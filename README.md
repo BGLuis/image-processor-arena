@@ -7,9 +7,15 @@ Arena comparativa de alto desempenho para processamento de imagens entre **Go 10
 ## 🎯 Visão Geral
 
 - **Operações**: `encode`, `decode`, `transcode` e `analyze`
-- **Formatos suportados**: PNG, JPEG, WebP (lossy e lossless), AVIF (lossy e lossless), JPEG XL
+- **Formatos suportados**: PNG, JPEG, WebP (lossy e lossless), AVIF (somente lossy), JPEG XL
 - **Formato de intercâmbio**: Netpbm PAM binário (`P7`, RGB e RGB_ALPHA, MAXVAL 255)
 - **Métricas de Análise**: 16 métricas formais (BT.601 inteira, DCT-II para pHash, base83 para blurHash, SI Sobel, etc.) especificadas matematicamente em [`docs/analyze-spec.md`](docs/analyze-spec.md).
+
+### Limitações conhecidas
+
+- **AVIF lossless não é suportado.** Nenhuma biblioteca pura disponível preserva o RGB no round-trip, então `mode=lossless` com `format=avif` retorna erro nos dois lados e o modo não faz parte do benchmark:
+  - Go: `KarpelesLab/goavif` ignora `Options.Lossless` (a saída é idêntica com e sem a opção) e `gen2brain/gav1d/avif` sempre converte RGB para YCbCr BT.601 4:2:0 (na foto do corpus, 236.705 bytes RGB divergem, com erro de até 55).
+  - Rust: `zenrav1e` (usado por `zenravif`) força `base_q_idx >= 1`, então `quantizer 0` nunca ativa o modo lossless do AV1 (na foto do corpus, 42.803 bytes RGB divergem mesmo com matriz identidade).
 
 ---
 
