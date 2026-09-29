@@ -7,8 +7,11 @@ Executa a matriz comparativa completa da Arena de Processamento de Imagens:
 - Formatos: PNG, JPEG, WebP (lossy/lossless), AVIF (lossy/lossless), JPEG XL (lossy/lossless)
 - Corpus: photo, screenshot, illustration, alpha (Netpbm PAM P7)
 - Modos:
-    --mode batch: executa os binários locais compilados (arena-batch)
-    --mode http: executa requisições HTTP contra servidores (/run)
+    --mode http: executa requisições HTTP contra servidores (/run); a métrica primária é o tempo de codec
+        reportado pelos headers X-Arena-*-Ns, e o tempo de parede do cliente é reportado à parte
+    --mode batch: executa os binários locais compilados (arena-batch); cronometra o processo inteiro e
+        reporta o custo de startup de cada binário separadamente. Não mede velocidade de codec.
+Cada tempo é reportado como mediana com p25-p75 (mínimo de 5 iterações medidas).
 Gera o relatório do PÓDIO em console, Markdown (results/PODIUM.md) e JSON (results/benchmark_results.json).
 """
 
@@ -18,10 +21,51 @@ import time
 import json
 import shutil
 import argparse
+import statistics
 import subprocess
+import tempfile
 import urllib.request
 import urllib.error
+from dataclasses import dataclass
 from typing import Dict, Any, List, Optional, Tuple
+
+MIN_ITERATIONS = 5
+STARTUP_PROBE_ARGS = ["--op", "analyze", "--input", "/dev/null"]
+CODEC_TIME_HEADERS = {
+    "analyze": ("X-Arena-Analyze-Ns",),
+    "encode": ("X-Arena-Encode-Ns",),
+    "decode": ("X-Arena-Decode-Ns",),
+    "transcode": ("X-Arena-Decode-Ns", "X-Arena-Encode-Ns"),
+}
+ANALYZE_CAVEAT = (
+    "op=analyze: os servidores cronometram trechos diferentes (Rust inclui parse do PAM e serialização JSON; "
+    "Go mede só a análise), então o tempo de analyze não é comparável entre Go e Rust (issue #7)."
+)
+
+
+def summarize(samples: List[float]) -> Dict[str, float]:
+    ordered = sorted(samples)
+    p25, _, p75 = statistics.quantiles(ordered, n=4, method="inclusive")
+    return {
+        "median": statistics.median(ordered),
+        "p25": p25,
+        "p75": p75,
+        "min": ordered[0],
+        "max": ordered[-1],
+        "n": len(ordered),
+    }
+
+
+def format_stats(stats: Dict[str, float]) -> str:
+    return f"{stats['median']:.2f} [{stats['p25']:.2f}-{stats['p75']:.2f}]"
+
+
+def decide_winner(go: Dict[str, float], rust: Dict[str, float]) -> Tuple[str, float]:
+    fastest = min(go["median"], rust["median"])
+    speedup = max(go["median"], rust["median"]) / fastest if fastest > 0 else 0.0
+    if go["p25"] <= rust["p75"] and rust["p25"] <= go["p75"]:
+        return "Empate", speedup
+    return ("Go" if go["median"] < rust["median"] else "Rust"), speedup
 
 
 def read_pam_dims(filepath: str) -> Tuple[int, int, int]:
@@ -47,6 +91,13 @@ def read_pam_dims(filepath: str) -> Tuple[int, int, int]:
     return 512, 512, 3
 
 
+@dataclass(frozen=True)
+class Engine:
+    key: str
+    bin_path: str
+    url: str
+
+
 class ArenaBenchmark:
     def __init__(
         self,
@@ -59,15 +110,19 @@ class ArenaBenchmark:
         iterations: int = 5,
         warmup: int = 2,
     ):
+        if iterations < MIN_ITERATIONS:
+            raise ValueError(f"iterations deve ser >= {MIN_ITERATIONS} (recebido: {iterations})")
         self.mode = mode
-        self.go_bin = go_bin
-        self.rust_bin = rust_bin
-        self.go_url = go_url
-        self.rust_url = rust_url
+        self.engines = [Engine("go", go_bin, go_url), Engine("rust", rust_bin, rust_url)]
         self.corpus_dir = corpus_dir
         self.iterations = iterations
         self.warmup = warmup
         self.results: List[Dict[str, Any]] = []
+        self.startup_ms: Dict[str, Dict[str, float]] = {}
+
+    @property
+    def metric(self) -> str:
+        return "codec_ms" if self.mode == "http" else "wall_ms"
 
     def run_cli_cmd(self, bin_path: str, cmd_args: List[str]) -> Tuple[float, Optional[int]]:
         cmd = [bin_path] + cmd_args
@@ -80,7 +135,23 @@ class ArenaBenchmark:
         elapsed_ms = (t1 - t0) / 1e6
         return elapsed_ms, len(res.stdout) if res.stdout else None
 
-    def run_http_req(self, url: str, query_params: Dict[str, str], body_data: bytes) -> Tuple[float, int]:
+    def run_startup_probe(self, bin_path: str) -> float:
+        t0 = time.perf_counter_ns()
+        subprocess.run([bin_path] + STARTUP_PROBE_ARGS, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return (time.perf_counter_ns() - t0) / 1e6
+
+    def measure_startup(self) -> None:
+        for engine in self.engines:
+            samples = []
+            for i in range(self.warmup + self.iterations):
+                elapsed_ms = self.run_startup_probe(engine.bin_path)
+                if i >= self.warmup:
+                    samples.append(elapsed_ms)
+            self.startup_ms[engine.key] = summarize(samples)
+
+    def run_http_req(
+        self, url: str, op: str, query_params: Dict[str, str], body_data: bytes
+    ) -> Tuple[float, float, int]:
         qs = "&".join(f"{k}={v}" for k, v in query_params.items())
         full_url = f"{url}?{qs}"
         req = urllib.request.Request(
@@ -92,9 +163,57 @@ class ArenaBenchmark:
         t0 = time.perf_counter_ns()
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = resp.read()
+            codec_ns = 0
+            for header in CODEC_TIME_HEADERS[op]:
+                value = resp.headers.get(header)
+                if value is None:
+                    raise RuntimeError(f"Resposta sem o header {header} (op={op}, url={url})")
+                codec_ns += int(value)
         t1 = time.perf_counter_ns()
-        elapsed_ms = (t1 - t0) / 1e6
-        return elapsed_ms, len(data)
+        wall_ms = (t1 - t0) / 1e6
+        return wall_ms, codec_ns / 1e6, len(data)
+
+    def measure_engine(
+        self,
+        engine: Engine,
+        op: str,
+        batch_args: List[str],
+        query_params: Dict[str, str],
+        body_data: Optional[bytes],
+        output_path: str,
+    ) -> Dict[str, Any]:
+        wall_samples: List[float] = []
+        codec_samples: List[float] = []
+        out_bytes = 0
+
+        cli_args = list(batch_args)
+        if op != "analyze":
+            cli_args.extend(["--output", output_path])
+
+        for i in range(self.warmup + self.iterations):
+            if self.mode == "batch":
+                wall_ms, stdout_bytes = self.run_cli_cmd(engine.bin_path, cli_args)
+                out_bytes = os.path.getsize(output_path) if os.path.exists(output_path) else (stdout_bytes or 0)
+            else:
+                wall_ms, codec_ms, out_bytes = self.run_http_req(engine.url, op, query_params, body_data)
+            if i < self.warmup:
+                continue
+            wall_samples.append(wall_ms)
+            if self.mode == "http":
+                codec_samples.append(codec_ms)
+
+        result: Dict[str, Any] = {
+            "wall_ms": summarize(wall_samples),
+            "codec_ms": None,
+            "net_of_startup_ms": None,
+            "out_bytes": out_bytes,
+        }
+        if self.mode == "http":
+            result["codec_ms"] = summarize(codec_samples)
+        else:
+            startup_median = self.startup_ms[engine.key]["median"]
+            result["net_of_startup_ms"] = summarize([max(w - startup_median, 0.0) for w in wall_samples])
+        return result
 
     def benchmark_task(
         self,
@@ -119,98 +238,31 @@ class ArenaBenchmark:
         else:
             out_ext = format_name
 
-        # --- Benchmarking Go ---
-        go_times = []
-        go_out_bytes = 0
-        tmp_go = f"/tmp/bench_go_{int(time.time()*1000)}.{out_ext}"
+        batch_args = ["--op", op, "--format", format_name, "--mode", mode, "--q", str(q), "--effort", str(effort), "--input", input_file]
+        query_params = {"op": op, "format": format_name, "mode": mode, "q": str(q), "effort": str(effort)}
+        if to_format:
+            batch_args.extend(["--to", to_format])
+            query_params["to"] = to_format
 
-        # Warmup Go
-        for _ in range(self.warmup):
-            if self.mode == "batch":
-                args = ["--op", op, "--format", format_name, "--mode", mode, "--q", str(q), "--effort", str(effort), "--input", input_file]
-                if op != "analyze":
-                    args.extend(["--output", tmp_go])
-                if to_format:
-                    args.extend(["--to", to_format])
-                self.run_cli_cmd(self.go_bin, args)
-            else:
-                qp = {"op": op, "format": format_name, "mode": mode, "q": str(q), "effort": str(effort)}
-                if to_format:
-                    qp["to"] = to_format
-                self.run_http_req(self.go_url, qp, open(input_file, "rb").read())
+        body_data = None
+        if self.mode == "http":
+            with open(input_file, "rb") as f:
+                body_data = f.read()
 
-        # Runs Go
-        for _ in range(self.iterations):
-            if self.mode == "batch":
-                args = ["--op", op, "--format", format_name, "--mode", mode, "--q", str(q), "--effort", str(effort), "--input", input_file]
-                if op != "analyze":
-                    args.extend(["--output", tmp_go])
-                if to_format:
-                    args.extend(["--to", to_format])
-                el, _ = self.run_cli_cmd(self.go_bin, args)
-                if os.path.exists(tmp_go):
-                    go_out_bytes = os.path.getsize(tmp_go)
-            else:
-                qp = {"op": op, "format": format_name, "mode": mode, "q": str(q), "effort": str(effort)}
-                if to_format:
-                    qp["to"] = to_format
-                el, go_out_bytes = self.run_http_req(self.go_url, qp, open(input_file, "rb").read())
-            go_times.append(el)
+        measured: Dict[str, Dict[str, Any]] = {}
+        with tempfile.TemporaryDirectory(prefix="arena_bench_") as workdir:
+            for engine in self.engines:
+                output_path = os.path.join(workdir, f"{engine.key}.{out_ext}")
+                measured[engine.key] = self.measure_engine(engine, op, batch_args, query_params, body_data, output_path)
 
-        # --- Benchmarking Rust ---
-        rust_times = []
-        rust_out_bytes = 0
-        tmp_rust = f"/tmp/bench_rust_{int(time.time()*1000)}.{out_ext}"
+        go_primary = measured["go"][self.metric]
+        rust_primary = measured["rust"][self.metric]
+        winner, speedup = decide_winner(go_primary, rust_primary)
 
-        # Warmup Rust
-        for _ in range(self.warmup):
-            if self.mode == "batch":
-                args = ["--op", op, "--format", format_name, "--mode", mode, "--q", str(q), "--effort", str(effort), "--input", input_file]
-                if op != "analyze":
-                    args.extend(["--output", tmp_rust])
-                if to_format:
-                    args.extend(["--to", to_format])
-                self.run_cli_cmd(self.rust_bin, args)
-            else:
-                qp = {"op": op, "format": format_name, "mode": mode, "q": str(q), "effort": str(effort)}
-                if to_format:
-                    qp["to"] = to_format
-                self.run_http_req(self.rust_url, qp, open(input_file, "rb").read())
-
-        # Runs Rust
-        for _ in range(self.iterations):
-            if self.mode == "batch":
-                args = ["--op", op, "--format", format_name, "--mode", mode, "--q", str(q), "--effort", str(effort), "--input", input_file]
-                if op != "analyze":
-                    args.extend(["--output", tmp_rust])
-                if to_format:
-                    args.extend(["--to", to_format])
-                el, _ = self.run_cli_cmd(self.rust_bin, args)
-                if os.path.exists(tmp_rust):
-                    rust_out_bytes = os.path.getsize(tmp_rust)
-            else:
-                qp = {"op": op, "format": format_name, "mode": mode, "q": str(q), "effort": str(effort)}
-                if to_format:
-                    qp["to"] = to_format
-                el, rust_out_bytes = self.run_http_req(self.rust_url, qp, open(input_file, "rb").read())
-            rust_times.append(el)
-
-        # Limpeza
-        if os.path.exists(tmp_go):
-            os.remove(tmp_go)
-        if os.path.exists(tmp_rust):
-            os.remove(tmp_rust)
-
-        go_times.sort()
-        rust_times.sort()
-        go_med = go_times[len(go_times) // 2]
-        rust_med = rust_times[len(rust_times) // 2]
-
-        go_mp_s = mp / (go_med / 1000.0) if go_med > 0 else 0
-        rust_mp_s = mp / (rust_med / 1000.0) if rust_med > 0 else 0
-
-        winner = "Rust" if rust_med < go_med else "Go"
-        speedup = (go_med / rust_med) if winner == "Rust" else (rust_med / go_med)
+        for engine_result, primary in ((measured["go"], go_primary), (measured["rust"], rust_primary)):
+            engine_result["throughput_mp_s"] = (
+                mp / (primary["median"] / 1000.0) if self.mode == "http" and primary["median"] > 0 else None
+            )
 
         return {
             "task": task_name,
@@ -219,14 +271,12 @@ class ArenaBenchmark:
             "mode": mode,
             "image": os.path.basename(input_file),
             "mp": mp,
-            "go_ms": go_med,
-            "go_mp_s": go_mp_s,
-            "go_bytes": go_out_bytes,
-            "rust_ms": rust_med,
-            "rust_mp_s": rust_mp_s,
-            "rust_bytes": rust_out_bytes,
+            "metric": self.metric,
+            "go": measured["go"],
+            "rust": measured["rust"],
             "winner": winner,
             "speedup": speedup,
+            "caveat": ANALYZE_CAVEAT if self.mode == "http" and op == "analyze" else None,
         }
 
     def run_suite(self) -> List[Dict[str, Any]]:
@@ -299,96 +349,162 @@ class ArenaBenchmark:
         print(f"Modo: {self.mode.upper()} | Iterações: {self.iterations} | Warmup: {self.warmup}")
         print("=" * 80)
 
+        if self.mode == "batch":
+            self.measure_startup()
+            for engine in self.engines:
+                print(f"Startup {engine.key:5s}: {format_stats(self.startup_ms[engine.key])} ms")
+
         results = []
         for i, (task_name, op, fmt, mode, q, effort, in_file, to_fmt) in enumerate(tasks, start=1):
             print(f"[{i:02d}/{len(tasks):02d}] Executando: {task_name:35s} ... ", end="", flush=True)
             try:
                 res = self.benchmark_task(task_name, op, fmt, mode, q, effort, in_file, to_fmt)
                 results.append(res)
-                medal = "🦀 Rust" if res["winner"] == "Rust" else "🐹 Go"
-                print(f"Vencedor: {medal} ({res['speedup']:.2f}x mais rápido) "
-                      f"[Go: {res['go_ms']:.2f}ms | Rust: {res['rust_ms']:.2f}ms]")
+                print(f"Vencedor: {res['winner']} ({res['speedup']:.2f}x) "
+                      f"[Go: {format_stats(res['go'][res['metric']])} ms | Rust: {format_stats(res['rust'][res['metric']])} ms]")
             except Exception as e:
                 print(f"ERRO: {e}")
 
         self.results = results
         return results
 
+    def standings(self) -> Tuple[int, int, int]:
+        go_wins = sum(1 for r in self.results if r["winner"] == "Go")
+        rust_wins = sum(1 for r in self.results if r["winner"] == "Rust")
+        ties = len(self.results) - go_wins - rust_wins
+        return go_wins, rust_wins, ties
+
+    def metric_labels(self) -> Dict[str, str]:
+        if self.mode == "http":
+            return {
+                "column": "codec (servidor, X-Arena-*-Ns)",
+                "winner": "Vencedor (codec)",
+                "verdict": "Vitórias em tempo de codec",
+            }
+        return {
+            "column": "processo completo (startup + codec + I/O)",
+            "winner": "Vencedor (processo completo)",
+            "verdict": "Vitórias em tempo de processo completo (NÃO é velocidade de codec)",
+        }
+
+    def notes(self) -> List[str]:
+        if self.mode == "http":
+            return [
+                "Métrica primária: tempo de codec reportado pelo servidor nos headers X-Arena-*-Ns "
+                "(transcode = decode + encode). A coluna de parede do cliente inclui rede, PAM e serialização.",
+                ANALYZE_CAVEAT,
+            ]
+        return [
+            "Modo batch cronometra o processo inteiro, incluindo o startup do binário. "
+            "Ele NÃO mede velocidade de codec; para isso use --mode http.",
+            "Startup medido executando cada binário com entrada vazia/inválida (--op analyze --input /dev/null).",
+            "Coluna 'líquido de startup' = tempo de parede de cada amostra menos a mediana do startup do binário; "
+            "é uma aproximação, não um tempo de codec isolado.",
+        ]
+
     def print_podium(self) -> None:
         if not self.results:
             print("Nenhum resultado para exibir.")
             return
 
-        go_wins = sum(1 for r in self.results if r["winner"] == "Go")
-        rust_wins = sum(1 for r in self.results if r["winner"] == "Rust")
+        labels = self.metric_labels()
+        go_wins, rust_wins, ties = self.standings()
         total = len(self.results)
 
-        print("\n" + "=" * 90)
-        print("                      🏆 PÓDIO OFICIAL DA ARENA: GO PURO × RUST PURO 🏆")
-        print("=" * 90)
+        print("\n" + "=" * 110)
+        print("                      PÓDIO DA ARENA: GO PURO × RUST PURO")
+        print("=" * 110)
+        print(f"Métrica primária: {labels['column']}")
+        print(f"{labels['verdict']}: Go {go_wins}/{total} | Rust {rust_wins}/{total} | Empates estatísticos {ties}/{total}")
 
-        if rust_wins > go_wins:
-            champion = "🦀 RUST PURO 🦀"
-            runner_up = "🐹 GO PURO 🐹"
-            champ_score = f"{rust_wins}/{total} vitórias ({rust_wins/total*100:.1f}%)"
-            runner_score = f"{go_wins}/{total} vitórias ({go_wins/total*100:.1f}%)"
-        elif go_wins > rust_wins:
-            champion = "🐹 GO PURO 🐹"
-            runner_up = "🦀 RUST PURO 🦀"
-            champ_score = f"{go_wins}/{total} vitórias ({go_wins/total*100:.1f}%)"
-            runner_score = f"{rust_wins}/{total} vitórias ({rust_wins/total*100:.1f}%)"
-        else:
-            champion = "🤝 EMPATE TÉCNICO"
-            runner_up = "🤝 EMPATE TÉCNICO"
-            champ_score = f"{rust_wins}/{total} vitórias"
-            runner_score = f"{go_wins}/{total} vitórias"
+        if self.startup_ms:
+            print("\nCusto de startup do binário (processo com entrada inválida, ms):")
+            for engine in self.engines:
+                print(f"  {engine.key:5s} {format_stats(self.startup_ms[engine.key])}  (min {self.startup_ms[engine.key]['min']:.2f} / max {self.startup_ms[engine.key]['max']:.2f})")
 
-        print(f"\n   🥇 1º LUGAR (CAMPEÃO GERAL): {champion}")
-        print(f"      Pontuação: {champ_score}")
-        print(f"\n   🥈 2º LUGAR (VICE-CAMPEÃO):  {runner_up}")
-        print(f"      Pontuação: {runner_score}")
-        print("\n" + "-" * 90)
-
-        # Tabela Detalhada
-        print(f"{'Operação / Tarefa':32s} | {'Go (ms)':9s} | {'Go MP/s':8s} | {'Rust (ms)':9s} | {'Rust MP/s':9s} | {'Vencedor':8s} | {'Vantagem':8s}")
-        print("-" * 90)
+        print("\n" + "-" * 110)
+        print(f"Tempos: mediana [p25-p75] em ms, {self.iterations} iterações medidas")
+        print(f"{'Tarefa':34s} | {'Go':22s} | {'Rust':22s} | {'Vencedor':8s} | {'Vantagem':8s}")
+        print("-" * 110)
         for r in self.results:
-            medal = "🦀 Rust" if r["winner"] == "Rust" else "🐹 Go"
+            task = r["task"] + (" †" if r["caveat"] else "")
             adv = f"{r['speedup']:.2f}x"
-            print(f"{r['task']:32s} | {r['go_ms']:7.2f}ms | {r['go_mp_s']:7.2f} | {r['rust_ms']:7.2f}ms | {r['rust_mp_s']:8.2f} | {medal:8s} | {adv:8s}")
-        print("=" * 90)
+            print(f"{task:34s} | {format_stats(r['go'][r['metric']]):22s} | {format_stats(r['rust'][r['metric']]):22s} | {r['winner']:8s} | {adv:8s}")
+        print("=" * 110)
+        for note in self.notes():
+            print(f"* {note}")
 
     def export_reports(self, output_dir: str = "./results") -> None:
         os.makedirs(output_dir, exist_ok=True)
         json_path = os.path.join(output_dir, "benchmark_results.json")
         md_path = os.path.join(output_dir, "PODIUM.md")
+        labels = self.metric_labels()
+        collected_at = time.strftime("%Y-%m-%d %H:%M:%S")
 
+        metadata = {
+            "mode": self.mode,
+            "primary_metric": self.metric,
+            "primary_metric_description": labels["column"],
+            "iterations": self.iterations,
+            "warmup": self.warmup,
+            "collected_at": collected_at,
+            "startup_ms": self.startup_ms or None,
+            "notes": self.notes(),
+        }
         with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(self.results, f, indent=2)
+            json.dump({"metadata": metadata, "results": self.results}, f, indent=2)
 
-        go_wins = sum(1 for r in self.results if r["winner"] == "Go")
-        rust_wins = sum(1 for r in self.results if r["winner"] == "Rust")
+        go_wins, rust_wins, ties = self.standings()
         total = len(self.results)
 
         md = []
         md.append("# 🏆 Pódio da Arena: Go Puro × Rust Puro\n")
         md.append(f"**Modo de Execução**: `{self.mode.upper()}`  ")
-        md.append(f"**Iterações por teste**: {self.iterations} (+ {self.warmup} warmup)  ")
-        md.append(f"**Data da Coleta**: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        md.append(f"**Métrica primária**: {labels['column']}  ")
+        md.append(f"**Iterações por teste**: {self.iterations} medidas (+ {self.warmup} warmup); tempos como mediana [p25-p75]  ")
+        md.append(f"**Data da Coleta**: {collected_at}\n")
+        md.append("## Notas de Medição\n")
+        for note in self.notes():
+            md.append(f"- {note}")
+        md.append("")
+
+        if self.startup_ms:
+            md.append("## ⏱️ Custo de Startup do Binário (não é custo de codec)\n")
+            md.append("| Binário | Startup mediana [p25-p75] | Mín | Máx |")
+            md.append("|---|---|---|---|")
+            for engine in self.engines:
+                s = self.startup_ms[engine.key]
+                md.append(f"| {engine.key.capitalize()} | {format_stats(s)} ms | {s['min']:.2f} ms | {s['max']:.2f} ms |")
+            md.append("")
+
         md.append("## 🥇 Classificação Geral\n")
-        if rust_wins >= go_wins:
-            md.append(f"- 🥇 **1º Lugar: Rust Puro** ({rust_wins}/{total} vitórias - {rust_wins/total*100:.1f}%)")
-            md.append(f"- 🥈 **2º Lugar: Go Puro** ({go_wins}/{total} vitórias - {go_wins/total*100:.1f}%)\n")
-        else:
-            md.append(f"- 🥇 **1º Lugar: Go Puro** ({go_wins}/{total} vitórias - {go_wins/total*100:.1f}%)")
-            md.append(f"- 🥈 **2º Lugar: Rust Puro** ({rust_wins}/{total} vitórias - {rust_wins/total*100:.1f}%)\n")
+        md.append(f"{labels['verdict']} (empate estatístico quando os intervalos p25-p75 se sobrepõem):\n")
+        md.append(f"- Go Puro: {go_wins}/{total} ({go_wins/total*100:.1f}%)")
+        md.append(f"- Rust Puro: {rust_wins}/{total} ({rust_wins/total*100:.1f}%)")
+        md.append(f"- Empates estatísticos: {ties}/{total} ({ties/total*100:.1f}%)\n")
 
         md.append("## 📊 Tabela Completa de Resultados\n")
-        md.append("| Tarefa / Operação | Go (tempo) | Go Throughput | Rust (tempo) | Rust Throughput | 🥇 Vencedor | Vantagem |")
-        md.append("|---|---|---|---|---|---|---|")
-        for r in self.results:
-            medal = "🦀 Rust" if r["winner"] == "Rust" else "🐹 Go"
-            md.append(f"| {r['task']} | {r['go_ms']:.2f} ms | {r['go_mp_s']:.2f} MP/s | {r['rust_ms']:.2f} ms | {r['rust_mp_s']:.2f} MP/s | {medal} | **{r['speedup']:.2f}x** |")
+        if self.mode == "http":
+            md.append("| Tarefa / Operação | Go codec (ms) | Go MP/s | Rust codec (ms) | Rust MP/s | Go parede cliente (ms) | Rust parede cliente (ms) | 🥇 Vencedor (codec) | Vantagem |")
+            md.append("|---|---|---|---|---|---|---|---|---|")
+            for r in self.results:
+                task = r["task"] + (" †" if r["caveat"] else "")
+                md.append(
+                    f"| {task} | {format_stats(r['go']['codec_ms'])} | {r['go']['throughput_mp_s']:.2f} "
+                    f"| {format_stats(r['rust']['codec_ms'])} | {r['rust']['throughput_mp_s']:.2f} "
+                    f"| {r['go']['wall_ms']['median']:.2f} | {r['rust']['wall_ms']['median']:.2f} "
+                    f"| {r['winner']} | **{r['speedup']:.2f}x** |"
+                )
+            md.append("\n† " + ANALYZE_CAVEAT)
+        else:
+            md.append("| Tarefa / Operação | Go processo completo (ms) | Rust processo completo (ms) | Go líquido de startup (ms) | Rust líquido de startup (ms) | 🥇 Vencedor (processo completo) | Vantagem |")
+            md.append("|---|---|---|---|---|---|---|")
+            for r in self.results:
+                md.append(
+                    f"| {r['task']} | {format_stats(r['go']['wall_ms'])} | {format_stats(r['rust']['wall_ms'])} "
+                    f"| {format_stats(r['go']['net_of_startup_ms'])} | {format_stats(r['rust']['net_of_startup_ms'])} "
+                    f"| {r['winner']} | **{r['speedup']:.2f}x** |"
+                )
 
         with open(md_path, "w", encoding="utf-8") as f:
             f.write("\n".join(md) + "\n")
@@ -405,10 +521,12 @@ def main() -> int:
     parser.add_argument("--go-url", default="http://localhost:8080/run", help="URL do endpoint Go")
     parser.add_argument("--rust-url", default="http://localhost:8081/run", help="URL do endpoint Rust")
     parser.add_argument("--corpus-dir", default="./harness/fixtures/corpus", help="Diretório do corpus de imagens PAM")
-    parser.add_argument("--iterations", type=int, default=5, help="Número de iterações medidas por teste")
+    parser.add_argument("--iterations", type=int, default=MIN_ITERATIONS, help=f"Número de iterações medidas por teste (mínimo {MIN_ITERATIONS})")
     parser.add_argument("--warmup", type=int, default=2, help="Número de iterações de warmup descartadas")
     parser.add_argument("--output-dir", default="./results", help="Diretório para salvar os resultados")
     args = parser.parse_args()
+    if args.iterations < MIN_ITERATIONS:
+        parser.error(f"--iterations deve ser >= {MIN_ITERATIONS} para reportar mediana e dispersão")
 
     bench = ArenaBenchmark(
         mode=args.mode,
