@@ -3,12 +3,12 @@
 // Encode: jxl-encoder
 // Decode: jxl-oxide
 
-use super::{CodecError, CodecMode, EncodeParams};
+use super::{params as contract, CodecError, CodecMode, EncodeParams};
 use crate::pam::PamImage;
 use std::io::Cursor;
 
 pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecError> {
-    let effort = params.effort.clamp(1, 10);
+    let effort = contract::jxl_effort(params.effort);
     let layout = if pam.depth == 4 {
         jxl_encoder::PixelLayout::Rgba8
     } else {
@@ -26,8 +26,7 @@ pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecErr
             Ok(out)
         }
         CodecMode::Lossy => {
-            let quality = params.quality.clamp(1, 100) as f32;
-            let distance = jxl_encoder::quality_to_distance(quality);
+            let distance = contract::jxl_distance(params.quality);
             let config = jxl_encoder::LossyConfig::new(distance).with_effort(effort);
 
             let out = config
@@ -103,7 +102,10 @@ mod tests {
                 let decoded = decode(&encoded)
                     .unwrap_or_else(|e| panic!("decode falhou em {name} effort {effort}: {e}"));
 
-                assert_eq!(decoded.data, pam.data, "pixels divergem em {name} effort {effort}");
+                assert_eq!(
+                    decoded.data, pam.data,
+                    "pixels divergem em {name} effort {effort}"
+                );
             }
         }
     }

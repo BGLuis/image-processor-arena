@@ -1,7 +1,7 @@
 // rust/src/codec/png.rs
 // Adaptador do codec PNG puro.
 
-use super::{CodecError, EncodeParams};
+use super::{params as contract, CodecError, EncodeParams};
 use crate::pam::PamImage;
 use std::io::Cursor;
 
@@ -16,12 +16,7 @@ pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecErr
     }
     encoder.set_depth(png::BitDepth::Eight);
 
-    let compression = match params.effort {
-        1 | 2 => png::Compression::Fast,
-        3..=6 => png::Compression::Balanced,
-        _ => png::Compression::High,
-    };
-    encoder.set_compression(compression);
+    encoder.set_compression(contract::png_compression(params.effort));
 
     let mut writer = encoder
         .write_header()

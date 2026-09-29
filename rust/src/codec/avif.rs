@@ -4,19 +4,21 @@
 // Lossless encode: não suportado
 // Decode: zenavif (baseado em rav1d-safe)
 
-use super::{CodecError, CodecMode, EncodeParams};
+use super::{params as contract, CodecError, CodecMode, EncodeParams};
 use crate::pam::PamImage;
 
 pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecError> {
-    let speed = params.effort.clamp(1, 10);
+    let speed = contract::avif_speed(params.effort);
 
     match params.mode {
         // zenrav1e clamps base_q_idx to at least 1, so quantizer 0 never enters AV1
         // lossless mode; the RGB it produces differs from the input.
         CodecMode::Lossless => Err(CodecError::UnsupportedFormat("avif lossless".to_string())),
         CodecMode::Lossy => {
+            let quality = contract::ravif_quality(params.quality);
             let enc = ravif::Encoder::new()
-                .with_quality(params.quality as f32)
+                .with_quality(quality)
+                .with_alpha_quality(quality)
                 .with_speed(speed);
 
             let w = pam.width as usize;

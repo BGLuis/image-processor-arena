@@ -4,7 +4,7 @@
 // Lossless encode: image-webp
 // Decode: image-webp
 
-use super::{CodecError, CodecMode, EncodeParams};
+use super::{params as contract, CodecError, CodecMode, EncodeParams};
 use crate::pam::PamImage;
 use std::io::Cursor;
 
@@ -12,7 +12,7 @@ pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecErr
     match params.mode {
         CodecMode::Lossy => {
             let quality = params.quality.clamp(1, 100) as f32;
-            let method = ((params.effort as u64 * 6) / 10).min(6) as u8;
+            let method = contract::webp_method(params.effort);
             let config = zenwebp::EncoderConfig::new_lossy()
                 .with_quality(quality)
                 .with_method(method);

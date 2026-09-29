@@ -64,8 +64,6 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 	format := qParams.Get("format")
 	to := qParams.Get("to")
 	mode := qParams.Get("mode")
-	qVal, _ := strconv.Atoi(qParams.Get("q"))
-	effortVal, _ := strconv.Atoi(qParams.Get("effort"))
 
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -109,6 +107,12 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		encParams, err := codec.ParseParams(format, mode, qParams.Get("q"), qParams.Get("effort"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
 		pamImg, err := pam.Decode(bytes.NewReader(bodyBytes))
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to decode PAM body: %v", err), http.StatusBadRequest)
@@ -116,12 +120,6 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var encBuf bytes.Buffer
-		encParams := codec.Params{
-			Format: format,
-			Mode:   mode,
-			Q:      qVal,
-			Effort: effortVal,
-		}
 
 		start := time.Now()
 		if err := codec.Encode(&encBuf, pamImg, encParams); err != nil {
@@ -162,6 +160,12 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		encParams, err := codec.ParseParams(to, mode, qParams.Get("q"), qParams.Get("effort"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
 		startDec := time.Now()
 		pamImg, err := codec.Decode(bytes.NewReader(bodyBytes), format)
 		if err != nil {
@@ -171,12 +175,6 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 		decodeNs := time.Since(startDec).Nanoseconds()
 
 		var encBuf bytes.Buffer
-		encParams := codec.Params{
-			Format: to,
-			Mode:   mode,
-			Q:      qVal,
-			Effort: effortVal,
-		}
 
 		startEnc := time.Now()
 		if err := codec.Encode(&encBuf, pamImg, encParams); err != nil {

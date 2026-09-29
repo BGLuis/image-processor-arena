@@ -2,7 +2,7 @@
 // Servidor HTTP de alta performance para a arena de processamento de imagens.
 
 use arena_rust::analyze::analyze;
-use arena_rust::codec::{self, CodecMode, EncodeParams, ImageFormat};
+use arena_rust::codec::{self, EncodeParams, ImageFormat};
 use arena_rust::pam::PamImage;
 use axum::{
     body::Bytes,
@@ -24,8 +24,8 @@ struct RunQuery {
     format: Option<String>,
     to: Option<String>,
     mode: Option<String>,
-    q: Option<u8>,
-    effort: Option<u8>,
+    q: Option<String>,
+    effort: Option<String>,
 }
 
 #[tokio::main]
@@ -101,24 +101,14 @@ async fn run_handler(
                     "Parâmetro 'format' obrigatório para op=encode".to_string(),
                 )
             })?;
-            let format = ImageFormat::from_str(&format_str)
-                .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
-
-            let mode = match params.mode.as_deref() {
-                Some(m) => {
-                    CodecMode::from_str(m).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?
-                }
-                None => CodecMode::Lossy,
-            };
-
-            let quality = params.q.unwrap_or(75);
-            let effort = params.effort.unwrap_or(4);
-            let encode_params = EncodeParams {
-                format,
-                mode,
-                quality,
-                effort,
-            };
+            let encode_params = EncodeParams::parse(
+                &format_str,
+                params.mode.as_deref(),
+                params.q.as_deref(),
+                params.effort.as_deref(),
+            )
+            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+            let format = encode_params.format;
 
             let body_bytes = body.to_vec();
             let (out_bytes, encode_ns) = tokio::task::spawn_blocking(move || {
@@ -200,24 +190,14 @@ async fn run_handler(
 
             let from_format = ImageFormat::from_str(&from_str)
                 .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
-            let to_format = ImageFormat::from_str(&to_str)
-                .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
-
-            let mode = match params.mode.as_deref() {
-                Some(m) => {
-                    CodecMode::from_str(m).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?
-                }
-                None => CodecMode::Lossy,
-            };
-
-            let quality = params.q.unwrap_or(75);
-            let effort = params.effort.unwrap_or(4);
-            let encode_params = EncodeParams {
-                format: to_format,
-                mode,
-                quality,
-                effort,
-            };
+            let encode_params = EncodeParams::parse(
+                &to_str,
+                params.mode.as_deref(),
+                params.q.as_deref(),
+                params.effort.as_deref(),
+            )
+            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+            let to_format = encode_params.format;
 
             let body_bytes = body.to_vec();
             let (out_bytes, decode_ns, encode_ns) = tokio::task::spawn_blocking(move || {
@@ -252,5 +232,116 @@ async fn run_handler(
             StatusCode::BAD_REQUEST,
             format!("Operação desconhecida: '{op}'. Esperado: analyze, encode, decode, transcode"),
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::to_bytes;
+
+    fn sample_pam() -> Bytes {
+        let data: Vec<u8> = (0..32 * 32 * 3).map(|i| (i % 251) as u8).collect();
+        Bytes::from(PamImage::new_rgb(32, 32, data).unwrap().encode())
+    }
+
+    fn query(op: &str, format: &str, extra: &[(&str, &str)]) -> RunQuery {
+        let mut q = RunQuery {
+            op: op.to_string(),
+            format: Some(format.to_string()),
+            to: None,
+            mode: None,
+            q: None,
+            effort: None,
+        };
+        for (key, value) in extra {
+            let value = Some(value.to_string());
+            match *key {
+                "to" => q.to = value,
+                "mode" => q.mode = value,
+                "q" => q.q = value,
+                "effort" => q.effort = value,
+                other => panic!("chave desconhecida: {other}"),
+            }
+        }
+        q
+    }
+
+    async fn encoded_bytes(q: RunQuery) -> Vec<u8> {
+        let response = run_handler(Query(q), sample_pam())
+            .await
+            .expect("requisição válida");
+        to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap()
+            .to_vec()
+    }
+
+    #[tokio::test]
+    async fn rejects_params_outside_the_contract() {
+        let bad_params = [
+            ("q", "0"),
+            ("q", "101"),
+            ("q", "300"),
+            ("q", "-1"),
+            ("q", "abc"),
+            ("effort", "0"),
+            ("effort", "11"),
+            ("effort", "fast"),
+            ("mode", "near-lossless"),
+        ];
+        let png = encoded_bytes(query("encode", "png", &[])).await;
+        for (key, value) in bad_params {
+            let encode = run_handler(
+                Query(query("encode", "webp", &[(key, value)])),
+                sample_pam(),
+            )
+            .await;
+            assert_eq!(
+                encode.unwrap_err().0,
+                StatusCode::BAD_REQUEST,
+                "encode {key}={value}"
+            );
+
+            let transcode = run_handler(
+                Query(query("transcode", "png", &[("to", "webp"), (key, value)])),
+                Bytes::from(png.clone()),
+            )
+            .await;
+            assert_eq!(
+                transcode.unwrap_err().0,
+                StatusCode::BAD_REQUEST,
+                "transcode {key}={value}"
+            );
+        }
+
+        let unknown_format = run_handler(Query(query("encode", "bmp", &[])), sample_pam()).await;
+        assert_eq!(unknown_format.unwrap_err().0, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn omitted_params_behave_as_the_contract_defaults() {
+        for format in ["png", "jpeg", "webp", "jxl"] {
+            let implicit = encoded_bytes(query("encode", format, &[])).await;
+            let explicit = encoded_bytes(query(
+                "encode",
+                format,
+                &[("mode", "lossy"), ("q", "75"), ("effort", "4")],
+            ))
+            .await;
+            assert_eq!(implicit, explicit, "{format}");
+        }
+    }
+
+    #[tokio::test]
+    async fn empty_params_select_defaults() {
+        let implicit = encoded_bytes(query("encode", "webp", &[])).await;
+        let empty = encoded_bytes(query(
+            "encode",
+            "webp",
+            &[("mode", ""), ("q", ""), ("effort", "")],
+        ))
+        .await;
+        assert_eq!(implicit, empty);
     }
 }

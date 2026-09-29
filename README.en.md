@@ -139,6 +139,10 @@ If you prefer running the binaries and harness directly on your host machine:
    python3 harness/benchmark_arena.py --mode http --go-url http://localhost:8080/run --rust-url http://localhost:8081/run
    ```
 
+# 🔌 HTTP Contract and Parameters
+
+Both servers and both `arena-batch` binaries share one parameter contract, defined in [`arena.toml`](arena.toml) (`[params]`) and enforced by tests in Go and Rust: `q` is an integer 1..100 (default 75), `effort` is an integer 1..10 (default 4), `mode` is `lossy` or `lossless` (default `lossy`). Out-of-range or non-numeric values return HTTP 400 (batch exits with status 1) and are never clamped. The per-codec mapping of `q` and `effort` is documented in the Portuguese [README](README.md#-contrato-http-e-parâmetros).
+
 # ⚠️ Known Limitations
 
 - **AVIF lossless is not supported.** No available pure library preserves RGB on a round trip, so `mode=lossless` with `format=avif` returns an error on both sides and the mode is not part of the benchmark:

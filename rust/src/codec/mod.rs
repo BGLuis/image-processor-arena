@@ -4,6 +4,7 @@
 pub mod avif;
 pub mod jpeg;
 pub mod jxl;
+pub mod params;
 pub mod png;
 pub mod webp;
 
@@ -92,9 +93,9 @@ impl Default for EncodeParams {
     fn default() -> Self {
         Self {
             format: ImageFormat::Png,
-            mode: CodecMode::Lossy,
-            quality: 75,
-            effort: 4,
+            mode: params::DEFAULT_MODE,
+            quality: params::DEFAULT_Q,
+            effort: params::DEFAULT_EFFORT,
         }
     }
 }
@@ -122,6 +123,7 @@ impl std::error::Error for CodecError {}
 
 /// Codifica uma imagem PAM no formato desejado
 pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecError> {
+    params.validate()?;
     match params.format {
         ImageFormat::Png => png::encode(pam, params),
         ImageFormat::Jpeg => jpeg::encode(pam, params),
@@ -292,7 +294,118 @@ mod tests {
             };
             let bytes = encode(&pam, &params).expect("encode lossless falhou");
             let decoded = decode(&bytes, format).expect("decode lossless falhou");
-            assert_eq!(decoded.data, pam.data, "{} lossless divergiu", format.as_str());
+            assert_eq!(
+                decoded.data,
+                pam.data,
+                "{} lossless divergiu",
+                format.as_str()
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod contract_tests {
+    use super::*;
+
+    fn gradient(depth: u8) -> PamImage {
+        let (w, h) = (32u32, 32u32);
+        let mut data = Vec::new();
+        for y in 0..h {
+            for x in 0..w {
+                data.push((x * 255 / w) as u8);
+                data.push((y * 255 / h) as u8);
+                data.push(128);
+                if depth == 4 {
+                    data.push(if (x / 8 + y / 8) % 2 == 0 { 255 } else { 64 });
+                }
+            }
+        }
+        if depth == 4 {
+            PamImage::new_rgba(w, h, data).unwrap()
+        } else {
+            PamImage::new_rgb(w, h, data).unwrap()
+        }
+    }
+
+    fn round_trip_depth(format: ImageFormat, mode: CodecMode, depth: u8) -> u8 {
+        let params = EncodeParams {
+            format,
+            mode,
+            ..EncodeParams::default()
+        };
+        let encoded = encode(&gradient(depth), &params).expect("encode");
+        decode(&encoded, format).expect("decode").depth
+    }
+
+    #[test]
+    fn rgb_in_rgb_out() {
+        let cases = [
+            (ImageFormat::Png, CodecMode::Lossless),
+            (ImageFormat::Jpeg, CodecMode::Lossy),
+            (ImageFormat::Webp, CodecMode::Lossy),
+            (ImageFormat::Webp, CodecMode::Lossless),
+            (ImageFormat::Avif, CodecMode::Lossy),
+            (ImageFormat::Jxl, CodecMode::Lossy),
+            (ImageFormat::Jxl, CodecMode::Lossless),
+        ];
+        for (format, mode) in cases {
+            assert_eq!(round_trip_depth(format, mode, 3), 3, "{format:?} {mode:?}");
+        }
+    }
+
+    #[test]
+    fn rgba_in_rgba_out() {
+        let cases = [
+            (ImageFormat::Png, CodecMode::Lossless),
+            (ImageFormat::Webp, CodecMode::Lossy),
+            (ImageFormat::Webp, CodecMode::Lossless),
+            (ImageFormat::Avif, CodecMode::Lossy),
+            (ImageFormat::Jxl, CodecMode::Lossless),
+        ];
+        for (format, mode) in cases {
+            assert_eq!(round_trip_depth(format, mode, 4), 4, "{format:?} {mode:?}");
+        }
+    }
+
+    #[test]
+    fn encode_rejects_params_outside_the_contract() {
+        let pam = gradient(3);
+        for (quality, effort) in [(0, 4), (101, 4), (75, 0), (75, 11)] {
+            let params = EncodeParams {
+                format: ImageFormat::Webp,
+                quality,
+                effort,
+                ..EncodeParams::default()
+            };
+            assert!(
+                matches!(encode(&pam, &params), Err(CodecError::InvalidParam(_))),
+                "q={quality} effort={effort}"
+            );
+        }
+    }
+
+    #[test]
+    fn default_params_are_the_contract_defaults() {
+        let params = EncodeParams::default();
+        assert_eq!(
+            (params.mode, params.quality, params.effort),
+            (CodecMode::Lossy, 75, 4)
+        );
+    }
+
+    #[test]
+    fn parsed_defaults_encode_like_explicit_values() {
+        let pam = gradient(3);
+        for format in ["png", "jpeg", "webp", "jxl"] {
+            let implicit = EncodeParams::parse(format, None, None, None).unwrap();
+            let explicit =
+                EncodeParams::parse(format, Some("lossy"), Some("75"), Some("4")).unwrap();
+            assert_eq!(
+                encode(&pam, &implicit).unwrap(),
+                encode(&pam, &explicit).unwrap(),
+                "{format}"
+            );
         }
     }
 }

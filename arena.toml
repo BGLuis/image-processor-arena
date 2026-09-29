@@ -28,6 +28,32 @@ go_cgo_enabled = 0
 go_forbidden = ["github.com/ebitengine/purego", "github.com/tetratelabs/wazero"]
 rust_banned_crates = ["cc", "cmake", "bindgen", "nasm-rs", "pkg-config"]
 
+[params]
+# Single parameter contract for both engines, servers and batch CLIs. Go and Rust tests read
+# these values; the benchmark harness sends them. Out-of-range or non-numeric values are rejected
+# (HTTP 400 / batch exit 1), never clamped. An omitted or empty value selects the default.
+mode_default = "lossy"
+q_default = 75
+q_min = 1
+q_max = 100
+effort_default = 4
+effort_min = 1
+effort_max = 10
+out_of_range = "reject"
+# effort 1..10 -> 0..6 (rounded linear). webp lossy method = step, jxl effort = step + 1.
+effort_step = [0, 1, 1, 2, 3, 3, 4, 5, 5, 6]
+
+[params.mapping]
+# Higher effort always means slower and smaller. Native scales are matched by position, not by
+# identical internals: the same effort is the closest tier, not the same algorithm.
+png = "q: none (always lossless, mode ignored). effort: 1-2 fastest deflate, 3-6 default, 7-10 best (go BestSpeed/Default/BestCompression, rust Fast/Balanced/High)."
+jpeg = "q: native quality 1..100, both use the Annex K tables with the libjpeg scale and 4:2:0 chroma (rust forces 4:2:0, its default switches to 4:4:4 at q>=90). effort: none, ignored. mode ignored."
+webp_lossy = "q: native quality 1..100 (float). effort: method = effort_step[effort-1] (0..6, native range of both zenwebp and deepteams/webp)."
+webp_lossless = "q: none. effort: none. Neither gowebp nor image-webp expose a compression knob."
+avif_lossy = "q: AV1 base_q_idx = (100-q)*255/100, gav1d's native mapping; ravif uses a different curve, so rust passes the ravif quality that yields the same index. effort: speed = 11-effort (1..10, inverted because AVIF speed 10 is fastest; 0 is not used because ravif starts at 1). Not normalizable: gav1d always writes 4:2:0 and ravif always 4:4:4."
+jxl_lossy = "q: Butteraugli distance = 0.1+(100-q)*0.09 for q>=30, else 53/3000*q^2-23/20*q+25 (gen2brain/jxl native mapping; jxl-encoder's own quality_to_distance differs, so rust computes the distance itself). effort: jxl effort = effort_step[effort-1]+1 (1..7, the native range of gen2brain/jxl; rust is capped to it)."
+jxl_lossless = "q: none. effort: jxl effort = effort_step[effort-1]+1."
+
 [benchmarks]
 server_go_port = 8080
 server_rust_port = 8081
