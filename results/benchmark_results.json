@@ -1,578 +1,1887 @@
-[
-  {
-    "task": "Analyze [photo.pam]",
-    "op": "analyze",
-    "format": "pam",
-    "mode": "lossless",
-    "image": "photo.pam",
-    "mp": 0.262144,
-    "go_ms": 104.683263,
-    "go_mp_s": 2.5041634401480204,
-    "go_bytes": 0,
-    "rust_ms": 154.317733,
-    "rust_mp_s": 1.6987289464652773,
-    "rust_bytes": 0,
-    "winner": "Go",
-    "speedup": 1.4741395002179098
+{
+  "metadata": {
+    "mode": "http",
+    "primary_metric": "codec_ms",
+    "primary_metric_description": "codec (servidor, X-Arena-*-Ns)",
+    "iterations": 7,
+    "warmup": 3,
+    "collected_at": "2026-09-29 01:35:46",
+    "startup_ms": null,
+    "notes": [
+      "M\u00e9trica prim\u00e1ria: tempo de codec reportado pelo servidor nos headers X-Arena-*-Ns (transcode = decode + encode). A coluna de parede do cliente inclui rede, PAM e serializa\u00e7\u00e3o.",
+      "op=analyze: os servidores cronometram trechos diferentes (Rust inclui parse do PAM e serializa\u00e7\u00e3o JSON; Go mede s\u00f3 a an\u00e1lise), ent\u00e3o o tempo de analyze n\u00e3o \u00e9 compar\u00e1vel entre Go e Rust (issue #7)."
+    ]
   },
-  {
-    "task": "Analyze [screenshot.pam]",
-    "op": "analyze",
-    "format": "pam",
-    "mode": "lossless",
-    "image": "screenshot.pam",
-    "mp": 0.262144,
-    "go_ms": 103.967076,
-    "go_mp_s": 2.521413605976569,
-    "go_bytes": 0,
-    "rust_ms": 152.553458,
-    "rust_mp_s": 1.718374682794801,
-    "rust_bytes": 0,
-    "winner": "Go",
-    "speedup": 1.467324694213772
-  },
-  {
-    "task": "Analyze [illustration.pam]",
-    "op": "analyze",
-    "format": "pam",
-    "mode": "lossless",
-    "image": "illustration.pam",
-    "mp": 0.262144,
-    "go_ms": 105.367325,
-    "go_mp_s": 2.487905999321896,
-    "go_bytes": 0,
-    "rust_ms": 144.98519,
-    "rust_mp_s": 1.808074328143447,
-    "rust_bytes": 0,
-    "winner": "Go",
-    "speedup": 1.3759976349404333
-  },
-  {
-    "task": "Analyze [alpha.pam]",
-    "op": "analyze",
-    "format": "pam",
-    "mode": "lossless",
-    "image": "alpha.pam",
-    "mp": 0.262144,
-    "go_ms": 90.040679,
-    "go_mp_s": 2.911395192832786,
-    "go_bytes": 0,
-    "rust_ms": 101.93789,
-    "rust_mp_s": 2.5716051215107556,
-    "rust_bytes": 0,
-    "winner": "Go",
-    "speedup": 1.1321315113583272
-  },
-  {
-    "task": "Encode PNG [photo.pam]",
-    "op": "encode",
-    "format": "png",
-    "mode": "lossless",
-    "image": "photo.pam",
-    "mp": 0.262144,
-    "go_ms": 48.02809,
-    "go_mp_s": 5.458139184797897,
-    "go_bytes": 171296,
-    "rust_ms": 51.805466,
-    "rust_mp_s": 5.060161026251554,
-    "rust_bytes": 167611,
-    "winner": "Go",
-    "speedup": 1.0786493071034056
-  },
-  {
-    "task": "Encode PNG [screenshot.pam]",
-    "op": "encode",
-    "format": "png",
-    "mode": "lossless",
-    "image": "screenshot.pam",
-    "mp": 0.262144,
-    "go_ms": 37.966128,
-    "go_mp_s": 6.9046809303282135,
-    "go_bytes": 7687,
-    "rust_ms": 3.175619,
-    "rust_mp_s": 82.54894557564997,
-    "rust_bytes": 3804,
-    "winner": "Rust",
-    "speedup": 11.955504737816469
-  },
-  {
-    "task": "Encode PNG [illustration.pam]",
-    "op": "encode",
-    "format": "png",
-    "mode": "lossless",
-    "image": "illustration.pam",
-    "mp": 0.262144,
-    "go_ms": 44.266877,
-    "go_mp_s": 5.921899572901878,
-    "go_bytes": 8910,
-    "rust_ms": 8.278733,
-    "rust_mp_s": 31.664748700072824,
-    "rust_bytes": 5517,
-    "winner": "Rust",
-    "speedup": 5.347059386985907
-  },
-  {
-    "task": "Encode PNG [alpha.pam]",
-    "op": "encode",
-    "format": "png",
-    "mode": "lossless",
-    "image": "alpha.pam",
-    "mp": 0.262144,
-    "go_ms": 42.985105,
-    "go_mp_s": 6.098484579716626,
-    "go_bytes": 14825,
-    "rust_ms": 5.63098,
-    "rust_mp_s": 46.55388582449236,
-    "rust_bytes": 10690,
-    "winner": "Rust",
-    "speedup": 7.633680993361724
-  },
-  {
-    "task": "Encode JPEG [photo.pam]",
-    "op": "encode",
-    "format": "jpeg",
-    "mode": "lossy",
-    "image": "photo.pam",
-    "mp": 0.262144,
-    "go_ms": 44.831144,
-    "go_mp_s": 5.847363609547862,
-    "go_bytes": 20798,
-    "rust_ms": 4.853937,
-    "rust_mp_s": 54.00646938763317,
-    "rust_bytes": 20864,
-    "winner": "Rust",
-    "speedup": 9.23603746814184
-  },
-  {
-    "task": "Encode JPEG [screenshot.pam]",
-    "op": "encode",
-    "format": "jpeg",
-    "mode": "lossy",
-    "image": "screenshot.pam",
-    "mp": 0.262144,
-    "go_ms": 42.626089,
-    "go_mp_s": 6.14984874638628,
-    "go_bytes": 61394,
-    "rust_ms": 4.936169,
-    "rust_mp_s": 53.106771668474074,
-    "rust_bytes": 62066,
-    "winner": "Rust",
-    "speedup": 8.63545980698797
-  },
-  {
-    "task": "Encode JPEG [illustration.pam]",
-    "op": "encode",
-    "format": "jpeg",
-    "mode": "lossy",
-    "image": "illustration.pam",
-    "mp": 0.262144,
-    "go_ms": 41.695434,
-    "go_mp_s": 6.287115275020282,
-    "go_bytes": 18929,
-    "rust_ms": 4.831503,
-    "rust_mp_s": 54.257236309280984,
-    "rust_bytes": 19862,
-    "winner": "Rust",
-    "speedup": 8.6299095747224
-  },
-  {
-    "task": "Encode WebP Lossy [photo.pam]",
-    "op": "encode",
-    "format": "webp",
-    "mode": "lossy",
-    "image": "photo.pam",
-    "mp": 0.262144,
-    "go_ms": 61.777034,
-    "go_mp_s": 4.243389218070909,
-    "go_bytes": 10382,
-    "rust_ms": 19.658775,
-    "rust_mp_s": 13.334706765808143,
-    "rust_bytes": 11120,
-    "winner": "Rust",
-    "speedup": 3.142466099744262
-  },
-  {
-    "task": "Encode WebP Lossless [photo.pam]",
-    "op": "encode",
-    "format": "webp",
-    "mode": "lossless",
-    "image": "photo.pam",
-    "mp": 0.262144,
-    "go_ms": 106.149749,
-    "go_mp_s": 2.4695677801367197,
-    "go_bytes": 146178,
-    "rust_ms": 4.354806,
-    "rust_mp_s": 60.19648177209271,
-    "rust_bytes": 172622,
-    "winner": "Rust",
-    "speedup": 24.37531063381469
-  },
-  {
-    "task": "Encode WebP Lossy [screenshot.pam]",
-    "op": "encode",
-    "format": "webp",
-    "mode": "lossy",
-    "image": "screenshot.pam",
-    "mp": 0.262144,
-    "go_ms": 60.559195,
-    "go_mp_s": 4.328723325995334,
-    "go_bytes": 16874,
-    "rust_ms": 22.056076,
-    "rust_mp_s": 11.885341708108005,
-    "rust_bytes": 16456,
-    "winner": "Rust",
-    "speedup": 2.7456921621053536
-  },
-  {
-    "task": "Encode WebP Lossless [screenshot.pam]",
-    "op": "encode",
-    "format": "webp",
-    "mode": "lossless",
-    "image": "screenshot.pam",
-    "mp": 0.262144,
-    "go_ms": 90.792781,
-    "go_mp_s": 2.887278009470819,
-    "go_bytes": 1342,
-    "rust_ms": 6.58123,
-    "rust_mp_s": 39.83206786573331,
-    "rust_bytes": 2866,
-    "winner": "Rust",
-    "speedup": 13.795716150324484
-  },
-  {
-    "task": "Encode WebP Lossy [illustration.pam]",
-    "op": "encode",
-    "format": "webp",
-    "mode": "lossy",
-    "image": "illustration.pam",
-    "mp": 0.262144,
-    "go_ms": 55.35324,
-    "go_mp_s": 4.735838408013695,
-    "go_bytes": 10224,
-    "rust_ms": 20.346708,
-    "rust_mp_s": 12.883853250363646,
-    "rust_bytes": 11360,
-    "winner": "Rust",
-    "speedup": 2.720501026505123
-  },
-  {
-    "task": "Encode WebP Lossless [illustration.pam]",
-    "op": "encode",
-    "format": "webp",
-    "mode": "lossless",
-    "image": "illustration.pam",
-    "mp": 0.262144,
-    "go_ms": 96.643142,
-    "go_mp_s": 2.712494591701085,
-    "go_bytes": 2602,
-    "rust_ms": 3.844399,
-    "rust_mp_s": 68.18855170860256,
-    "rust_bytes": 12226,
-    "winner": "Rust",
-    "speedup": 25.13868669719246
-  },
-  {
-    "task": "Encode WebP Lossy [alpha.pam]",
-    "op": "encode",
-    "format": "webp",
-    "mode": "lossy",
-    "image": "alpha.pam",
-    "mp": 0.262144,
-    "go_ms": 166.457303,
-    "go_mp_s": 1.5748422885356972,
-    "go_bytes": 7738,
-    "rust_ms": 18.653817,
-    "rust_mp_s": 14.053102375776497,
-    "rust_bytes": 9862,
-    "winner": "Rust",
-    "speedup": 8.923498230951875
-  },
-  {
-    "task": "Encode WebP Lossless [alpha.pam]",
-    "op": "encode",
-    "format": "webp",
-    "mode": "lossless",
-    "image": "alpha.pam",
-    "mp": 0.262144,
-    "go_ms": 87.778196,
-    "go_mp_s": 2.986436403865033,
-    "go_bytes": 7940,
-    "rust_ms": 2.98929,
-    "rust_mp_s": 87.69440234972184,
-    "rust_bytes": 9910,
-    "winner": "Rust",
-    "speedup": 29.36422896406839
-  },
-  {
-    "task": "Encode AVIF Lossy [photo.pam]",
-    "op": "encode",
-    "format": "avif",
-    "mode": "lossy",
-    "image": "photo.pam",
-    "mp": 0.262144,
-    "go_ms": 212.687682,
-    "go_mp_s": 1.2325302412200816,
-    "go_bytes": 10200,
-    "rust_ms": 496.388837,
-    "rust_mp_s": 0.5281021257131936,
-    "rust_bytes": 7165,
-    "winner": "Go",
-    "speedup": 2.3338861580145487
-  },
-  {
-    "task": "Encode AVIF Lossless [photo.pam]",
-    "op": "encode",
-    "format": "avif",
-    "mode": "lossless",
-    "image": "photo.pam",
-    "mp": 0.262144,
-    "go_ms": 71.143952,
-    "go_mp_s": 3.6846983142010443,
-    "go_bytes": 1022,
-    "rust_ms": 1573.531252,
-    "rust_mp_s": 0.16659599208265358,
-    "rust_bytes": 245224,
-    "winner": "Go",
-    "speedup": 22.117568785045847
-  },
-  {
-    "task": "Encode AVIF Lossy [screenshot.pam]",
-    "op": "encode",
-    "format": "avif",
-    "mode": "lossy",
-    "image": "screenshot.pam",
-    "mp": 0.262144,
-    "go_ms": 256.591236,
-    "go_mp_s": 1.0216405052899,
-    "go_bytes": 23395,
-    "rust_ms": 520.491099,
-    "rust_mp_s": 0.5036474216439962,
-    "rust_bytes": 9668,
-    "winner": "Go",
-    "speedup": 2.0284835410356727
-  },
-  {
-    "task": "Encode AVIF Lossless [screenshot.pam]",
-    "op": "encode",
-    "format": "avif",
-    "mode": "lossless",
-    "image": "screenshot.pam",
-    "mp": 0.262144,
-    "go_ms": 106.851352,
-    "go_mp_s": 2.4533522046590477,
-    "go_bytes": 4838,
-    "rust_ms": 993.749109,
-    "rust_mp_s": 0.26379294092026195,
-    "rust_bytes": 32002,
-    "winner": "Go",
-    "speedup": 9.300295133373698
-  },
-  {
-    "task": "Encode JXL Lossy [photo.pam]",
-    "op": "encode",
-    "format": "jxl",
-    "mode": "lossy",
-    "image": "photo.pam",
-    "mp": 0.262144,
-    "go_ms": 77.781049,
-    "go_mp_s": 3.370281107934145,
-    "go_bytes": 12554,
-    "rust_ms": 17.099468,
-    "rust_mp_s": 15.330535429523302,
-    "rust_bytes": 13362,
-    "winner": "Rust",
-    "speedup": 4.548740873107865
-  },
-  {
-    "task": "Encode JXL Lossless [photo.pam]",
-    "op": "encode",
-    "format": "jxl",
-    "mode": "lossless",
-    "image": "photo.pam",
-    "mp": 0.262144,
-    "go_ms": 189.469162,
-    "go_mp_s": 1.383570799769516,
-    "go_bytes": 139516,
-    "rust_ms": 29.995217,
-    "rust_mp_s": 8.7395267052077,
-    "rust_bytes": 171924,
-    "winner": "Rust",
-    "speedup": 6.316645817231461
-  },
-  {
-    "task": "Encode JXL Lossy [screenshot.pam]",
-    "op": "encode",
-    "format": "jxl",
-    "mode": "lossy",
-    "image": "screenshot.pam",
-    "mp": 0.262144,
-    "go_ms": 107.426521,
-    "go_mp_s": 2.4402167878079193,
-    "go_bytes": 34980,
-    "rust_ms": 24.511688,
-    "rust_mp_s": 10.694653097738515,
-    "rust_bytes": 40355,
-    "winner": "Rust",
-    "speedup": 4.382665159576117
-  },
-  {
-    "task": "Encode JXL Lossless [screenshot.pam]",
-    "op": "encode",
-    "format": "jxl",
-    "mode": "lossless",
-    "image": "screenshot.pam",
-    "mp": 0.262144,
-    "go_ms": 153.301158,
-    "go_mp_s": 1.7099936061800656,
-    "go_bytes": 4522,
-    "rust_ms": 21.588859,
-    "rust_mp_s": 12.142559270964714,
-    "rust_bytes": 6998,
-    "winner": "Rust",
-    "speedup": 7.100938405313592
-  },
-  {
-    "task": "Decode PNG [photo.png]",
-    "op": "decode",
-    "format": "png",
-    "mode": "lossless",
-    "image": "photo.png",
-    "mp": 0.262144,
-    "go_ms": 47.818143,
-    "go_mp_s": 5.482103309616185,
-    "go_bytes": 786495,
-    "rust_ms": 4.594983,
-    "rust_mp_s": 57.050047845661226,
-    "rust_bytes": 786495,
-    "winner": "Rust",
-    "speedup": 10.406598457491572
-  },
-  {
-    "task": "Decode JPEG [photo.jpg]",
-    "op": "decode",
-    "format": "jpeg",
-    "mode": "lossy",
-    "image": "photo.jpg",
-    "mp": 0.262144,
-    "go_ms": 47.768587,
-    "go_mp_s": 5.487790543186886,
-    "go_bytes": 786495,
-    "rust_ms": 3.048005,
-    "rust_mp_s": 86.00510825933685,
-    "rust_bytes": 786495,
-    "winner": "Rust",
-    "speedup": 15.672082887003137
-  },
-  {
-    "task": "Decode WebP [photo.webp]",
-    "op": "decode",
-    "format": "webp",
-    "mode": "lossy",
-    "image": "photo.webp",
-    "mp": 0.262144,
-    "go_ms": 46.597459,
-    "go_mp_s": 5.625714483701783,
-    "go_bytes": 1048645,
-    "rust_ms": 6.156649,
-    "rust_mp_s": 42.57900685908844,
-    "rust_bytes": 786495,
-    "winner": "Rust",
-    "speedup": 7.568639855869646
-  },
-  {
-    "task": "Decode AVIF [photo.avif]",
-    "op": "decode",
-    "format": "avif",
-    "mode": "lossy",
-    "image": "photo.avif",
-    "mp": 0.262144,
-    "go_ms": 40.343319,
-    "go_mp_s": 6.4978292936186035,
-    "go_bytes": 1048645,
-    "rust_ms": 18.315433,
-    "rust_mp_s": 14.312738333841192,
-    "rust_bytes": 786495,
-    "winner": "Rust",
-    "speedup": 2.202695344412551
-  },
-  {
-    "task": "Decode JXL [photo.jxl]",
-    "op": "decode",
-    "format": "jxl",
-    "mode": "lossy",
-    "image": "photo.jxl",
-    "mp": 0.262144,
-    "go_ms": 42.383663,
-    "go_mp_s": 6.185024640272361,
-    "go_bytes": 1048645,
-    "rust_ms": 18.532077,
-    "rust_mp_s": 14.14541931808291,
-    "rust_bytes": 786495,
-    "winner": "Rust",
-    "speedup": 2.287043324933303
-  },
-  {
-    "task": "Transcode PNG -> WebP",
-    "op": "transcode",
-    "format": "png",
-    "mode": "lossy",
-    "image": "photo.png",
-    "mp": 0.262144,
-    "go_ms": 63.520902,
-    "go_mp_s": 4.126893538130173,
-    "go_bytes": 10382,
-    "rust_ms": 19.513302,
-    "rust_mp_s": 13.434117916075916,
-    "rust_bytes": 11120,
-    "winner": "Rust",
-    "speedup": 3.2552615646495915
-  },
-  {
-    "task": "Transcode PNG -> AVIF",
-    "op": "transcode",
-    "format": "png",
-    "mode": "lossy",
-    "image": "photo.png",
-    "mp": 0.262144,
-    "go_ms": 221.882624,
-    "go_mp_s": 1.1814534877683798,
-    "go_bytes": 10200,
-    "rust_ms": 504.281223,
-    "rust_mp_s": 0.5198369244059678,
-    "rust_bytes": 7165,
-    "winner": "Go",
-    "speedup": 2.2727386845758595
-  },
-  {
-    "task": "Transcode JPEG -> WebP",
-    "op": "transcode",
-    "format": "jpeg",
-    "mode": "lossy",
-    "image": "photo.jpg",
-    "mp": 0.262144,
-    "go_ms": 72.574034,
-    "go_mp_s": 3.6120907926931554,
-    "go_bytes": 11044,
-    "rust_ms": 21.10557,
-    "rust_mp_s": 12.420607451018853,
-    "rust_bytes": 11764,
-    "winner": "Rust",
-    "speedup": 3.438619947246153
-  },
-  {
-    "task": "Transcode JXL -> PNG",
-    "op": "transcode",
-    "format": "jxl",
-    "mode": "lossless",
-    "image": "photo.jxl",
-    "mp": 0.262144,
-    "go_ms": 56.294911,
-    "go_mp_s": 4.65661984970542,
-    "go_bytes": 178784,
-    "rust_ms": 75.529095,
-    "rust_mp_s": 3.47076845022438,
-    "rust_bytes": 175387,
-    "winner": "Go",
-    "speedup": 1.3416682548800902
-  }
-]
+  "results": [
+    {
+      "task": "Analyze [photo.pam]",
+      "op": "analyze",
+      "format": "pam",
+      "mode": "lossless",
+      "image": "photo.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 75.93195,
+          "p25": 75.5418365,
+          "p75": 82.103707,
+          "min": 69.960106,
+          "max": 84.636616,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 73.643743,
+          "p25": 73.3728655,
+          "p75": 79.4941405,
+          "min": 68.019569,
+          "max": 82.360143,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 0,
+        "throughput_mp_s": 3.5596235242958794
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 160.841129,
+          "p25": 160.2136265,
+          "p75": 162.6325085,
+          "min": 158.931258,
+          "max": 164.521044,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 159.083009,
+          "p25": 158.09035,
+          "p75": 160.8523925,
+          "min": 157.136076,
+          "max": 162.469188,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 0,
+        "throughput_mp_s": 1.6478441138864803
+      },
+      "bytes_ratio": null,
+      "winner": "Go",
+      "speedup": 2.1601700635992933,
+      "caveat": "op=analyze: os servidores cronometram trechos diferentes (Rust inclui parse do PAM e serializa\u00e7\u00e3o JSON; Go mede s\u00f3 a an\u00e1lise), ent\u00e3o o tempo de analyze n\u00e3o \u00e9 compar\u00e1vel entre Go e Rust (issue #7)."
+    },
+    {
+      "task": "Analyze [screenshot.pam]",
+      "op": "analyze",
+      "format": "pam",
+      "mode": "lossless",
+      "image": "screenshot.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 68.803534,
+          "p25": 67.2833485,
+          "p75": 71.22441599999999,
+          "min": 65.128816,
+          "max": 73.979055,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 67.365394,
+          "p25": 65.638777,
+          "p75": 69.6425795,
+          "min": 63.112673,
+          "max": 71.824002,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 0,
+        "throughput_mp_s": 3.891374850416521
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 153.297512,
+          "p25": 150.0303095,
+          "p75": 156.2855715,
+          "min": 148.058207,
+          "max": 166.94924,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 151.159669,
+          "p25": 148.1108925,
+          "p75": 154.3063205,
+          "min": 146.130682,
+          "max": 164.665502,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 0,
+        "throughput_mp_s": 1.7342191983762547
+      },
+      "bytes_ratio": null,
+      "winner": "Go",
+      "speedup": 2.243877160430473,
+      "caveat": "op=analyze: os servidores cronometram trechos diferentes (Rust inclui parse do PAM e serializa\u00e7\u00e3o JSON; Go mede s\u00f3 a an\u00e1lise), ent\u00e3o o tempo de analyze n\u00e3o \u00e9 compar\u00e1vel entre Go e Rust (issue #7)."
+    },
+    {
+      "task": "Analyze [illustration.pam]",
+      "op": "analyze",
+      "format": "pam",
+      "mode": "lossless",
+      "image": "illustration.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 64.899343,
+          "p25": 63.502133,
+          "p75": 65.2491345,
+          "min": 63.245499,
+          "max": 66.629371,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 62.155569,
+          "p25": 61.825,
+          "p75": 63.7569145,
+          "min": 61.738115,
+          "max": 65.196128,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 0,
+        "throughput_mp_s": 4.217546459915764
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 146.893106,
+          "p25": 146.31046750000002,
+          "p75": 147.12508400000002,
+          "min": 145.552252,
+          "max": 147.51256,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 145.536602,
+          "p25": 144.947366,
+          "p75": 145.8025925,
+          "min": 144.215022,
+          "max": 145.959099,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 0,
+        "throughput_mp_s": 1.8012238598232493
+      },
+      "bytes_ratio": null,
+      "winner": "Go",
+      "speedup": 2.3414893362170006,
+      "caveat": "op=analyze: os servidores cronometram trechos diferentes (Rust inclui parse do PAM e serializa\u00e7\u00e3o JSON; Go mede s\u00f3 a an\u00e1lise), ent\u00e3o o tempo de analyze n\u00e3o \u00e9 compar\u00e1vel entre Go e Rust (issue #7)."
+    },
+    {
+      "task": "Analyze [alpha.pam]",
+      "op": "analyze",
+      "format": "pam",
+      "mode": "lossless",
+      "image": "alpha.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 55.043199,
+          "p25": 54.621057,
+          "p75": 57.319538,
+          "min": 53.864082,
+          "max": 59.861525,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 52.836668,
+          "p25": 52.566646500000004,
+          "p75": 54.788125,
+          "min": 51.864766,
+          "max": 57.965518,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 0,
+        "throughput_mp_s": 4.961402940851607
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 97.961644,
+          "p25": 97.16299599999999,
+          "p75": 98.106311,
+          "min": 96.842184,
+          "max": 98.399045,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 96.101793,
+          "p25": 95.655367,
+          "p75": 96.255597,
+          "min": 95.456902,
+          "max": 96.578398,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 0,
+        "throughput_mp_s": 2.7277742882487113
+      },
+      "bytes_ratio": null,
+      "winner": "Go",
+      "speedup": 1.8188465820744033,
+      "caveat": "op=analyze: os servidores cronometram trechos diferentes (Rust inclui parse do PAM e serializa\u00e7\u00e3o JSON; Go mede s\u00f3 a an\u00e1lise), ent\u00e3o o tempo de analyze n\u00e3o \u00e9 compar\u00e1vel entre Go e Rust (issue #7)."
+    },
+    {
+      "task": "Encode PNG [photo.pam]",
+      "op": "encode",
+      "format": "png",
+      "mode": "lossless",
+      "image": "photo.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 14.342055,
+          "p25": 14.212868,
+          "p75": 14.8409085,
+          "min": 13.465329,
+          "max": 18.424926,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 12.827086,
+          "p25": 12.4550925,
+          "p75": 13.3190055,
+          "min": 12.134614,
+          "max": 16.151028,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 171296,
+        "throughput_mp_s": 20.43675391277489
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 50.968311,
+          "p25": 50.7252225,
+          "p75": 51.357076,
+          "min": 50.416176,
+          "max": 51.579237,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 49.16654,
+          "p25": 49.0387925,
+          "p75": 49.6506215,
+          "min": 48.903551,
+          "max": 49.970239,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 167611,
+        "throughput_mp_s": 5.331756108930993
+      },
+      "bytes_ratio": 1.021985430550501,
+      "winner": "Go",
+      "speedup": 3.8330248974708674,
+      "caveat": null
+    },
+    {
+      "task": "Encode PNG [screenshot.pam]",
+      "op": "encode",
+      "format": "png",
+      "mode": "lossless",
+      "image": "screenshot.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 5.623072,
+          "p25": 5.4806705000000004,
+          "p75": 6.34976,
+          "min": 5.2399,
+          "max": 7.333863,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 4.072775,
+          "p25": 3.9655039999999997,
+          "p75": 4.878277,
+          "min": 3.827351,
+          "max": 5.694221,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 7687,
+        "throughput_mp_s": 64.36496000883918
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 2.91985,
+          "p25": 2.841088,
+          "p75": 3.772575,
+          "min": 2.764549,
+          "max": 5.988561,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 1.497065,
+          "p25": 1.4728945,
+          "p75": 2.2497825,
+          "min": 1.431329,
+          "max": 3.422001,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 3804,
+        "throughput_mp_s": 175.10528934949383
+      },
+      "bytes_ratio": 2.0207676130389065,
+      "winner": "Rust",
+      "speedup": 2.72050645763544,
+      "caveat": null
+    },
+    {
+      "task": "Encode PNG [illustration.pam]",
+      "op": "encode",
+      "format": "png",
+      "mode": "lossless",
+      "image": "illustration.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 7.304599,
+          "p25": 7.0808745,
+          "p75": 7.452102,
+          "min": 6.815726,
+          "max": 11.815083,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 5.68444,
+          "p25": 5.517118,
+          "p75": 5.8921995,
+          "min": 5.384805,
+          "max": 10.340635,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 8910,
+        "throughput_mp_s": 46.116064203334005
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 3.42516,
+          "p25": 3.2939685,
+          "p75": 3.580304,
+          "min": 3.017248,
+          "max": 3.719895,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 1.88725,
+          "p25": 1.872226,
+          "p75": 2.007316,
+          "min": 1.826765,
+          "max": 2.156995,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 5517,
+        "throughput_mp_s": 138.90263611074315
+      },
+      "bytes_ratio": 1.6150081566068515,
+      "winner": "Rust",
+      "speedup": 3.012022784474765,
+      "caveat": null
+    },
+    {
+      "task": "Encode PNG [alpha.pam]",
+      "op": "encode",
+      "format": "png",
+      "mode": "lossless",
+      "image": "alpha.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 7.450218,
+          "p25": 6.920237,
+          "p75": 8.6439825,
+          "min": 6.779792,
+          "max": 9.976763,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 5.575905,
+          "p25": 5.281883499999999,
+          "p75": 6.5411055000000005,
+          "min": 5.10728,
+          "max": 8.20949,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 14825,
+        "throughput_mp_s": 47.01371346893464
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 4.91869,
+          "p25": 4.705953,
+          "p75": 5.201994,
+          "min": 4.535117,
+          "max": 6.895662,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 3.19935,
+          "p25": 3.1245114999999997,
+          "p75": 3.4734075,
+          "min": 3.10275,
+          "max": 5.246618,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 10690,
+        "throughput_mp_s": 81.93664338068669
+      },
+      "bytes_ratio": 1.3868101028999065,
+      "winner": "Rust",
+      "speedup": 1.7428243236907497,
+      "caveat": null
+    },
+    {
+      "task": "Encode JPEG [photo.pam]",
+      "op": "encode",
+      "format": "jpeg",
+      "mode": "lossy",
+      "image": "photo.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 5.611802,
+          "p25": 5.566185,
+          "p75": 5.8408619999999996,
+          "min": 5.49198,
+          "max": 7.562706,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 4.245522,
+          "p25": 4.2347305,
+          "p75": 4.492706500000001,
+          "min": 4.123055,
+          "max": 6.185091,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 18501,
+        "throughput_mp_s": 61.745999667414274
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 3.083463,
+          "p25": 3.017556,
+          "p75": 3.6686335000000003,
+          "min": 2.776809,
+          "max": 5.783746,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 1.488685,
+          "p25": 1.476833,
+          "p75": 1.5108389999999998,
+          "min": 1.469926,
+          "max": 1.843476,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 18575,
+        "throughput_mp_s": 176.0909796229558
+      },
+      "bytes_ratio": 0.9960161507402423,
+      "winner": "Rust",
+      "speedup": 2.8518605346329142,
+      "caveat": null
+    },
+    {
+      "task": "Encode JPEG [screenshot.pam]",
+      "op": "encode",
+      "format": "jpeg",
+      "mode": "lossy",
+      "image": "screenshot.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 5.5326,
+          "p25": 5.2534555,
+          "p75": 6.5658595,
+          "min": 5.050275,
+          "max": 8.135678,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 3.865259,
+          "p25": 3.7434494999999997,
+          "p75": 4.1880109999999995,
+          "min": 3.637596,
+          "max": 6.36348,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 55900,
+        "throughput_mp_s": 67.82055225794701
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 3.104327,
+          "p25": 2.967991,
+          "p75": 3.2003225,
+          "min": 2.685711,
+          "max": 3.912416,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 1.620355,
+          "p25": 1.6140210000000002,
+          "p75": 1.660069,
+          "min": 1.600237,
+          "max": 2.318206,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 56551,
+        "throughput_mp_s": 161.7818317590898
+      },
+      "bytes_ratio": 0.988488267227812,
+      "winner": "Rust",
+      "speedup": 2.3854396104557334,
+      "caveat": null
+    },
+    {
+      "task": "Encode JPEG [illustration.pam]",
+      "op": "encode",
+      "format": "jpeg",
+      "mode": "lossy",
+      "image": "illustration.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 4.855892,
+          "p25": 4.638006,
+          "p75": 5.6591214999999995,
+          "min": 4.574593,
+          "max": 7.65324,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 3.081051,
+          "p25": 2.9658175,
+          "p75": 3.9889575,
+          "min": 2.853209,
+          "max": 5.276321,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 16992,
+        "throughput_mp_s": 85.08265523680069
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 3.014882,
+          "p25": 2.850179,
+          "p75": 3.45318,
+          "min": 2.694946,
+          "max": 4.652873,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 1.462924,
+          "p25": 1.4242445,
+          "p75": 1.5768244999999999,
+          "min": 1.397,
+          "max": 1.669925,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 17470,
+        "throughput_mp_s": 179.1918103742915
+      },
+      "bytes_ratio": 0.9726388093875215,
+      "winner": "Rust",
+      "speedup": 2.106090952093205,
+      "caveat": null
+    },
+    {
+      "task": "Encode WebP Lossy [photo.pam]",
+      "op": "encode",
+      "format": "webp",
+      "mode": "lossy",
+      "image": "photo.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 32.827559,
+          "p25": 32.597498,
+          "p75": 33.4996325,
+          "min": 32.326764,
+          "max": 36.734896,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 30.860392,
+          "p25": 30.8290135,
+          "p75": 31.590074,
+          "min": 30.201522,
+          "max": 34.948007,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 11456,
+        "throughput_mp_s": 8.494512966653177
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 15.655645,
+          "p25": 15.500737,
+          "p75": 15.983291000000001,
+          "min": 15.242647,
+          "max": 17.280842,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 14.096994,
+          "p25": 14.008246499999998,
+          "p75": 14.346832,
+          "min": 13.858536,
+          "max": 14.583591,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 9438,
+        "throughput_mp_s": 18.595737502619354
+      },
+      "bytes_ratio": 1.2138164865437593,
+      "winner": "Rust",
+      "speedup": 2.189146991195428,
+      "caveat": null
+    },
+    {
+      "task": "Encode WebP Lossless [photo.pam]",
+      "op": "encode",
+      "format": "webp",
+      "mode": "lossless",
+      "image": "photo.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 68.137295,
+          "p25": 67.346124,
+          "p75": 68.8203705,
+          "min": 67.077821,
+          "max": 69.59599,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 66.678208,
+          "p25": 65.95992,
+          "p75": 66.935412,
+          "min": 65.659665,
+          "max": 68.242068,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 146178,
+        "throughput_mp_s": 3.931479382289338
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 3.551145,
+          "p25": 3.4543815,
+          "p75": 4.168349,
+          "min": 3.401225,
+          "max": 4.74363,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 2.061735,
+          "p25": 2.0241055,
+          "p75": 2.1152845,
+          "min": 2.017841,
+          "max": 2.290311,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 172622,
+        "throughput_mp_s": 127.14728129463775
+      },
+      "bytes_ratio": 0.8468097924945835,
+      "winner": "Rust",
+      "speedup": 32.34082362670275,
+      "caveat": null
+    },
+    {
+      "task": "Encode WebP Lossy [screenshot.pam]",
+      "op": "encode",
+      "format": "webp",
+      "mode": "lossy",
+      "image": "screenshot.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 36.235407,
+          "p25": 36.092312,
+          "p75": 36.527591,
+          "min": 35.410454,
+          "max": 39.576201,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 34.670607,
+          "p25": 34.54641,
+          "p75": 34.872200500000005,
+          "min": 33.873939,
+          "max": 38.196684,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 23106,
+        "throughput_mp_s": 7.5609867459199664
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 15.956901,
+          "p25": 15.759472500000001,
+          "p75": 16.1922625,
+          "min": 15.577153,
+          "max": 16.364786,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 14.435037,
+          "p25": 14.3282875,
+          "p75": 14.6152805,
+          "min": 14.184129,
+          "max": 14.86835,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 15082,
+        "throughput_mp_s": 18.16025826605086
+      },
+      "bytes_ratio": 1.5320249303805862,
+      "winner": "Rust",
+      "speedup": 2.4018370718412427,
+      "caveat": null
+    },
+    {
+      "task": "Encode WebP Lossless [screenshot.pam]",
+      "op": "encode",
+      "format": "webp",
+      "mode": "lossless",
+      "image": "screenshot.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 56.711434,
+          "p25": 56.180367000000004,
+          "p75": 56.972465,
+          "min": 56.054706,
+          "max": 57.962129,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 55.112677,
+          "p25": 54.880331999999996,
+          "p75": 55.543887,
+          "min": 54.610198,
+          "max": 56.610885,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 1342,
+        "throughput_mp_s": 4.7565100131136795
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 1.930144,
+          "p25": 1.559505,
+          "p75": 1.9856004999999999,
+          "min": 1.458502,
+          "max": 2.396468,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 0.621694,
+          "p25": 0.6117395,
+          "p75": 0.634418,
+          "min": 0.598678,
+          "max": 0.658999,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 2866,
+        "throughput_mp_s": 421.6608170579095
+      },
+      "bytes_ratio": 0.46824842986741105,
+      "winner": "Rust",
+      "speedup": 88.6492020189997,
+      "caveat": null
+    },
+    {
+      "task": "Encode WebP Lossy [illustration.pam]",
+      "op": "encode",
+      "format": "webp",
+      "mode": "lossy",
+      "image": "illustration.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 31.403313,
+          "p25": 30.801869500000002,
+          "p75": 32.414517000000004,
+          "min": 30.024527,
+          "max": 33.520884,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 29.84297,
+          "p25": 29.189283500000002,
+          "p75": 30.763741,
+          "min": 28.685275,
+          "max": 31.963666,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 11864,
+        "throughput_mp_s": 8.784112305176059
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 12.938761,
+          "p25": 12.830656999999999,
+          "p75": 13.0703515,
+          "min": 12.511346,
+          "max": 13.723341,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 10.985931,
+          "p25": 10.881007499999999,
+          "p75": 11.079877,
+          "min": 10.77829,
+          "max": 11.244405,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 9386,
+        "throughput_mp_s": 23.861791959188526
+      },
+      "bytes_ratio": 1.2640102279991476,
+      "winner": "Rust",
+      "speedup": 2.716471639954775,
+      "caveat": null
+    },
+    {
+      "task": "Encode WebP Lossless [illustration.pam]",
+      "op": "encode",
+      "format": "webp",
+      "mode": "lossless",
+      "image": "illustration.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 59.791478,
+          "p25": 58.528279999999995,
+          "p75": 60.4321785,
+          "min": 57.32341,
+          "max": 76.962859,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 58.261896,
+          "p25": 56.929889,
+          "p75": 58.446048,
+          "min": 55.651505,
+          "max": 75.185607,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 2602,
+        "throughput_mp_s": 4.499407297009352
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 2.318738,
+          "p25": 2.2426005,
+          "p75": 2.3961245,
+          "min": 2.052193,
+          "max": 2.80508,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 0.72056,
+          "p25": 0.707249,
+          "p75": 0.7485835000000001,
+          "min": 0.661089,
+          "max": 0.94123,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 12226,
+        "throughput_mp_s": 363.805928722105
+      },
+      "bytes_ratio": 0.2128251267789956,
+      "winner": "Rust",
+      "speedup": 80.8564116798046,
+      "caveat": null
+    },
+    {
+      "task": "Encode WebP Lossy [alpha.pam]",
+      "op": "encode",
+      "format": "webp",
+      "mode": "lossy",
+      "image": "alpha.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 42.078447,
+          "p25": 41.440019500000005,
+          "p75": 42.296899999999994,
+          "min": 40.1106,
+          "max": 48.358877,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 40.191784,
+          "p25": 39.676217,
+          "p75": 40.553589,
+          "min": 37.944327,
+          "max": 45.37899,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 18670,
+        "throughput_mp_s": 6.522328045950883
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 12.595695,
+          "p25": 12.3849195,
+          "p75": 12.738850500000002,
+          "min": 12.232169,
+          "max": 12.892405,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 10.74763,
+          "p25": 10.669191999999999,
+          "p75": 10.868916,
+          "min": 10.519465,
+          "max": 11.049507,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 9276,
+        "throughput_mp_s": 24.390865707137294
+      },
+      "bytes_ratio": 2.0127210004312204,
+      "winner": "Rust",
+      "speedup": 3.7395950549097803,
+      "caveat": null
+    },
+    {
+      "task": "Encode WebP Lossless [alpha.pam]",
+      "op": "encode",
+      "format": "webp",
+      "mode": "lossless",
+      "image": "alpha.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 55.293019,
+          "p25": 55.169607,
+          "p75": 55.9684295,
+          "min": 54.674886,
+          "max": 57.628221,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 53.836434,
+          "p25": 53.6804315,
+          "p75": 54.430985500000006,
+          "min": 53.081329,
+          "max": 56.142518,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 7940,
+        "throughput_mp_s": 4.869267529866485
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 2.225094,
+          "p25": 2.0863565,
+          "p75": 2.2521575,
+          "min": 1.849066,
+          "max": 3.208954,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 0.715704,
+          "p25": 0.689057,
+          "p75": 0.731973,
+          "min": 0.677333,
+          "max": 0.795034,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 9910,
+        "throughput_mp_s": 366.27432569889226
+      },
+      "bytes_ratio": 0.8012108980827447,
+      "winner": "Rust",
+      "speedup": 75.22164749673048,
+      "caveat": null
+    },
+    {
+      "task": "Encode AVIF Lossy [photo.pam]",
+      "op": "encode",
+      "format": "avif",
+      "mode": "lossy",
+      "image": "photo.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 81.793636,
+          "p25": 81.09734800000001,
+          "p75": 82.3384695,
+          "min": 80.451379,
+          "max": 82.410942,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 80.33225,
+          "p25": 79.093342,
+          "p75": 80.747807,
+          "min": 78.572768,
+          "max": 80.820662,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 10788,
+        "throughput_mp_s": 3.2632473259494157
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 137.863873,
+          "p25": 131.766074,
+          "p75": 139.5231005,
+          "min": 129.37523,
+          "max": 141.864607,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 136.408596,
+          "p25": 130.34962000000002,
+          "p75": 137.8884295,
+          "min": 127.873521,
+          "max": 140.238482,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 15174,
+        "throughput_mp_s": 1.9217557227845083
+      },
+      "bytes_ratio": 0.7109529458283906,
+      "winner": "Go",
+      "speedup": 1.698055214437539,
+      "caveat": null
+    },
+    {
+      "task": "Encode AVIF Lossy [screenshot.pam]",
+      "op": "encode",
+      "format": "avif",
+      "mode": "lossy",
+      "image": "screenshot.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 108.313932,
+          "p25": 107.498973,
+          "p75": 108.889939,
+          "min": 106.767053,
+          "max": 109.946909,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 106.196117,
+          "p25": 105.69927799999999,
+          "p75": 107.1979575,
+          "min": 104.69171,
+          "max": 108.045302,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 38247,
+        "throughput_mp_s": 2.4684895023044953
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 143.596646,
+          "p25": 136.8155845,
+          "p75": 145.074412,
+          "min": 134.638425,
+          "max": 150.451793,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 142.203169,
+          "p25": 135.30665900000002,
+          "p75": 143.6383495,
+          "min": 133.290195,
+          "max": 149.084501,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 29138,
+        "throughput_mp_s": 1.8434469628451107
+      },
+      "bytes_ratio": 1.3126158281282174,
+      "winner": "Go",
+      "speedup": 1.33906185100911,
+      "caveat": null
+    },
+    {
+      "task": "Encode JXL Lossy [photo.pam]",
+      "op": "encode",
+      "format": "jxl",
+      "mode": "lossy",
+      "image": "photo.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 41.464502,
+          "p25": 41.1201365,
+          "p75": 41.7605045,
+          "min": 37.759592,
+          "max": 46.423609,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 39.898798,
+          "p25": 39.369275,
+          "p75": 40.220989,
+          "min": 36.376393,
+          "max": 44.935422,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 11961,
+        "throughput_mp_s": 6.570222992682637
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 11.657814,
+          "p25": 11.577277500000001,
+          "p75": 11.934216,
+          "min": 11.199432,
+          "max": 13.332474,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 10.027646,
+          "p25": 9.841534,
+          "p75": 10.5542355,
+          "min": 9.555239,
+          "max": 11.920516,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 10765,
+        "throughput_mp_s": 26.142127474384314
+      },
+      "bytes_ratio": 1.1111007895959126,
+      "winner": "Rust",
+      "speedup": 3.9788797889355085,
+      "caveat": null
+    },
+    {
+      "task": "Encode JXL Lossless [photo.pam]",
+      "op": "encode",
+      "format": "jxl",
+      "mode": "lossless",
+      "image": "photo.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 156.863635,
+          "p25": 153.2428125,
+          "p75": 157.8543805,
+          "min": 151.443999,
+          "max": 158.998484,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 155.265609,
+          "p25": 151.6401875,
+          "p75": 156.345795,
+          "min": 149.660833,
+          "max": 157.00642,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 139516,
+        "throughput_mp_s": 1.6883584310032236
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 22.231072,
+          "p25": 22.030948000000002,
+          "p75": 23.40854,
+          "min": 21.716036,
+          "max": 24.985801,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 20.629934,
+          "p25": 20.5117005,
+          "p75": 21.853243,
+          "min": 20.175533,
+          "max": 23.282122,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 171924,
+        "throughput_mp_s": 12.70697230538886
+      },
+      "bytes_ratio": 0.8114981038133129,
+      "winner": "Rust",
+      "speedup": 7.526229070824949,
+      "caveat": null
+    },
+    {
+      "task": "Encode JXL Lossy [screenshot.pam]",
+      "op": "encode",
+      "format": "jxl",
+      "mode": "lossy",
+      "image": "screenshot.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 61.155162,
+          "p25": 59.171630500000006,
+          "p75": 63.1846205,
+          "min": 56.859619,
+          "max": 70.951946,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 59.652115,
+          "p25": 57.376574000000005,
+          "p75": 61.436799,
+          "min": 55.290359,
+          "max": 69.488889,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 30793,
+        "throughput_mp_s": 4.394546614147713
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 17.433523,
+          "p25": 17.1562045,
+          "p75": 18.4816445,
+          "min": 16.640684,
+          "max": 19.3291,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 15.969217,
+          "p25": 15.6507325,
+          "p75": 16.974756,
+          "min": 15.099037,
+          "max": 17.771022,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 33987,
+        "throughput_mp_s": 16.415582554861643
+      },
+      "bytes_ratio": 0.9060228911054227,
+      "winner": "Rust",
+      "speedup": 3.735443948191073,
+      "caveat": null
+    },
+    {
+      "task": "Encode JXL Lossless [screenshot.pam]",
+      "op": "encode",
+      "format": "jxl",
+      "mode": "lossless",
+      "image": "screenshot.pam",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 119.657592,
+          "p25": 119.39331100000001,
+          "p75": 121.655276,
+          "min": 118.807237,
+          "max": 123.914471,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 118.02851,
+          "p25": 117.3423825,
+          "p75": 119.8788525,
+          "min": 117.165872,
+          "max": 121.489225,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 4522,
+        "throughput_mp_s": 2.221022700362819
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 15.55377,
+          "p25": 15.396937000000001,
+          "p75": 15.880325,
+          "min": 15.285504,
+          "max": 16.888919,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 14.160527,
+          "p25": 14.0015985,
+          "p75": 14.3783335,
+          "min": 13.832519,
+          "max": 15.319358,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 6998,
+        "throughput_mp_s": 18.512305368295966
+      },
+      "bytes_ratio": 0.6461846241783367,
+      "winner": "Rust",
+      "speedup": 8.335036542072197,
+      "caveat": null
+    },
+    {
+      "task": "Decode PNG [photo.png]",
+      "op": "decode",
+      "format": "png",
+      "mode": "lossless",
+      "image": "photo.png",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 13.701178,
+          "p25": 13.5746745,
+          "p75": 13.752668,
+          "min": 13.180361,
+          "max": 15.750771,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 12.028065,
+          "p25": 11.991041,
+          "p75": 12.201152,
+          "min": 11.804908,
+          "max": 13.879343,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 786495,
+        "throughput_mp_s": 21.794361769744345
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 2.865706,
+          "p25": 2.6110625,
+          "p75": 3.434799,
+          "min": 2.424424,
+          "max": 3.712631,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 1.517186,
+          "p25": 1.482374,
+          "p75": 1.5858375,
+          "min": 1.452902,
+          "max": 1.758099,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 786495,
+        "throughput_mp_s": 172.7830338534629
+      },
+      "bytes_ratio": 1.0,
+      "winner": "Rust",
+      "speedup": 7.9278776629892445,
+      "caveat": null
+    },
+    {
+      "task": "Decode JPEG [photo.jpg]",
+      "op": "decode",
+      "format": "jpeg",
+      "mode": "lossy",
+      "image": "photo.jpg",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 12.6484,
+          "p25": 12.105117499999999,
+          "p75": 14.379943,
+          "min": 11.777946,
+          "max": 14.944323,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 11.163328,
+          "p25": 10.716801,
+          "p75": 12.6914125,
+          "min": 10.29831,
+          "max": 13.24202,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 786495,
+        "throughput_mp_s": 23.4826030373738
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 1.636964,
+          "p25": 1.5222205,
+          "p75": 1.748048,
+          "min": 1.482601,
+          "max": 3.193794,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 0.636472,
+          "p25": 0.6074265000000001,
+          "p75": 0.6603559999999999,
+          "min": 0.604841,
+          "max": 0.880499,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 786495,
+        "throughput_mp_s": 411.8704357772219
+      },
+      "bytes_ratio": 1.0,
+      "winner": "Rust",
+      "speedup": 17.539385864578488,
+      "caveat": null
+    },
+    {
+      "task": "Decode WebP [photo.webp]",
+      "op": "decode",
+      "format": "webp",
+      "mode": "lossy",
+      "image": "photo.webp",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 13.228813,
+          "p25": 13.120823000000001,
+          "p75": 13.601295499999999,
+          "min": 12.935888,
+          "max": 14.059378,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 11.950119,
+          "p25": 11.8718195,
+          "p75": 12.228937,
+          "min": 11.628645,
+          "max": 12.817339,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 786495,
+        "throughput_mp_s": 21.936517954340033
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 3.76794,
+          "p25": 3.5687515000000003,
+          "p75": 4.1032235,
+          "min": 3.397683,
+          "max": 6.275424,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 2.153948,
+          "p25": 2.1254535,
+          "p75": 2.479718,
+          "min": 2.078199,
+          "max": 4.819315,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 786495,
+        "throughput_mp_s": 121.70395942706136
+      },
+      "bytes_ratio": 1.0,
+      "winner": "Rust",
+      "speedup": 5.548007194231244,
+      "caveat": null
+    },
+    {
+      "task": "Decode AVIF [photo.avif]",
+      "op": "decode",
+      "format": "avif",
+      "mode": "lossy",
+      "image": "photo.avif",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 4.704576,
+          "p25": 4.6528315,
+          "p75": 5.160609,
+          "min": 4.55122,
+          "max": 5.979882,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 3.369109,
+          "p25": 3.2325285,
+          "p75": 3.7520355,
+          "min": 3.131721,
+          "max": 4.579062,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 786495,
+        "throughput_mp_s": 77.80810890950693
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 10.771394,
+          "p25": 10.2568625,
+          "p75": 11.763195,
+          "min": 9.998557,
+          "max": 12.739654,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 9.320903,
+          "p25": 8.913385,
+          "p75": 10.483295,
+          "min": 8.114151,
+          "max": 11.498582,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 786495,
+        "throughput_mp_s": 28.124313706515345
+      },
+      "bytes_ratio": 1.0,
+      "winner": "Go",
+      "speedup": 2.7665780477865214,
+      "caveat": null
+    },
+    {
+      "task": "Decode JXL [photo.jxl]",
+      "op": "decode",
+      "format": "jxl",
+      "mode": "lossy",
+      "image": "photo.jxl",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 12.045784,
+          "p25": 11.985816,
+          "p75": 12.896705,
+          "min": 11.609368,
+          "max": 13.677467,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 10.178413,
+          "p25": 10.078648000000001,
+          "p75": 11.292922,
+          "min": 9.895552,
+          "max": 12.089552,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 786495,
+        "throughput_mp_s": 25.754899118359607
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 14.778331,
+          "p25": 14.328670500000001,
+          "p75": 15.743963999999998,
+          "min": 13.830402,
+          "max": 17.485545,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 13.066047,
+          "p25": 12.840050000000002,
+          "p75": 13.572071000000001,
+          "min": 12.432659,
+          "max": 16.023131,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 786495,
+        "throughput_mp_s": 20.062992273026417
+      },
+      "bytes_ratio": 1.0,
+      "winner": "Go",
+      "speedup": 1.2837017912320907,
+      "caveat": null
+    },
+    {
+      "task": "Transcode PNG -> WebP",
+      "op": "transcode",
+      "format": "png",
+      "mode": "lossy",
+      "image": "photo.png",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 46.854359,
+          "p25": 44.7090825,
+          "p75": 48.3554745,
+          "min": 44.397359,
+          "max": 52.746842,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 45.195604,
+          "p25": 43.3541855,
+          "p75": 46.928781,
+          "min": 43.127445,
+          "max": 51.276699,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 11456,
+        "throughput_mp_s": 5.800210126630899
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 16.989182,
+          "p25": 16.808396000000002,
+          "p75": 17.1299265,
+          "min": 16.69726,
+          "max": 17.389548,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 15.714117,
+          "p25": 15.5514705,
+          "p75": 15.965936000000001,
+          "min": 15.431557,
+          "max": 16.140579,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 9438,
+        "throughput_mp_s": 16.682070013860784
+      },
+      "bytes_ratio": 1.2138164865437593,
+      "winner": "Rust",
+      "speedup": 2.876114769923121,
+      "caveat": null
+    },
+    {
+      "task": "Transcode PNG -> AVIF",
+      "op": "transcode",
+      "format": "png",
+      "mode": "lossy",
+      "image": "photo.png",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 93.317352,
+          "p25": 93.10455300000001,
+          "p75": 94.80342300000001,
+          "min": 92.904447,
+          "max": 99.39059,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 92.077311,
+          "p25": 91.803726,
+          "p75": 93.327146,
+          "min": 91.543013,
+          "max": 98.105159,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 10788,
+        "throughput_mp_s": 2.846998865985563
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 136.194529,
+          "p25": 135.4501225,
+          "p75": 140.515388,
+          "min": 133.136312,
+          "max": 143.097868,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 134.972527,
+          "p25": 134.31527599999998,
+          "p75": 139.35351450000002,
+          "min": 132.070635,
+          "max": 141.999187,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 15174,
+        "throughput_mp_s": 1.9422026528406033
+      },
+      "bytes_ratio": 0.7109529458283906,
+      "winner": "Go",
+      "speedup": 1.4658608677223428,
+      "caveat": null
+    },
+    {
+      "task": "Transcode JPEG -> WebP",
+      "op": "transcode",
+      "format": "jpeg",
+      "mode": "lossy",
+      "image": "photo.jpg",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 43.705056,
+          "p25": 43.284543,
+          "p75": 43.7677015,
+          "min": 42.65817,
+          "max": 44.091693,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 42.725869,
+          "p25": 42.1642295,
+          "p75": 42.851396,
+          "min": 41.739206,
+          "max": 43.101712,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 12624,
+        "throughput_mp_s": 6.135486676701649
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 16.683182,
+          "p25": 16.3480575,
+          "p75": 16.733845000000002,
+          "min": 15.802529,
+          "max": 17.238148,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 15.674075,
+          "p25": 15.169319999999999,
+          "p75": 15.7373625,
+          "min": 14.821539,
+          "max": 16.293821,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 9842,
+        "throughput_mp_s": 16.72468710274769
+      },
+      "bytes_ratio": 1.282666124771388,
+      "winner": "Rust",
+      "speedup": 2.7258941277236457,
+      "caveat": null
+    },
+    {
+      "task": "Transcode JXL -> PNG",
+      "op": "transcode",
+      "format": "jxl",
+      "mode": "lossless",
+      "image": "photo.jxl",
+      "mp": 0.262144,
+      "metric": "codec_ms",
+      "go": {
+        "wall_ms": {
+          "median": 23.875779,
+          "p25": 22.883081500000003,
+          "p75": 24.685291999999997,
+          "min": 22.324226,
+          "max": 25.258317,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 22.931769,
+          "p25": 21.8242765,
+          "p75": 23.666269,
+          "min": 21.230581,
+          "max": 24.245279,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 178784,
+        "throughput_mp_s": 11.43147744075043
+      },
+      "rust": {
+        "wall_ms": {
+          "median": 63.9336,
+          "p25": 63.448507,
+          "p75": 65.56846999999999,
+          "min": 62.87887,
+          "max": 68.892184,
+          "n": 7
+        },
+        "codec_ms": {
+          "median": 62.699574,
+          "p25": 62.2133125,
+          "p75": 64.305904,
+          "min": 61.826188,
+          "max": 67.860985,
+          "n": 7
+        },
+        "net_of_startup_ms": null,
+        "out_bytes": 175387,
+        "throughput_mp_s": 4.18095344635037
+      },
+      "bytes_ratio": 1.019368596304173,
+      "winner": "Go",
+      "speedup": 2.734179556753777,
+      "caveat": null
+    }
+  ]
+}
