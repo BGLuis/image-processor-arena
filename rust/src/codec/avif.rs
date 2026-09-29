@@ -5,10 +5,10 @@
 // Decode: zenavif (baseado em rav1d-safe)
 
 use crate::pam::PamImage;
-use super::{CodecError, CodecMode, EncodeParams};
+use super::{params as contract, CodecError, CodecMode, EncodeParams};
 
 pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecError> {
-    let speed = params.effort.clamp(1, 10);
+    let speed = contract::avif_speed(params.effort);
 
     match params.mode {
         CodecMode::Lossless => {
@@ -32,8 +32,10 @@ pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecErr
             }
         }
         CodecMode::Lossy => {
+            let quality = contract::ravif_quality(params.quality);
             let enc = ravif::Encoder::new()
-                .with_quality(params.quality as f32)
+                .with_quality(quality)
+                .with_alpha_quality(quality)
                 .with_speed(speed);
 
             let w = pam.width as usize;

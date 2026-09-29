@@ -10,7 +10,9 @@ use std::io::Cursor;
 pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecError> {
     let mut out = Vec::new();
     let quality = params.quality.clamp(1, 100);
-    let encoder = jpeg_encoder::Encoder::new(&mut out, quality);
+    let mut encoder = jpeg_encoder::Encoder::new(&mut out, quality);
+    // O default do jpeg-encoder passa a 4:4:4 em q >= 90; o Go sempre grava 4:2:0.
+    encoder.set_sampling_factor(jpeg_encoder::SamplingFactor::F_2_2);
 
     // JPEG baseline não suporta canal alpha nativo
     if pam.depth == 4 {

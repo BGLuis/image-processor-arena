@@ -4,11 +4,11 @@
 // Decode: jxl-oxide
 
 use crate::pam::PamImage;
-use super::{CodecError, CodecMode, EncodeParams};
+use super::{params as contract, CodecError, CodecMode, EncodeParams};
 use std::io::Cursor;
 
 pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecError> {
-    let effort = params.effort.clamp(1, 10);
+    let effort = contract::jxl_effort(params.effort);
     let layout = if pam.depth == 4 {
         jxl_encoder::PixelLayout::Rgba8
     } else {
@@ -27,8 +27,7 @@ pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecErr
             Ok(out)
         }
         CodecMode::Lossy => {
-            let quality = params.quality.clamp(1, 100) as f32;
-            let distance = jxl_encoder::quality_to_distance(quality);
+            let distance = contract::jxl_distance(params.quality);
             let config = jxl_encoder::LossyConfig::new(distance)
                 .with_effort(effort);
 
