@@ -246,4 +246,3 @@ func BenchmarkBlurHash(b *testing.B) {
 		_ = ComputeBlurHash(r, g, bl, 64, 64, 4, 3)
 	}
 }
-

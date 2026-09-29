@@ -1,8 +1,8 @@
 // rust/src/analyze/metrics.rs
 // Implementação estrita das 16 métricas de imagem segundo docs/analyze-spec.md.
 
-use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 #[inline]
 pub fn round6(v: f64) -> f64 {
@@ -93,12 +93,7 @@ pub struct AnalyzeResult {
     pub blurhash: String,
 }
 
-pub fn analyze(
-    width: u32,
-    height: u32,
-    depth: u8,
-    raster: &[u8],
-) -> AnalyzeResult {
+pub fn analyze(width: u32, height: u32, depth: u8, raster: &[u8]) -> AnalyzeResult {
     let num_pixels = (width as usize) * (height as usize);
     let mut r_list = vec![0u8; num_pixels];
     let mut g_list = vec![0u8; num_pixels];
@@ -247,10 +242,18 @@ pub fn analyze(
 
             for x_idx in 1..(w_usize - 1) {
                 // Y Sobel
-                let gx = ((y_list[y_prev + x_idx + 1] as i32) + 2 * (y_list[y_curr + x_idx + 1] as i32) + (y_list[y_next + x_idx + 1] as i32))
-                    - ((y_list[y_prev + x_idx - 1] as i32) + 2 * (y_list[y_curr + x_idx - 1] as i32) + (y_list[y_next + x_idx - 1] as i32));
-                let gy = ((y_list[y_next + x_idx - 1] as i32) + 2 * (y_list[y_next + x_idx] as i32) + (y_list[y_next + x_idx + 1] as i32))
-                    - ((y_list[y_prev + x_idx - 1] as i32) + 2 * (y_list[y_prev + x_idx] as i32) + (y_list[y_prev + x_idx + 1] as i32));
+                let gx = ((y_list[y_prev + x_idx + 1] as i32)
+                    + 2 * (y_list[y_curr + x_idx + 1] as i32)
+                    + (y_list[y_next + x_idx + 1] as i32))
+                    - ((y_list[y_prev + x_idx - 1] as i32)
+                        + 2 * (y_list[y_curr + x_idx - 1] as i32)
+                        + (y_list[y_next + x_idx - 1] as i32));
+                let gy = ((y_list[y_next + x_idx - 1] as i32)
+                    + 2 * (y_list[y_next + x_idx] as i32)
+                    + (y_list[y_next + x_idx + 1] as i32))
+                    - ((y_list[y_prev + x_idx - 1] as i32)
+                        + 2 * (y_list[y_prev + x_idx] as i32)
+                        + (y_list[y_prev + x_idx + 1] as i32));
 
                 let mag_sq = (gx * gx + gy * gy) as f64;
                 let m = mag_sq.sqrt();
@@ -269,19 +272,35 @@ pub fn analyze(
                 sum_lap += lap;
 
                 // Cb Sobel
-                let gx_cb = ((cb_list[y_prev + x_idx + 1] as i32) + 2 * (cb_list[y_curr + x_idx + 1] as i32) + (cb_list[y_next + x_idx + 1] as i32))
-                    - ((cb_list[y_prev + x_idx - 1] as i32) + 2 * (cb_list[y_curr + x_idx - 1] as i32) + (cb_list[y_next + x_idx - 1] as i32));
-                let gy_cb = ((cb_list[y_next + x_idx - 1] as i32) + 2 * (cb_list[y_next + x_idx] as i32) + (cb_list[y_next + x_idx + 1] as i32))
-                    - ((cb_list[y_prev + x_idx - 1] as i32) + 2 * (cb_list[y_prev + x_idx] as i32) + (cb_list[y_prev + x_idx + 1] as i32));
+                let gx_cb = ((cb_list[y_prev + x_idx + 1] as i32)
+                    + 2 * (cb_list[y_curr + x_idx + 1] as i32)
+                    + (cb_list[y_next + x_idx + 1] as i32))
+                    - ((cb_list[y_prev + x_idx - 1] as i32)
+                        + 2 * (cb_list[y_curr + x_idx - 1] as i32)
+                        + (cb_list[y_next + x_idx - 1] as i32));
+                let gy_cb = ((cb_list[y_next + x_idx - 1] as i32)
+                    + 2 * (cb_list[y_next + x_idx] as i32)
+                    + (cb_list[y_next + x_idx + 1] as i32))
+                    - ((cb_list[y_prev + x_idx - 1] as i32)
+                        + 2 * (cb_list[y_prev + x_idx] as i32)
+                        + (cb_list[y_prev + x_idx + 1] as i32));
                 let mag_sq_cb = (gx_cb * gx_cb + gy_cb * gy_cb) as f64;
                 gx_sq_gy_sq_cb.push(mag_sq_cb);
                 sum_ge_cb += mag_sq_cb;
 
                 // Cr Sobel
-                let gx_cr = ((cr_list[y_prev + x_idx + 1] as i32) + 2 * (cr_list[y_curr + x_idx + 1] as i32) + (cr_list[y_next + x_idx + 1] as i32))
-                    - ((cr_list[y_prev + x_idx - 1] as i32) + 2 * (cr_list[y_curr + x_idx - 1] as i32) + (cr_list[y_next + x_idx - 1] as i32));
-                let gy_cr = ((cr_list[y_next + x_idx - 1] as i32) + 2 * (cr_list[y_next + x_idx] as i32) + (cr_list[y_next + x_idx + 1] as i32))
-                    - ((cr_list[y_prev + x_idx - 1] as i32) + 2 * (cr_list[y_prev + x_idx] as i32) + (cr_list[y_prev + x_idx + 1] as i32));
+                let gx_cr = ((cr_list[y_prev + x_idx + 1] as i32)
+                    + 2 * (cr_list[y_curr + x_idx + 1] as i32)
+                    + (cr_list[y_next + x_idx + 1] as i32))
+                    - ((cr_list[y_prev + x_idx - 1] as i32)
+                        + 2 * (cr_list[y_curr + x_idx - 1] as i32)
+                        + (cr_list[y_next + x_idx - 1] as i32));
+                let gy_cr = ((cr_list[y_next + x_idx - 1] as i32)
+                    + 2 * (cr_list[y_next + x_idx] as i32)
+                    + (cr_list[y_next + x_idx + 1] as i32))
+                    - ((cr_list[y_prev + x_idx - 1] as i32)
+                        + 2 * (cr_list[y_prev + x_idx] as i32)
+                        + (cr_list[y_prev + x_idx + 1] as i32));
                 let mag_sq_cr = (gx_cr * gx_cr + gy_cr * gy_cr) as f64;
                 gx_sq_gy_sq_cr.push(mag_sq_cr);
                 sum_ge_cr += mag_sq_cr;
@@ -370,10 +389,7 @@ pub fn analyze(
                 binary_alpha += 1;
             }
         }
-        (
-            (zero_alpha as f64) / n_f64,
-            (binary_alpha as f64) / n_f64,
-        )
+        ((zero_alpha as f64) / n_f64, (binary_alpha as f64) / n_f64)
     } else {
         (0.0, 1.0)
     };

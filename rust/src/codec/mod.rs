@@ -53,7 +53,9 @@ impl FromStr for ImageFormat {
             "webp" => Ok(Self::Webp),
             "avif" => Ok(Self::Avif),
             "jxl" => Ok(Self::Jxl),
-            _ => Err(CodecError::UnsupportedFormat(format!("Formato desconhecido: '{s}'"))),
+            _ => Err(CodecError::UnsupportedFormat(format!(
+                "Formato desconhecido: '{s}'"
+            ))),
         }
     }
 }
@@ -71,7 +73,9 @@ impl FromStr for CodecMode {
         match s.to_ascii_lowercase().as_str() {
             "lossy" => Ok(Self::Lossy),
             "lossless" => Ok(Self::Lossless),
-            _ => Err(CodecError::InvalidParam(format!("Modo inválido: '{s}', esperado 'lossy' ou 'lossless'"))),
+            _ => Err(CodecError::InvalidParam(format!(
+                "Modo inválido: '{s}', esperado 'lossy' ou 'lossless'"
+            ))),
         }
     }
 }
@@ -207,8 +211,10 @@ mod tests {
             quality: 100,
             effort: 4,
         };
-        let webp_lossless_bytes = encode(&pam, &params_webp_lossless).expect("WebP lossless encode falhou");
-        let decoded_webp_ll = decode(&webp_lossless_bytes, ImageFormat::Webp).expect("WebP lossless decode falhou");
+        let webp_lossless_bytes =
+            encode(&pam, &params_webp_lossless).expect("WebP lossless encode falhou");
+        let decoded_webp_ll =
+            decode(&webp_lossless_bytes, ImageFormat::Webp).expect("WebP lossless decode falhou");
         assert_eq!(decoded_webp_ll.width, 32);
         assert_eq!(decoded_webp_ll.height, 32);
         assert_eq!(decoded_webp_ll.data, pam.data);
@@ -221,7 +227,8 @@ mod tests {
             effort: 4,
         };
         let webp_lossy_bytes = encode(&pam, &params_webp_lossy).expect("WebP lossy encode falhou");
-        let decoded_webp_lossy = decode(&webp_lossy_bytes, ImageFormat::Webp).expect("WebP lossy decode falhou");
+        let decoded_webp_lossy =
+            decode(&webp_lossy_bytes, ImageFormat::Webp).expect("WebP lossy decode falhou");
         assert_eq!(decoded_webp_lossy.width, 32);
         assert_eq!(decoded_webp_lossy.height, 32);
 

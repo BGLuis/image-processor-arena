@@ -4,8 +4,8 @@
 // Lossless encode: image-webp
 // Decode: image-webp
 
-use crate::pam::PamImage;
 use super::{CodecError, CodecMode, EncodeParams};
+use crate::pam::PamImage;
 use std::io::Cursor;
 
 pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecError> {
@@ -24,7 +24,8 @@ pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecErr
             };
 
             let req = zenwebp::EncodeRequest::new(&config, &pam.data, color, pam.width, pam.height);
-            req.encode().map_err(|e| CodecError::Encode(format!("{e:?}")))
+            req.encode()
+                .map_err(|e| CodecError::Encode(format!("{e:?}")))
         }
         CodecMode::Lossless => {
             let mut out = Vec::new();
@@ -55,7 +56,9 @@ pub fn decode(data: &[u8]) -> Result<PamImage, CodecError> {
     let total_bytes = (width as usize) * (height as usize) * (depth as usize);
 
     let mut buf = vec![0u8; total_bytes];
-    decoder.read_image(&mut buf).map_err(|e| CodecError::Decode(e.to_string()))?;
+    decoder
+        .read_image(&mut buf)
+        .map_err(|e| CodecError::Decode(e.to_string()))?;
 
     if has_alpha {
         PamImage::new_rgba(width, height, buf).map_err(|e| CodecError::Decode(e.to_string()))

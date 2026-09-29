@@ -24,11 +24,17 @@ impl fmt::Display for PamError {
             Self::MissingHeader(h) => write!(f, "Campo obrigatório do cabeçalho ausente: {h}"),
             Self::UnsupportedDepth(d) => write!(f, "DEPTH não suportado: {d} (esperado 3 ou 4)"),
             Self::UnsupportedMaxval(m) => write!(f, "MAXVAL não suportado: {m} (esperado 255)"),
-            Self::UnsupportedTupltype(t) => write!(f, "TUPLTYPE não suportado: '{t}' (esperado RGB ou RGB_ALPHA)"),
+            Self::UnsupportedTupltype(t) => write!(
+                f,
+                "TUPLTYPE não suportado: '{t}' (esperado RGB ou RGB_ALPHA)"
+            ),
             Self::InvalidDimensions(w, h) => write!(f, "Dimensões inválidas: {w}x{h}"),
             Self::UnexpectedEof => write!(f, "Fim inesperado do fluxo ao ler cabeçalho PAM"),
             Self::BufferTooShort { expected, actual } => {
-                write!(f, "Tamanho de raster insuficiente: esperado {expected}, obtido {actual}")
+                write!(
+                    f,
+                    "Tamanho de raster insuficiente: esperado {expected}, obtido {actual}"
+                )
             }
             Self::InvalidHeaderFormat(msg) => write!(f, "Formato de cabeçalho inválido: {msg}"),
         }
@@ -97,7 +103,11 @@ impl PamImage {
 
         // Determina onde começam os dados de raster (logo após o \n seguinte a ENDHDR)
         let mut raster_start = endhdr_pos + endhdr_needle.len();
-        while raster_start < input.len() && (input[raster_start] == b'\r' || input[raster_start] == b' ' || input[raster_start] == b'\t') {
+        while raster_start < input.len()
+            && (input[raster_start] == b'\r'
+                || input[raster_start] == b' '
+                || input[raster_start] == b'\t')
+        {
             raster_start += 1;
         }
         if raster_start < input.len() && input[raster_start] == b'\n' {
@@ -133,19 +143,27 @@ impl PamImage {
 
             match key.as_str() {
                 "WIDTH" => {
-                    let w: u32 = value.parse().map_err(|_| PamError::InvalidHeaderFormat(format!("WIDTH inválido: {value}")))?;
+                    let w: u32 = value.parse().map_err(|_| {
+                        PamError::InvalidHeaderFormat(format!("WIDTH inválido: {value}"))
+                    })?;
                     width = Some(w);
                 }
                 "HEIGHT" => {
-                    let h: u32 = value.parse().map_err(|_| PamError::InvalidHeaderFormat(format!("HEIGHT inválido: {value}")))?;
+                    let h: u32 = value.parse().map_err(|_| {
+                        PamError::InvalidHeaderFormat(format!("HEIGHT inválido: {value}"))
+                    })?;
                     height = Some(h);
                 }
                 "DEPTH" => {
-                    let d: u8 = value.parse().map_err(|_| PamError::InvalidHeaderFormat(format!("DEPTH inválido: {value}")))?;
+                    let d: u8 = value.parse().map_err(|_| {
+                        PamError::InvalidHeaderFormat(format!("DEPTH inválido: {value}"))
+                    })?;
                     depth = Some(d);
                 }
                 "MAXVAL" => {
-                    let m: u32 = value.parse().map_err(|_| PamError::InvalidHeaderFormat(format!("MAXVAL inválido: {value}")))?;
+                    let m: u32 = value.parse().map_err(|_| {
+                        PamError::InvalidHeaderFormat(format!("MAXVAL inválido: {value}"))
+                    })?;
                     maxval = Some(m);
                 }
                 "TUPLTYPE" => {
@@ -159,7 +177,13 @@ impl PamImage {
         let height = height.ok_or_else(|| PamError::MissingHeader("HEIGHT".to_string()))?;
         let depth = depth.ok_or_else(|| PamError::MissingHeader("DEPTH".to_string()))?;
         let maxval = maxval.ok_or_else(|| PamError::MissingHeader("MAXVAL".to_string()))?;
-        let tupltype = tupltype.unwrap_or_else(|| if depth == 4 { "RGB_ALPHA".to_string() } else { "RGB".to_string() });
+        let tupltype = tupltype.unwrap_or_else(|| {
+            if depth == 4 {
+                "RGB_ALPHA".to_string()
+            } else {
+                "RGB".to_string()
+            }
+        });
 
         if width == 0 || height == 0 {
             return Err(PamError::InvalidDimensions(width, height));
@@ -218,7 +242,12 @@ impl PamImage {
     pub fn rgba_at(&self, x: u32, y: u32) -> (u8, u8, u8, u8) {
         let idx = ((y as usize) * (self.width as usize) + (x as usize)) * (self.depth as usize);
         if self.depth == 4 {
-            (self.data[idx], self.data[idx + 1], self.data[idx + 2], self.data[idx + 3])
+            (
+                self.data[idx],
+                self.data[idx + 1],
+                self.data[idx + 2],
+                self.data[idx + 3],
+            )
         } else {
             (self.data[idx], self.data[idx + 1], self.data[idx + 2], 255)
         }
@@ -262,10 +291,7 @@ mod tests {
     fn test_pam_roundtrip() {
         let width = 2;
         let height = 2;
-        let data = vec![
-            255, 0, 0,    0, 255, 0,
-            0, 0, 255,    255, 255, 0,
-        ];
+        let data = vec![255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 0];
         let img = PamImage::new_rgb(width, height, data.clone()).unwrap();
         let encoded = img.encode();
         let parsed = PamImage::parse(&encoded).unwrap();

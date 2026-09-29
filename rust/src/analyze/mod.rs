@@ -20,7 +20,11 @@ mod tests {
 
     fn get_fixtures_dir() -> PathBuf {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        manifest_dir.parent().unwrap().join("harness").join("fixtures")
+        manifest_dir
+            .parent()
+            .unwrap()
+            .join("harness")
+            .join("fixtures")
     }
 
     #[test]
@@ -29,7 +33,11 @@ mod tests {
         let gt_path = fixtures_dir.join("ground_truth.json");
         let synthetic_dir = fixtures_dir.join("synthetic");
 
-        assert!(gt_path.exists(), "ground_truth.json não encontrado em {:?}", gt_path);
+        assert!(
+            gt_path.exists(),
+            "ground_truth.json não encontrado em {:?}",
+            gt_path
+        );
         let gt_content = fs::read_to_string(&gt_path).expect("Falha ao ler ground_truth.json");
         let ground_truth: HashMap<String, serde_json::Value> =
             serde_json::from_str(&gt_content).expect("Falha ao deserializar ground_truth.json");
@@ -47,41 +55,50 @@ mod tests {
             // Validações exatas
             assert_eq!(
                 actual_json["width"], expected["width"],
-                "[{}] width divergente", fname
+                "[{}] width divergente",
+                fname
             );
             assert_eq!(
                 actual_json["height"], expected["height"],
-                "[{}] height divergente", fname
+                "[{}] height divergente",
+                fname
             );
             assert_eq!(
                 actual_json["aspect_ratio"]["str"], expected["aspect_ratio"]["str"],
-                "[{}] aspect_ratio.str divergente", fname
+                "[{}] aspect_ratio.str divergente",
+                fname
             );
             assert_eq!(
                 actual_json["unique_colors"], expected["unique_colors"],
-                "[{}] unique_colors divergente", fname
+                "[{}] unique_colors divergente",
+                fname
             );
             assert_eq!(
                 actual_json["alpha"]["has_alpha"], expected["alpha"]["has_alpha"],
-                "[{}] alpha.has_alpha divergente", fname
+                "[{}] alpha.has_alpha divergente",
+                fname
             );
             assert_eq!(
                 actual_json["dominant_color"]["dominant_bin"],
                 expected["dominant_color"]["dominant_bin"],
-                "[{}] dominant_bin divergente", fname
+                "[{}] dominant_bin divergente",
+                fname
             );
             assert_eq!(
                 actual_json["dominant_color"]["dominant_rgb"],
                 expected["dominant_color"]["dominant_rgb"],
-                "[{}] dominant_rgb divergente", fname
+                "[{}] dominant_rgb divergente",
+                fname
             );
             assert_eq!(
                 actual_json["phash"], expected["phash"],
-                "[{}] phash divergente", fname
+                "[{}] phash divergente",
+                fname
             );
             assert_eq!(
                 actual_json["blurhash"], expected["blurhash"],
-                "[{}] blurhash divergente", fname
+                "[{}] blurhash divergente",
+                fname
             );
 
             // Validações de tolerância float
@@ -90,7 +107,12 @@ mod tests {
                 assert!(
                     diff <= eps,
                     "[{}] {} divergente: obtido {}, esperado {}, diff={}, eps={}",
-                    fname, path, act, exp, diff, eps
+                    fname,
+                    path,
+                    act,
+                    exp,
+                    diff,
+                    eps
                 );
             };
 
@@ -150,8 +172,12 @@ mod tests {
             );
             check_float(
                 "adequacy_420.chroma_gradient_energy",
-                actual_json["adequacy_420"]["chroma_gradient_energy"].as_f64().unwrap(),
-                expected["adequacy_420"]["chroma_gradient_energy"].as_f64().unwrap(),
+                actual_json["adequacy_420"]["chroma_gradient_energy"]
+                    .as_f64()
+                    .unwrap(),
+                expected["adequacy_420"]["chroma_gradient_energy"]
+                    .as_f64()
+                    .unwrap(),
                 1e-3,
             );
             check_float(

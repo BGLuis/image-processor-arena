@@ -10,8 +10,8 @@ import (
 	"io"
 	"strings"
 
-	gowebp "github.com/KarpelesLab/gowebp"
 	goavif "github.com/KarpelesLab/goavif"
+	gowebp "github.com/KarpelesLab/gowebp"
 	deepwebp "github.com/deepteams/webp"
 	gav1davif "github.com/gen2brain/gav1d/avif"
 	genjxl "github.com/gen2brain/jxl"

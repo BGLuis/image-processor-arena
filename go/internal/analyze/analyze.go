@@ -482,10 +482,10 @@ func AnalyzeImage(img *pam.Image) *Result {
 	blurhashStr := ComputeBlurHash(rList, gList, bList, width, height, 4, 3)
 
 	return &Result{
-		Width:       width,
-		Height:      height,
-		AspectRatio: aspectRatio,
-		BlockAlignment: blockAlignment,
+		Width:              width,
+		Height:             height,
+		AspectRatio:        aspectRatio,
+		BlockAlignment:     blockAlignment,
 		MeanY:              round6(meanY),
 		EntropyY:           round6(entropyY),
 		EntropyResidualY:   round6(entropyResidualY),

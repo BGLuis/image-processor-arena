@@ -52,7 +52,10 @@ async fn main() {
 }
 
 async fn health_handler() -> impl IntoResponse {
-    ([(header::CONTENT_TYPE, "application/json")], "{\"status\":\"ok\"}")
+    (
+        [(header::CONTENT_TYPE, "application/json")],
+        "{\"status\":\"ok\"}",
+    )
 }
 
 async fn run_handler(
@@ -79,7 +82,10 @@ async fn run_handler(
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))??;
 
             let mut headers = HeaderMap::new();
-            headers.insert(header::CONTENT_TYPE, HeaderValue::from_static("application/json"));
+            headers.insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/json"),
+            );
             headers.insert(
                 HeaderName::from_static("x-arena-analyze-ns"),
                 HeaderValue::from_str(&analyze_ns.to_string()).unwrap(),
@@ -89,14 +95,19 @@ async fn run_handler(
         }
 
         "encode" => {
-            let format_str = params
-                .format
-                .ok_or_else(|| (StatusCode::BAD_REQUEST, "Parâmetro 'format' obrigatório para op=encode".to_string()))?;
+            let format_str = params.format.ok_or_else(|| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    "Parâmetro 'format' obrigatório para op=encode".to_string(),
+                )
+            })?;
             let format = ImageFormat::from_str(&format_str)
                 .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
             let mode = match params.mode.as_deref() {
-                Some(m) => CodecMode::from_str(m).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?,
+                Some(m) => {
+                    CodecMode::from_str(m).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?
+                }
                 None => CodecMode::Lossy,
             };
 
@@ -114,8 +125,12 @@ async fn run_handler(
                 let pam = PamImage::parse(&body_bytes)
                     .map_err(|e| (StatusCode::BAD_REQUEST, format!("Erro de PAM: {e}")))?;
                 let t0 = Instant::now();
-                let encoded = codec::encode(&pam, &encode_params)
-                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Erro encode: {e}")))?;
+                let encoded = codec::encode(&pam, &encode_params).map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Erro encode: {e}"),
+                    )
+                })?;
                 let elapsed = t0.elapsed().as_nanos();
                 Ok::<_, (StatusCode, String)>((encoded, elapsed))
             })
@@ -136,9 +151,12 @@ async fn run_handler(
         }
 
         "decode" => {
-            let format_str = params
-                .format
-                .ok_or_else(|| (StatusCode::BAD_REQUEST, "Parâmetro 'format' obrigatório para op=decode".to_string()))?;
+            let format_str = params.format.ok_or_else(|| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    "Parâmetro 'format' obrigatório para op=decode".to_string(),
+                )
+            })?;
             let format = ImageFormat::from_str(&format_str)
                 .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
@@ -167,12 +185,18 @@ async fn run_handler(
         }
 
         "transcode" => {
-            let from_str = params
-                .format
-                .ok_or_else(|| (StatusCode::BAD_REQUEST, "Parâmetro 'format' (origem) obrigatório para op=transcode".to_string()))?;
-            let to_str = params
-                .to
-                .ok_or_else(|| (StatusCode::BAD_REQUEST, "Parâmetro 'to' (destino) obrigatório para op=transcode".to_string()))?;
+            let from_str = params.format.ok_or_else(|| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    "Parâmetro 'format' (origem) obrigatório para op=transcode".to_string(),
+                )
+            })?;
+            let to_str = params.to.ok_or_else(|| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    "Parâmetro 'to' (destino) obrigatório para op=transcode".to_string(),
+                )
+            })?;
 
             let from_format = ImageFormat::from_str(&from_str)
                 .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
@@ -180,7 +204,9 @@ async fn run_handler(
                 .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
             let mode = match params.mode.as_deref() {
-                Some(m) => CodecMode::from_str(m).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?,
+                Some(m) => {
+                    CodecMode::from_str(m).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?
+                }
                 None => CodecMode::Lossy,
             };
 
@@ -195,8 +221,12 @@ async fn run_handler(
 
             let body_bytes = body.to_vec();
             let (out_bytes, decode_ns, encode_ns) = tokio::task::spawn_blocking(move || {
-                codec::transcode(&body_bytes, from_format, &encode_params)
-                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Erro transcode: {e}")))
+                codec::transcode(&body_bytes, from_format, &encode_params).map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Erro transcode: {e}"),
+                    )
+                })
             })
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))??;

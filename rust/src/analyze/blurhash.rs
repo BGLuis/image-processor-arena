@@ -8,7 +8,8 @@
 
 use std::f64::consts::PI;
 
-const BLURHASH_CHARS: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz#$%*+,-.:;=?@[]^_{|}~";
+const BLURHASH_CHARS: &[u8] =
+    b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz#$%*+,-.:;=?@[]^_{|}~";
 
 fn srgb_to_linear(value: u8) -> f64 {
     let v = value as f64 / 255.0;
@@ -120,9 +121,12 @@ pub fn compute_blurhash(
 
     // AC components
     for comp in ac {
-        let qr = (0.0f64).max((18.0f64).min((sign_pow(comp[0] / max_val, 0.5) * 9.0 + 9.5).floor())) as u32;
-        let qg = (0.0f64).max((18.0f64).min((sign_pow(comp[1] / max_val, 0.5) * 9.0 + 9.5).floor())) as u32;
-        let qb = (0.0f64).max((18.0f64).min((sign_pow(comp[2] / max_val, 0.5) * 9.0 + 9.5).floor())) as u32;
+        let qr = (0.0f64).max((18.0f64).min((sign_pow(comp[0] / max_val, 0.5) * 9.0 + 9.5).floor()))
+            as u32;
+        let qg = (0.0f64).max((18.0f64).min((sign_pow(comp[1] / max_val, 0.5) * 9.0 + 9.5).floor()))
+            as u32;
+        let qb = (0.0f64).max((18.0f64).min((sign_pow(comp[2] / max_val, 0.5) * 9.0 + 9.5).floor()))
+            as u32;
         let val = qr * 361 + qg * 19 + qb;
         result.push_str(&encode_base83(val, 2));
     }

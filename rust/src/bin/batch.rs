@@ -11,7 +11,10 @@ use std::process;
 use std::str::FromStr;
 
 #[derive(Parser, Debug)]
-#[command(name = "arena-batch", about = "CLI Batch da Arena de Processamento de Imagens")]
+#[command(
+    name = "arena-batch",
+    about = "CLI Batch da Arena de Processamento de Imagens"
+)]
 struct Args {
     #[arg(long)]
     op: String,
@@ -101,7 +104,9 @@ fn main() {
         }
 
         "encode" => {
-            let format_str = args.format.expect("Argumento '--format' obrigatório para op=encode");
+            let format_str = args
+                .format
+                .expect("Argumento '--format' obrigatório para op=encode");
             let format = ImageFormat::from_str(&format_str).unwrap_or_else(|e| {
                 eprintln!("[-] {e}");
                 process::exit(1);
@@ -140,7 +145,9 @@ fn main() {
         }
 
         "decode" => {
-            let format_str = args.format.expect("Argumento '--format' obrigatório para op=decode");
+            let format_str = args
+                .format
+                .expect("Argumento '--format' obrigatório para op=decode");
             let format = ImageFormat::from_str(&format_str).unwrap_or_else(|e| {
                 eprintln!("[-] {e}");
                 process::exit(1);
@@ -162,8 +169,12 @@ fn main() {
         }
 
         "transcode" => {
-            let from_str = args.format.expect("Argumento '--format' (origem) obrigatório para op=transcode");
-            let to_str = args.to.expect("Argumento '--to' (destino) obrigatório para op=transcode");
+            let from_str = args
+                .format
+                .expect("Argumento '--format' (origem) obrigatório para op=transcode");
+            let to_str = args
+                .to
+                .expect("Argumento '--to' (destino) obrigatório para op=transcode");
 
             let from_format = ImageFormat::from_str(&from_str).unwrap_or_else(|e| {
                 eprintln!("[-] {e}");
@@ -185,13 +196,14 @@ fn main() {
                 effort: args.effort,
             };
 
-            let (out_bytes, _dec_ns, _enc_ns) = match codec::transcode(&input_bytes, from_format, &params) {
-                Ok(res) => res,
-                Err(e) => {
-                    eprintln!("[-] Erro transcode: {e}");
-                    process::exit(1);
-                }
-            };
+            let (out_bytes, _dec_ns, _enc_ns) =
+                match codec::transcode(&input_bytes, from_format, &params) {
+                    Ok(res) => res,
+                    Err(e) => {
+                        eprintln!("[-] Erro transcode: {e}");
+                        process::exit(1);
+                    }
+                };
 
             if let Err(e) = write_output(args.output.as_deref(), &out_bytes) {
                 eprintln!("[-] Erro ao escrever saída: {e}");
@@ -200,7 +212,9 @@ fn main() {
         }
 
         _ => {
-            eprintln!("[-] Operação desconhecida: '{op}'. Esperado: analyze, encode, decode, transcode");
+            eprintln!(
+                "[-] Operação desconhecida: '{op}'. Esperado: analyze, encode, decode, transcode"
+            );
             process::exit(1);
         }
     }

@@ -1,0 +1,246 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - 'README.en.md'
+      - 'results/**'
+      - 'docs/**'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - 'README.en.md'
+      - 'results/**'
+      - 'docs/**'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Purity Guard: Verificação Imediata de Pureza (0% CGO / 0% FFI)
+  # Executa scripts estritos que barram qualquer inclusão de código nativo C.
+  # ---------------------------------------------------------------------------
+  purity-guard:
+    name: "0% CGO / FFI Purity Guard"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Setup Go
+        uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34  # v5.3.0
+        with:
+          go-version-file: 'go/go.mod'
+          cache-dependency-path: 'go/go.sum'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de  # master
+        with:
+          toolchain: stable
+
+      - name: Setup Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38  # v5.4.0
+        with:
+          python-version: '3.12'
+
+      - name: Run Go ecosystem purity audit
+        run: |
+          chmod +x ./scripts/check-purity-go.sh
+          ./scripts/check-purity-go.sh
+
+      - name: Run Rust ecosystem purity audit
+        run: |
+          chmod +x ./scripts/check-purity-rust.sh
+          ./scripts/check-purity-rust.sh
+
+      - name: Audit dependency bans with cargo-deny
+        uses: EmbarkStudios/cargo-deny-action@9b7d65878c2d28c8e3c16e30bf555c29abe505bd  # v2.0.11
+        with:
+          command: check bans
+          arguments: --manifest-path rust/Cargo.toml --config rust/deny.toml
+
+  # ---------------------------------------------------------------------------
+  # 2. Go CI: Formatação, Vet, Testes Unitários e Compilação dos Binários
+  # ---------------------------------------------------------------------------
+  go-ci:
+    name: "Go Engine (Pure, CGO=0)"
+    needs: purity-guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Setup Go
+        uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34  # v5.3.0
+        with:
+          go-version-file: 'go/go.mod'
+          cache-dependency-path: 'go/go.sum'
+
+      - name: Verify gofmt formatting
+        run: |
+          cd go
+          UNFORMATTED=$(gofmt -l .)
+          if [ -n "$UNFORMATTED" ]; then
+            echo "[-] Arquivos Go fora dos padrões de formatação (gofmt):"
+            echo "$UNFORMATTED"
+            exit 1
+          fi
+          echo "[+] Todos os arquivos Go estão devidamente formatados!"
+
+      - name: Run go vet
+        run: |
+          cd go
+          CGO_ENABLED=0 go vet ./...
+
+      - name: Run Go unit tests
+        run: |
+          cd go
+          CGO_ENABLED=0 go test -v ./...
+
+      - name: Compile Go static binaries
+        run: |
+          cd go
+          mkdir -p bin
+          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/arena-server ./cmd/server
+          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/arena-batch ./cmd/batch
+
+      - name: Upload Go batch binary artifact
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
+        with:
+          name: go-arena-batch
+          path: go/bin/arena-batch
+          if-no-files-found: error
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # 3. Rust CI: Rustfmt, Clippy, Testes Unitários e Compilação Release
+  # ---------------------------------------------------------------------------
+  rust-ci:
+    name: "Rust Engine (Pure)"
+    needs: purity-guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de  # master
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - name: Cache Cargo Dependencies and Targets
+        uses: Swatinem/rust-cache@5cb072d7354962be830356aa6b146f7612846014  # v2.7.5
+        with:
+          workspaces: rust -> target
+
+      - name: Verify rustfmt formatting
+        run: |
+          cargo fmt --manifest-path rust/Cargo.toml --all -- --check
+
+      - name: Run clippy checks (-D warnings)
+        run: |
+          cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings
+
+      - name: Run Rust unit tests
+        run: |
+          cargo test --manifest-path rust/Cargo.toml
+
+      - name: Compile Rust release binaries
+        run: |
+          cargo build --release --manifest-path rust/Cargo.toml --bin arena-server --bin arena-batch
+
+      - name: Upload Rust batch binary artifact
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
+        with:
+          name: rust-arena-batch
+          path: rust/target/release/arena-batch
+          if-no-files-found: error
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # 4. Cross Validation: Validação Cruzada Formal Bit-a-Bit
+  # Executa harness de conformidade contra o gabarito das 16 métricas de imagem
+  # ---------------------------------------------------------------------------
+  cross-validation:
+    name: "Mathematical Cross-Validation"
+    needs: [go-ci, rust-ci]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Setup Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38  # v5.4.0
+        with:
+          python-version: '3.12'
+
+      - name: Download Go batch artifact
+        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806  # v4.1.9
+        with:
+          name: go-arena-batch
+          path: go/bin
+
+      - name: Download Rust batch artifact
+        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806  # v4.1.9
+        with:
+          name: rust-arena-batch
+          path: rust/target/release
+
+      - name: Set binary permissions
+        run: |
+          chmod +x go/bin/arena-batch
+          chmod +x rust/target/release/arena-batch
+
+      - name: Verify Python self-oracle ground truth
+        run: |
+          python3 harness/verify_cross.py --mode self
+
+      - name: Run cross-validation against Go and Rust engines
+        run: |
+          python3 harness/verify_cross.py --mode batch --target all
+
+  # ---------------------------------------------------------------------------
+  # 5. Docker Validation: Validação de Builds Herméticos Multi-Stage
+  # ---------------------------------------------------------------------------
+  docker-validation:
+    name: "Docker Compose & Containers Build"
+    needs: purity-guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2  # v3.10.0
+
+      - name: Validate docker-compose configuration
+        run: |
+          docker compose config --quiet
+
+      - name: Build Docker dev profile images
+        run: |
+          docker compose --profile dev build

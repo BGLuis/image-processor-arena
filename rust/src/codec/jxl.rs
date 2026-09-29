@@ -3,8 +3,8 @@
 // Encode: jxl-encoder
 // Decode: jxl-oxide
 
-use crate::pam::PamImage;
 use super::{CodecError, CodecMode, EncodeParams};
+use crate::pam::PamImage;
 use std::io::Cursor;
 
 pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecError> {
@@ -17,8 +17,7 @@ pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecErr
 
     match params.mode {
         CodecMode::Lossless => {
-            let config = jxl_encoder::LosslessConfig::new()
-                .with_effort(effort);
+            let config = jxl_encoder::LosslessConfig::new().with_effort(effort);
 
             let out = config
                 .encode(&pam.data, pam.width, pam.height, layout)
@@ -29,8 +28,7 @@ pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecErr
         CodecMode::Lossy => {
             let quality = params.quality.clamp(1, 100) as f32;
             let distance = jxl_encoder::quality_to_distance(quality);
-            let config = jxl_encoder::LossyConfig::new(distance)
-                .with_effort(effort);
+            let config = jxl_encoder::LossyConfig::new(distance).with_effort(effort);
 
             let out = config
                 .encode(&pam.data, pam.width, pam.height, layout)
