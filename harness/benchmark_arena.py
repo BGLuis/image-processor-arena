@@ -19,9 +19,30 @@ import json
 import shutil
 import argparse
 import subprocess
+import tomllib
 import urllib.request
 import urllib.error
 from typing import Dict, Any, List, Optional, Tuple
+
+
+ARENA_TOML = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "arena.toml")
+
+
+def load_param_contract(path: str = ARENA_TOML) -> Dict[str, Any]:
+    """Lê a tabela [params] de arena.toml: o contrato único de mode/q/effort dos dois engines."""
+    with open(path, "rb") as f:
+        return tomllib.load(f)["params"]
+
+
+def bytes_ratio(go_bytes: int, rust_bytes: int) -> Optional[float]:
+    """Tamanho de saída Go / Rust; None quando a operação não produz arquivo comparável."""
+    if go_bytes <= 0 or rust_bytes <= 0:
+        return None
+    return go_bytes / rust_bytes
+
+
+def format_ratio(ratio: Optional[float]) -> str:
+    return "-" if ratio is None else f"{ratio:.2f}x"
 
 
 def read_pam_dims(filepath: str) -> Tuple[int, int, int]:
@@ -58,7 +79,9 @@ class ArenaBenchmark:
         corpus_dir: str = "./harness/fixtures/corpus",
         iterations: int = 5,
         warmup: int = 2,
+        params: Optional[Dict[str, Any]] = None,
     ):
+        self.params = params or load_param_contract()
         self.mode = mode
         self.go_bin = go_bin
         self.rust_bin = rust_bin
@@ -109,6 +132,10 @@ class ArenaBenchmark:
     ) -> Dict[str, Any]:
         width, height, depth = read_pam_dims(input_file)
         mp = (width * height) / 1e6
+        if not self.params["q_min"] <= q <= self.params["q_max"]:
+            raise ValueError(f"q={q} fora do contrato [{self.params['q_min']}, {self.params['q_max']}]")
+        if not self.params["effort_min"] <= effort <= self.params["effort_max"]:
+            raise ValueError(f"effort={effort} fora do contrato [{self.params['effort_min']}, {self.params['effort_max']}]")
 
         if op == "decode":
             out_ext = "pam"
@@ -209,6 +236,9 @@ class ArenaBenchmark:
         go_mp_s = mp / (go_med / 1000.0) if go_med > 0 else 0
         rust_mp_s = mp / (rust_med / 1000.0) if rust_med > 0 else 0
 
+        if op == "analyze":
+            go_out_bytes = rust_out_bytes = 0
+
         winner = "Rust" if rust_med < go_med else "Go"
         speedup = (go_med / rust_med) if winner == "Rust" else (rust_med / go_med)
 
@@ -225,6 +255,7 @@ class ArenaBenchmark:
             "rust_ms": rust_med,
             "rust_mp_s": rust_mp_s,
             "rust_bytes": rust_out_bytes,
+            "bytes_ratio": bytes_ratio(go_out_bytes, rust_out_bytes),
             "winner": winner,
             "speedup": speedup,
         }
@@ -237,43 +268,45 @@ class ArenaBenchmark:
             os.path.join(self.corpus_dir, "alpha.pam"),
         ]
 
+        q = self.params["q_default"]
+        effort = self.params["effort_default"]
         tasks = []
 
         # 1. ANALYZE (16 métricas formais)
         for img in corpus_images:
             name = f"Analyze [{os.path.basename(img)}]"
-            tasks.append((name, "analyze", "pam", "lossless", 0, 4, img, None))
+            tasks.append((name, "analyze", "pam", "lossless", q, effort, img, None))
 
         # 2. ENCODE PNG
         for img in corpus_images:
             name = f"Encode PNG [{os.path.basename(img)}]"
-            tasks.append((name, "encode", "png", "lossless", 0, 4, img, None))
+            tasks.append((name, "encode", "png", "lossless", q, effort, img, None))
 
         # 3. ENCODE JPEG (exceto alpha)
         for img in corpus_images[:3]:
             name = f"Encode JPEG [{os.path.basename(img)}]"
-            tasks.append((name, "encode", "jpeg", "lossy", 80, 4, img, None))
+            tasks.append((name, "encode", "jpeg", "lossy", q, effort, img, None))
 
         # 4. ENCODE WebP Lossy & Lossless
         for img in corpus_images:
             name = f"Encode WebP Lossy [{os.path.basename(img)}]"
-            tasks.append((name, "encode", "webp", "lossy", 80, 4, img, None))
+            tasks.append((name, "encode", "webp", "lossy", q, effort, img, None))
             name_ll = f"Encode WebP Lossless [{os.path.basename(img)}]"
-            tasks.append((name_ll, "encode", "webp", "lossless", 100, 4, img, None))
+            tasks.append((name_ll, "encode", "webp", "lossless", q, effort, img, None))
 
         # 5. ENCODE AVIF Lossy & Lossless
         for img in corpus_images[:2]:  # photo e screenshot para avif
             name = f"Encode AVIF Lossy [{os.path.basename(img)}]"
-            tasks.append((name, "encode", "avif", "lossy", 80, 4, img, None))
+            tasks.append((name, "encode", "avif", "lossy", q, effort, img, None))
             name_ll = f"Encode AVIF Lossless [{os.path.basename(img)}]"
-            tasks.append((name_ll, "encode", "avif", "lossless", 100, 4, img, None))
+            tasks.append((name_ll, "encode", "avif", "lossless", q, effort, img, None))
 
         # 6. ENCODE JPEG XL Lossy & Lossless
         for img in corpus_images[:2]:  # photo e screenshot para jxl
             name = f"Encode JXL Lossy [{os.path.basename(img)}]"
-            tasks.append((name, "encode", "jxl", "lossy", 80, 4, img, None))
+            tasks.append((name, "encode", "jxl", "lossy", q, effort, img, None))
             name_ll = f"Encode JXL Lossless [{os.path.basename(img)}]"
-            tasks.append((name_ll, "encode", "jxl", "lossless", 100, 4, img, None))
+            tasks.append((name_ll, "encode", "jxl", "lossless", q, effort, img, None))
 
         # 7. DECODE (PNG, JPEG, WebP, AVIF, JXL)
         photo_png = os.path.join(self.corpus_dir, "photo.png")
@@ -282,17 +315,17 @@ class ArenaBenchmark:
         photo_avif = os.path.join(self.corpus_dir, "photo.avif")
         photo_jxl = os.path.join(self.corpus_dir, "photo.jxl")
 
-        tasks.append(("Decode PNG [photo.png]", "decode", "png", "lossless", 0, 4, photo_png, None))
-        tasks.append(("Decode JPEG [photo.jpg]", "decode", "jpeg", "lossy", 80, 4, photo_jpg, None))
-        tasks.append(("Decode WebP [photo.webp]", "decode", "webp", "lossy", 80, 4, photo_webp, None))
-        tasks.append(("Decode AVIF [photo.avif]", "decode", "avif", "lossy", 80, 4, photo_avif, None))
-        tasks.append(("Decode JXL [photo.jxl]", "decode", "jxl", "lossy", 80, 4, photo_jxl, None))
+        tasks.append(("Decode PNG [photo.png]", "decode", "png", "lossless", q, effort, photo_png, None))
+        tasks.append(("Decode JPEG [photo.jpg]", "decode", "jpeg", "lossy", q, effort, photo_jpg, None))
+        tasks.append(("Decode WebP [photo.webp]", "decode", "webp", "lossy", q, effort, photo_webp, None))
+        tasks.append(("Decode AVIF [photo.avif]", "decode", "avif", "lossy", q, effort, photo_avif, None))
+        tasks.append(("Decode JXL [photo.jxl]", "decode", "jxl", "lossy", q, effort, photo_jxl, None))
 
         # 8. TRANSCODE (PNG -> WebP, PNG -> AVIF, JPEG -> WebP, JXL -> PNG)
-        tasks.append(("Transcode PNG -> WebP", "transcode", "png", "lossy", 80, 4, photo_png, "webp"))
-        tasks.append(("Transcode PNG -> AVIF", "transcode", "png", "lossy", 80, 4, photo_png, "avif"))
-        tasks.append(("Transcode JPEG -> WebP", "transcode", "jpeg", "lossy", 80, 4, photo_jpg, "webp"))
-        tasks.append(("Transcode JXL -> PNG", "transcode", "jxl", "lossless", 0, 4, photo_jxl, "png"))
+        tasks.append(("Transcode PNG -> WebP", "transcode", "png", "lossy", q, effort, photo_png, "webp"))
+        tasks.append(("Transcode PNG -> AVIF", "transcode", "png", "lossy", q, effort, photo_png, "avif"))
+        tasks.append(("Transcode JPEG -> WebP", "transcode", "jpeg", "lossy", q, effort, photo_jpg, "webp"))
+        tasks.append(("Transcode JXL -> PNG", "transcode", "jxl", "lossless", q, effort, photo_jxl, "png"))
 
         print("=" * 80)
         print("          ARENA DE PROCESSAMENTO DE IMAGENS — BATERIA DE BENCHMARK")
@@ -350,13 +383,13 @@ class ArenaBenchmark:
         print("\n" + "-" * 90)
 
         # Tabela Detalhada
-        print(f"{'Operação / Tarefa':32s} | {'Go (ms)':9s} | {'Go MP/s':8s} | {'Rust (ms)':9s} | {'Rust MP/s':9s} | {'Vencedor':8s} | {'Vantagem':8s}")
-        print("-" * 90)
+        print(f"{'Operação / Tarefa':32s} | {'Go (ms)':9s} | {'Go MP/s':8s} | {'Rust (ms)':9s} | {'Rust MP/s':9s} | {'Go (B)':9s} | {'Rust (B)':9s} | {'Go/Rust':7s} | {'Vencedor':8s} | {'Vantagem':8s}")
+        print("-" * 140)
         for r in self.results:
             medal = "🦀 Rust" if r["winner"] == "Rust" else "🐹 Go"
             adv = f"{r['speedup']:.2f}x"
-            print(f"{r['task']:32s} | {r['go_ms']:7.2f}ms | {r['go_mp_s']:7.2f} | {r['rust_ms']:7.2f}ms | {r['rust_mp_s']:8.2f} | {medal:8s} | {adv:8s}")
-        print("=" * 90)
+            print(f"{r['task']:32s} | {r['go_ms']:7.2f}ms | {r['go_mp_s']:7.2f} | {r['rust_ms']:7.2f}ms | {r['rust_mp_s']:8.2f} | {r['go_bytes']:9d} | {r['rust_bytes']:9d} | {format_ratio(r['bytes_ratio']):7s} | {medal:8s} | {adv:8s}")
+        print("=" * 140)
 
     def export_reports(self, output_dir: str = "./results") -> None:
         os.makedirs(output_dir, exist_ok=True)
@@ -384,11 +417,13 @@ class ArenaBenchmark:
             md.append(f"- 🥈 **2º Lugar: Rust Puro** ({rust_wins}/{total} vitórias - {rust_wins/total*100:.1f}%)\n")
 
         md.append("## 📊 Tabela Completa de Resultados\n")
-        md.append("| Tarefa / Operação | Go (tempo) | Go Throughput | Rust (tempo) | Rust Throughput | 🥇 Vencedor | Vantagem |")
-        md.append("|---|---|---|---|---|---|---|")
+        md.append(f"Parâmetros (arena.toml `[params]`): q={self.params['q_default']}, effort={self.params['effort_default']}, mode padrão `{self.params['mode_default']}`. "
+                  "Go/Rust acima de 1 significa saída maior no Go; o tempo só é comparável junto do tamanho.\n")
+        md.append("| Tarefa / Operação | Go (tempo) | Go Throughput | Rust (tempo) | Rust Throughput | Go (bytes) | Rust (bytes) | Go/Rust | 🥇 Vencedor | Vantagem |")
+        md.append("|---|---|---|---|---|---|---|---|---|---|")
         for r in self.results:
             medal = "🦀 Rust" if r["winner"] == "Rust" else "🐹 Go"
-            md.append(f"| {r['task']} | {r['go_ms']:.2f} ms | {r['go_mp_s']:.2f} MP/s | {r['rust_ms']:.2f} ms | {r['rust_mp_s']:.2f} MP/s | {medal} | **{r['speedup']:.2f}x** |")
+            md.append(f"| {r['task']} | {r['go_ms']:.2f} ms | {r['go_mp_s']:.2f} MP/s | {r['rust_ms']:.2f} ms | {r['rust_mp_s']:.2f} MP/s | {r['go_bytes']} | {r['rust_bytes']} | {format_ratio(r['bytes_ratio'])} | {medal} | **{r['speedup']:.2f}x** |")
 
         with open(md_path, "w", encoding="utf-8") as f:
             f.write("\n".join(md) + "\n")
@@ -408,6 +443,7 @@ def main() -> int:
     parser.add_argument("--iterations", type=int, default=5, help="Número de iterações medidas por teste")
     parser.add_argument("--warmup", type=int, default=2, help="Número de iterações de warmup descartadas")
     parser.add_argument("--output-dir", default="./results", help="Diretório para salvar os resultados")
+    parser.add_argument("--arena-toml", default=ARENA_TOML, help="arena.toml com a tabela [params] (q, effort e mode padrão)")
     args = parser.parse_args()
 
     bench = ArenaBenchmark(
@@ -419,6 +455,7 @@ def main() -> int:
         corpus_dir=args.corpus_dir,
         iterations=args.iterations,
         warmup=args.warmup,
+        params=load_param_contract(args.arena_toml),
     )
 
     bench.run_suite()
