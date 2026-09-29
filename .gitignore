@@ -10,6 +10,14 @@ results/
 ramdisk/
 tmp/
 
+# Go build artifacts
+go/bin/
+*.test
+
+# Rust build artifacts
+target/
+rust/target/
+
 # OS
 .DS_Store
 Thumbs.db

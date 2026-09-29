@@ -1,0 +1,40 @@
+# rust/deny.toml
+# Configuração do cargo-deny para garantir a pureza do ecossistema Rust
+# Bloqueia ferramentas de build C/FFI: cc, cmake, bindgen, nasm-rs, pkg-config.
+
+[graph]
+targets = [
+    { triple = "x86_64-unknown-linux-gnu" },
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+deny = [
+    { name = "cc" },
+    { name = "cmake" },
+    { name = "bindgen" },
+    { name = "nasm-rs" },
+    { name = "pkg-config" },
+]
+
+# rav1d e rav1d-safe upstream incluem cc/nasm-rs como build-dependency inerte quando asm está desligado.
+# O skip-tree permite resolver a árvore, enquanto check-purity-rust.sh audita que nenhum código C/asm é gerado.
+[[bans.skip-tree]]
+name = "rav1d"
+
+[[bans.skip-tree]]
+name = "rav1d-safe"
+
+[licenses]
+unlicensed = "warn"
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "MPL-2.0",
+    "AGPL-3.0-only",
+    "AGPL-3.0-or-later",
+    "Zlib",
+]

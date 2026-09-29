@@ -1,0 +1,62 @@
+[package]
+name = "arena-rust"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Codecs Puros (100% Rust)
+# PNG
+png = "0.18.1"
+
+# JPEG
+jpeg-encoder = "0.7.1"
+zune-jpeg = "0.5.16-rc2"
+
+# WebP
+zenwebp = "0.4.4"
+image-webp = "0.2.4"
+
+# AVIF
+ravif = { version = "0.13.0", default-features = false, features = ["threading"] }
+zenravif = { version = "0.1.3", default-features = false, features = ["threading"] }
+rav1d = { version = "1.1.0", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
+zenavif = "0.1.6"
+
+# JPEG XL
+jxl-encoder = { version = "0.3.1", features = ["convenience"] }
+jxl-oxide = "0.12.6"
+
+# Servidor HTTP & Async
+tokio = { version = "1", features = ["full"] }
+axum = "0.8"
+
+# Serialização
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# CLI Batch
+clap = { version = "4", features = ["derive"] }
+
+# Utilitários de buffers de pixel puros
+imgref = "1.12"
+rgb = "0.8"
+bytemuck = "1.25"
+zenpixels = "0.2"
+
+[[bin]]
+name = "arena-server"
+path = "src/bin/server.rs"
+
+[[bin]]
+name = "arena-batch"
+path = "src/bin/batch.rs"
+
+[lib]
+name = "arena_rust"
+path = "src/lib.rs"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
