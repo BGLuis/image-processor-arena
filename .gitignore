@@ -5,8 +5,7 @@ __pycache__/
 .venv/
 env/
 
-# Results and temp data
-results/
+# Temp data
 ramdisk/
 tmp/
 

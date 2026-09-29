@@ -67,6 +67,7 @@ services:
         condition: service_healthy
       rust-server:
         condition: service_healthy
+    command: ["python3", "harness/benchmark_arena.py", "--mode", "http", "--go-url", "http://go-server:8080/run", "--rust-url", "http://rust-server:8081/run"]
     profiles:
       - dev
       - bench
@@ -106,9 +107,21 @@ services:
       - bench-isolated
 
   harness-bench:
-    extends:
-      service: harness
+    build:
+      context: .
+      dockerfile: docker/harness.Dockerfile
+    image: arena-harness:latest
     container_name: arena-harness-bench
+    volumes:
+      - ./harness:/arena/harness
+      - ./docs:/arena/docs
+      - ./results:/arena/results
+    depends_on:
+      go-server-bench:
+        condition: service_healthy
+      rust-server-bench:
+        condition: service_healthy
+    command: ["python3", "harness/benchmark_arena.py", "--mode", "http", "--go-url", "http://go-server-bench:8080/run", "--rust-url", "http://rust-server-bench:8081/run"]
     deploy:
       resources:
         limits:

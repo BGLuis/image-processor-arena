@@ -11,10 +11,10 @@ targets = [
 multiple-versions = "warn"
 wildcards = "allow"
 deny = [
-    { name = "cc" },
+    { name = "cc", wrappers = ["rav1d", "rav1d-safe"] },
     { name = "cmake" },
     { name = "bindgen" },
-    { name = "nasm-rs" },
+    { name = "nasm-rs", wrappers = ["rav1d", "rav1d-safe"] },
     { name = "pkg-config" },
 ]
 
@@ -27,7 +27,6 @@ name = "rav1d"
 name = "rav1d-safe"
 
 [licenses]
-unlicensed = "warn"
 allow = [
     "MIT",
     "Apache-2.0",
