@@ -1,0 +1,602 @@
+{
+  "alpha_boxes.pam": {
+    "adequacy_420": {
+      "chroma_gradient_energy": 48728.174818,
+      "chroma_gradient_ratio": 3.641833,
+      "mse_cb": 0.0,
+      "mse_chroma": 0.0,
+      "mse_cr": 0.0
+    },
+    "alpha": {
+      "binarity": 0.5,
+      "has_alpha": true,
+      "sparsity": 0.25
+    },
+    "aspect_ratio": {
+      "float": 1.0,
+      "str": "1:1"
+    },
+    "block_alignment": {
+      "b16": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      },
+      "b256": {
+        "h_mod": 64,
+        "partial_pct": 1.0,
+        "partial_pixels": 4096,
+        "w_mod": 64
+      },
+      "b64": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      },
+      "b8": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      }
+    },
+    "blurhash": "L~Lqdfm3e?pSoW[,o0J.fOo0fQa}",
+    "color_variance": {
+      "var_b": 12192.1875,
+      "var_g": 16256.25,
+      "var_r": 16256.25,
+      "var_sum": 44704.6875
+    },
+    "dominant_color": {
+      "dominant_bin": 15,
+      "dominant_rgb": [
+        0,
+        0,
+        255
+      ],
+      "mean_rgb": [
+        127.5,
+        127.5,
+        63.75
+      ]
+    },
+    "entropy_residual_y": 0.133468,
+    "entropy_y": 2.0,
+    "flat_area": 1.0,
+    "gradient_energy": 13380.122789,
+    "height": 64,
+    "laplacian_variance": 850.484391,
+    "mean_y": 120.25,
+    "phash": "1144009100440091",
+    "spatial_information": 112.899027,
+    "unique_colors": 4,
+    "width": 64
+  },
+  "checkerboard_1x1.pam": {
+    "adequacy_420": {
+      "chroma_gradient_energy": 0.0,
+      "chroma_gradient_ratio": 0.0,
+      "mse_cb": 0.0,
+      "mse_chroma": 0.0,
+      "mse_cr": 0.0
+    },
+    "alpha": {
+      "binarity": 1.0,
+      "has_alpha": false,
+      "sparsity": 0.0
+    },
+    "aspect_ratio": {
+      "float": 1.0,
+      "str": "1:1"
+    },
+    "block_alignment": {
+      "b16": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      },
+      "b256": {
+        "h_mod": 64,
+        "partial_pct": 1.0,
+        "partial_pixels": 4096,
+        "w_mod": 64
+      },
+      "b64": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      },
+      "b8": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      }
+    },
+    "blurhash": "L2Lqe9_3fQ_3_3j[fQj[fQfQfQfQ",
+    "color_variance": {
+      "var_b": 16256.25,
+      "var_g": 16256.25,
+      "var_r": 16256.25,
+      "var_sum": 48768.75
+    },
+    "dominant_color": {
+      "dominant_bin": 0,
+      "dominant_rgb": [
+        0,
+        0,
+        0
+      ],
+      "mean_rgb": [
+        127.5,
+        127.5,
+        127.5
+      ]
+    },
+    "entropy_residual_y": 1.0,
+    "entropy_y": 1.0,
+    "flat_area": 0.0,
+    "gradient_energy": 0.0,
+    "height": 64,
+    "laplacian_variance": 1040400.0,
+    "mean_y": 127.5,
+    "phash": "0000000000000000",
+    "spatial_information": 0.0,
+    "unique_colors": 2,
+    "width": 64
+  },
+  "checkerboard_8x8.pam": {
+    "adequacy_420": {
+      "chroma_gradient_energy": 0.0,
+      "chroma_gradient_ratio": 0.0,
+      "mse_cb": 0.0,
+      "mse_chroma": 0.0,
+      "mse_cr": 0.0
+    },
+    "alpha": {
+      "binarity": 1.0,
+      "has_alpha": false,
+      "sparsity": 0.0
+    },
+    "aspect_ratio": {
+      "float": 1.0,
+      "str": "1:1"
+    },
+    "block_alignment": {
+      "b16": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      },
+      "b256": {
+        "h_mod": 64,
+        "partial_pct": 1.0,
+        "partial_pixels": 4096,
+        "w_mod": 64
+      },
+      "b64": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      },
+      "b8": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      }
+    },
+    "blurhash": "L2Lqe9_3fQ_3_3~qfQ~qfQfQfQfQ",
+    "color_variance": {
+      "var_b": 16256.25,
+      "var_g": 16256.25,
+      "var_r": 16256.25,
+      "var_sum": 48768.75
+    },
+    "dominant_color": {
+      "dominant_bin": 0,
+      "dominant_rgb": [
+        0,
+        0,
+        0
+      ],
+      "mean_rgb": [
+        127.5,
+        127.5,
+        127.5
+      ]
+    },
+    "entropy_residual_y": 0.614369,
+    "entropy_y": 1.0,
+    "flat_area": 1.0,
+    "gradient_energy": 390285.327784,
+    "height": 64,
+    "laplacian_variance": 35997.190427,
+    "mean_y": 127.5,
+    "phash": "0055005500550055",
+    "spatial_information": 485.302647,
+    "unique_colors": 2,
+    "width": 64
+  },
+  "gradient_h.pam": {
+    "adequacy_420": {
+      "chroma_gradient_energy": 0.0,
+      "chroma_gradient_ratio": 0.0,
+      "mse_cb": 0.0,
+      "mse_chroma": 0.0,
+      "mse_cr": 0.0
+    },
+    "alpha": {
+      "binarity": 1.0,
+      "has_alpha": false,
+      "sparsity": 0.0
+    },
+    "aspect_ratio": {
+      "float": 1.0,
+      "str": "1:1"
+    },
+    "block_alignment": {
+      "b16": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      },
+      "b256": {
+        "h_mod": 64,
+        "partial_pct": 1.0,
+        "partial_pixels": 4096,
+        "w_mod": 64
+      },
+      "b64": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      },
+      "b8": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      }
+    },
+    "blurhash": "L$HV9w00%MRjj[ayj[fQfQfQfQfQ",
+    "color_variance": {
+      "var_b": 5578.842773,
+      "var_g": 5578.842773,
+      "var_r": 5578.842773,
+      "var_sum": 16736.52832
+    },
+    "dominant_color": {
+      "dominant_bin": 0,
+      "dominant_rgb": [
+        0,
+        0,
+        0
+      ],
+      "mean_rgb": [
+        127.03125,
+        127.03125,
+        127.03125
+      ]
+    },
+    "entropy_residual_y": 0.276195,
+    "entropy_y": 6.0,
+    "flat_area": 0.0,
+    "gradient_energy": 1045.935484,
+    "height": 64,
+    "laplacian_variance": 0.080385,
+    "mean_y": 127.03125,
+    "phash": "2a00000000000000",
+    "spatial_information": 1.089158,
+    "unique_colors": 64,
+    "width": 64
+  },
+  "gradient_v.pam": {
+    "adequacy_420": {
+      "chroma_gradient_energy": 0.0,
+      "chroma_gradient_ratio": 0.0,
+      "mse_cb": 0.0,
+      "mse_chroma": 0.0,
+      "mse_cr": 0.0
+    },
+    "alpha": {
+      "binarity": 1.0,
+      "has_alpha": false,
+      "sparsity": 0.0
+    },
+    "aspect_ratio": {
+      "float": 1.0,
+      "str": "1:1"
+    },
+    "block_alignment": {
+      "b16": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      },
+      "b256": {
+        "h_mod": 64,
+        "partial_pct": 1.0,
+        "partial_pixels": 4096,
+        "w_mod": 64
+      },
+      "b64": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      },
+      "b8": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      }
+    },
+    "blurhash": "L$HV9wj[fQj[00ayfQay%Mj[fQj[",
+    "color_variance": {
+      "var_b": 5578.842773,
+      "var_g": 5578.842773,
+      "var_r": 5578.842773,
+      "var_sum": 16736.52832
+    },
+    "dominant_color": {
+      "dominant_bin": 0,
+      "dominant_rgb": [
+        0,
+        0,
+        0
+      ],
+      "mean_rgb": [
+        127.03125,
+        127.03125,
+        127.03125
+      ]
+    },
+    "entropy_residual_y": 0.0,
+    "entropy_y": 6.0,
+    "flat_area": 0.0,
+    "gradient_energy": 1045.935484,
+    "height": 64,
+    "laplacian_variance": 0.080385,
+    "mean_y": 127.03125,
+    "phash": "0000800080008000",
+    "spatial_information": 1.089158,
+    "unique_colors": 64,
+    "width": 64
+  },
+  "noise_deterministic.pam": {
+    "adequacy_420": {
+      "chroma_gradient_energy": 108048.930801,
+      "chroma_gradient_ratio": 1.842435,
+      "mse_cb": 1527.717529,
+      "mse_chroma": 1668.116913,
+      "mse_cr": 1808.516296
+    },
+    "alpha": {
+      "binarity": 1.0,
+      "has_alpha": false,
+      "sparsity": 0.0
+    },
+    "aspect_ratio": {
+      "float": 1.0,
+      "str": "1:1"
+    },
+    "block_alignment": {
+      "b16": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      },
+      "b256": {
+        "h_mod": 64,
+        "partial_pct": 1.0,
+        "partial_pixels": 4096,
+        "w_mod": 64
+      },
+      "b64": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      },
+      "b8": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      }
+    },
+    "blurhash": "L2HetX%Nvb}d^kv~xIaTc7z=zrfy",
+    "color_variance": {
+      "var_b": 5419.75594,
+      "var_g": 5516.131016,
+      "var_r": 5416.359379,
+      "var_sum": 16352.246335
+    },
+    "dominant_color": {
+      "dominant_bin": 183,
+      "dominant_rgb": [
+        0,
+        187,
+        119
+      ],
+      "mean_rgb": [
+        128.105957,
+        128.369873,
+        129.161377
+      ]
+    },
+    "entropy_residual_y": 8.07732,
+    "entropy_y": 7.586715,
+    "flat_area": 0.0,
+    "gradient_energy": 58644.634755,
+    "height": 64,
+    "laplacian_variance": 48639.700926,
+    "mean_y": 128.385254,
+    "phash": "9ee8982bea24ece1",
+    "spatial_information": 109.65846,
+    "unique_colors": 4096,
+    "width": 64
+  },
+  "solid_black.pam": {
+    "adequacy_420": {
+      "chroma_gradient_energy": 0.0,
+      "chroma_gradient_ratio": 0.0,
+      "mse_cb": 0.0,
+      "mse_chroma": 0.0,
+      "mse_cr": 0.0
+    },
+    "alpha": {
+      "binarity": 1.0,
+      "has_alpha": false,
+      "sparsity": 0.0
+    },
+    "aspect_ratio": {
+      "float": 1.0,
+      "str": "1:1"
+    },
+    "block_alignment": {
+      "b16": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      },
+      "b256": {
+        "h_mod": 64,
+        "partial_pct": 1.0,
+        "partial_pixels": 4096,
+        "w_mod": 64
+      },
+      "b64": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      },
+      "b8": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      }
+    },
+    "blurhash": "L00000fQfQfQfQfQfQfQfQfQfQfQ",
+    "color_variance": {
+      "var_b": 0.0,
+      "var_g": 0.0,
+      "var_r": 0.0,
+      "var_sum": 0.0
+    },
+    "dominant_color": {
+      "dominant_bin": 0,
+      "dominant_rgb": [
+        0,
+        0,
+        0
+      ],
+      "mean_rgb": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "entropy_residual_y": 0.0,
+    "entropy_y": 0.0,
+    "flat_area": 1.0,
+    "gradient_energy": 0.0,
+    "height": 64,
+    "laplacian_variance": 0.0,
+    "mean_y": 0.0,
+    "phash": "0000000000000000",
+    "spatial_information": 0.0,
+    "unique_colors": 1,
+    "width": 64
+  },
+  "solid_red.pam": {
+    "adequacy_420": {
+      "chroma_gradient_energy": 0.0,
+      "chroma_gradient_ratio": 0.0,
+      "mse_cb": 0.0,
+      "mse_chroma": 0.0,
+      "mse_cr": 0.0
+    },
+    "alpha": {
+      "binarity": 1.0,
+      "has_alpha": false,
+      "sparsity": 0.0
+    },
+    "aspect_ratio": {
+      "float": 1.0,
+      "str": "1:1"
+    },
+    "block_alignment": {
+      "b16": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      },
+      "b256": {
+        "h_mod": 64,
+        "partial_pct": 1.0,
+        "partial_pixels": 4096,
+        "w_mod": 64
+      },
+      "b64": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      },
+      "b8": {
+        "h_mod": 0,
+        "partial_pct": 0.0,
+        "partial_pixels": 0,
+        "w_mod": 0
+      }
+    },
+    "blurhash": "L4TI:j|cfQ|c|cjtfQjtfQfQfQfQ",
+    "color_variance": {
+      "var_b": 0.0,
+      "var_g": 0.0,
+      "var_r": 0.0,
+      "var_sum": 0.0
+    },
+    "dominant_color": {
+      "dominant_bin": 3840,
+      "dominant_rgb": [
+        255,
+        0,
+        0
+      ],
+      "mean_rgb": [
+        255.0,
+        0.0,
+        0.0
+      ]
+    },
+    "entropy_residual_y": 0.0,
+    "entropy_y": 0.0,
+    "flat_area": 1.0,
+    "gradient_energy": 0.0,
+    "height": 64,
+    "laplacian_variance": 0.0,
+    "mean_y": 77.0,
+    "phash": "0000000000000000",
+    "spatial_information": 0.0,
+    "unique_colors": 1,
+    "width": 64
+  }
+}
