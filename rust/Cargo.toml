@@ -55,6 +55,12 @@ path = "src/bin/batch.rs"
 name = "arena_rust"
 path = "src/lib.rs"
 
+# jxl-oxide 0.12.6 falha com UnexpectedEof ao decodificar JXL lossless multi-grupo com ANS
+# produzido pelo jxl-encoder (issue #2). A cópia local difere do jxl-modular 0.11.3 apenas
+# por pular a leitura do estado ANS em streams sem canais. Remover quando o upstream corrigir.
+[patch.crates-io]
+jxl-modular = { path = "vendor/jxl-modular" }
+
 [profile.release]
 opt-level = 3
 lto = "thin"
