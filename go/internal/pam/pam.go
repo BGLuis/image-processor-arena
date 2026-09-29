@@ -92,6 +92,9 @@ func FromImage(m image.Image) *Image {
 
 	// Check if source is already *image.NRGBA
 	if nrgba, ok := m.(*image.NRGBA); ok && nrgba.Rect == bounds && nrgba.Stride == w*4 {
+		if nrgba.Opaque() {
+			return fromOpaqueNRGBA(nrgba)
+		}
 		pixCopy := make([]byte, len(nrgba.Pix))
 		copy(pixCopy, nrgba.Pix)
 		return &Image{
@@ -157,6 +160,25 @@ func FromImage(m image.Image) *Image {
 	return &Image{
 		Width:    w,
 		Height:   h,
+		Depth:    3,
+		MaxVal:   255,
+		TuplType: "RGB",
+		Pix:      pix,
+	}
+}
+
+// fromOpaqueNRGBA drops the alpha channel of a fully opaque image. The pure-Go WebP, AVIF
+// and JPEG XL decoders always return *image.NRGBA, so this is how an RGB file comes back as depth 3.
+func fromOpaqueNRGBA(nrgba *image.NRGBA) *Image {
+	n := nrgba.Rect.Dx() * nrgba.Rect.Dy()
+	pix := make([]byte, n*3)
+	src := nrgba.Pix
+	for i, j := 0, 0; i < n*3; i, j = i+3, j+4 {
+		pix[i], pix[i+1], pix[i+2] = src[j], src[j+1], src[j+2]
+	}
+	return &Image{
+		Width:    nrgba.Rect.Dx(),
+		Height:   nrgba.Rect.Dy(),
 		Depth:    3,
 		MaxVal:   255,
 		TuplType: "RGB",

@@ -19,9 +19,9 @@ func main() {
 		opFlag     = flag.String("op", "", "Operation: analyze, encode, decode, transcode")
 		formatFlag = flag.String("format", "", "Image format: png, jpeg, webp, avif, jxl")
 		toFlag     = flag.String("to", "", "Target format for transcode")
-		modeFlag   = flag.String("mode", "", "Compression mode: lossy, lossless")
-		qFlag      = flag.Int("q", 0, "Quality level (1-100)")
-		effortFlag = flag.Int("effort", 0, "Effort / speed / method setting")
+		modeFlag   = flag.String("mode", "", "Compression mode: lossy, lossless (default lossy)")
+		qFlag      = flag.String("q", "", "Quality level 1-100 (default 75)")
+		effortFlag = flag.String("effort", "", "Effort level 1-10, higher is slower and smaller (default 4)")
 		inputFlag  = flag.String("input", "", "Input file path (or '-' for stdin)")
 		outputFlag = flag.String("output", "", "Output file path (or '-' for stdout)")
 	)
@@ -81,6 +81,12 @@ func main() {
 			os.Exit(1)
 		}
 
+		params, err := codec.ParseParams(fmtStr, *modeFlag, *qFlag, *effortFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
 		pamImg, err := pam.Decode(bytes.NewReader(inputData))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error decoding PAM input: %v\n", err)
@@ -88,12 +94,6 @@ func main() {
 		}
 
 		var outBuf bytes.Buffer
-		params := codec.Params{
-			Format: fmtStr,
-			Mode:   *modeFlag,
-			Q:      *qFlag,
-			Effort: *effortFlag,
-		}
 		if err := codec.Encode(&outBuf, pamImg, params); err != nil {
 			fmt.Fprintf(os.Stderr, "Error encoding: %v\n", err)
 			os.Exit(1)
@@ -134,6 +134,12 @@ func main() {
 			os.Exit(1)
 		}
 
+		params, err := codec.ParseParams(toFmt, *modeFlag, *qFlag, *effortFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
 		pamImg, err := codec.Decode(bytes.NewReader(inputData), fromFmt)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error decoding input: %v\n", err)
@@ -141,12 +147,6 @@ func main() {
 		}
 
 		var outBuf bytes.Buffer
-		params := codec.Params{
-			Format: toFmt,
-			Mode:   *modeFlag,
-			Q:      *qFlag,
-			Effort: *effortFlag,
-		}
 		if err := codec.Encode(&outBuf, pamImg, params); err != nil {
 			fmt.Fprintf(os.Stderr, "Error encoding transcode: %v\n", err)
 			os.Exit(1)

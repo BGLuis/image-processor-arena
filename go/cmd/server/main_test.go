@@ -120,3 +120,61 @@ func TestRunEncodeDecodeTranscode(t *testing.T) {
 		t.Fatalf("Expected image/webp, got %q", ct)
 	}
 }
+
+func postRun(t *testing.T, query string, body []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/run?"+query, bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	handleRun(rr, req)
+	return rr
+}
+
+func TestRunRejectsParamsOutsideContract(t *testing.T) {
+	pamData := loadSamplePAM(t)
+	encoded := postRun(t, "op=encode&format=png", pamData).Body.Bytes()
+
+	for _, params := range []string{
+		"q=0", "q=101", "q=300", "q=-1", "q=abc",
+		"effort=0", "effort=11", "effort=fast",
+		"mode=near-lossless",
+	} {
+		for _, target := range []struct {
+			query string
+			body  []byte
+		}{
+			{"op=encode&format=webp&" + params, pamData},
+			{"op=transcode&format=png&to=webp&" + params, encoded},
+		} {
+			if rr := postRun(t, target.query, target.body); rr.Code != http.StatusBadRequest {
+				t.Errorf("%s: expected 400, got %d", target.query, rr.Code)
+			}
+		}
+	}
+
+	if rr := postRun(t, "op=encode&format=bmp", pamData); rr.Code != http.StatusBadRequest {
+		t.Errorf("unknown format: expected 400, got %d", rr.Code)
+	}
+}
+
+func TestRunDefaultsMatchTheContract(t *testing.T) {
+	pamData := loadSamplePAM(t)
+	for _, format := range []string{"png", "jpeg", "webp", "jxl"} {
+		implicit := postRun(t, "op=encode&format="+format, pamData)
+		explicit := postRun(t, "op=encode&format="+format+"&mode=lossy&q=75&effort=4", pamData)
+		if implicit.Code != http.StatusOK || explicit.Code != http.StatusOK {
+			t.Fatalf("%s: implicit %d, explicit %d", format, implicit.Code, explicit.Code)
+		}
+		if !bytes.Equal(implicit.Body.Bytes(), explicit.Body.Bytes()) {
+			t.Errorf("%s: omitted params must behave as mode=lossy q=75 effort=4", format)
+		}
+	}
+}
+
+func TestRunEmptyParamsSelectDefaults(t *testing.T) {
+	pamData := loadSamplePAM(t)
+	implicit := postRun(t, "op=encode&format=webp", pamData)
+	empty := postRun(t, "op=encode&format=webp&mode=&q=&effort=", pamData)
+	if empty.Code != http.StatusOK || !bytes.Equal(implicit.Body.Bytes(), empty.Body.Bytes()) {
+		t.Errorf("empty params must equal omitted params, got status %d", empty.Code)
+	}
+}

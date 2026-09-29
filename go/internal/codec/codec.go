@@ -28,7 +28,7 @@ type Params struct {
 	Format string // png, jpeg, jpg, webp, avif, jxl
 	Mode   string // lossy or lossless
 	Q      int    // Quality [1..100], 0 means default
-	Effort int    // Effort / Speed / Method level
+	Effort int    // Effort [1..10], 0 means default
 }
 
 // NormalizeFormat standardizes format string.
@@ -43,44 +43,19 @@ func NormalizeFormat(fmtStr string) string {
 
 // Encode encodes a PAM image into the target format.
 func Encode(w io.Writer, pamImg *pam.Image, params Params) error {
-	format := NormalizeFormat(params.Format)
-	q := params.Q
-	if q <= 0 {
-		q = 75 // reasonable default across codecs
+	params, err := params.resolve()
+	if err != nil {
+		return err
 	}
-	if q > 100 {
-		q = 100
-	}
-
-	mode := strings.ToLower(params.Mode)
-	if mode == "" {
-		if format == "png" {
-			mode = "lossless"
-		} else {
-			mode = "lossy"
-		}
-	}
-
-	// Codecs work with image.Image. For Depth 3 and 4, pamImg implements image.Image.
-	// However, many third-party pure-Go encoders optimize for *image.NRGBA or *image.RGBA.
-	// Providing pamImg.ToNRGBA() gives universal compatibility.
-	nrgba := pamImg.ToNRGBA()
+	format, q, mode := params.Format, params.Q, params.Mode
+	src := encoderInput(pamImg)
 
 	switch format {
 	case "png":
 		enc := &png.Encoder{
-			CompressionLevel: png.DefaultCompression,
+			CompressionLevel: pngCompression(params.Effort),
 		}
-		if params.Effort > 0 {
-			if params.Effort <= 2 {
-				enc.CompressionLevel = png.BestSpeed
-			} else if params.Effort >= 7 {
-				enc.CompressionLevel = png.BestCompression
-			} else {
-				enc.CompressionLevel = png.DefaultCompression
-			}
-		}
-		return enc.Encode(w, nrgba)
+		return enc.Encode(w, src)
 
 	case "jpeg":
 		// Standard library JPEG encoder only supports lossy baseline
@@ -88,7 +63,7 @@ func Encode(w io.Writer, pamImg *pam.Image, params Params) error {
 			Quality: q,
 		}
 		// image/jpeg handles image.Image, but for RGB without alpha, *image.RGBA or *image.NRGBA is fine.
-		return jpeg.Encode(w, nrgba, opts)
+		return jpeg.Encode(w, src, opts)
 
 	case "webp":
 		if mode == "lossless" {
@@ -96,51 +71,54 @@ func Encode(w io.Writer, pamImg *pam.Image, params Params) error {
 				Lossy:             false,
 				UseExtendedFormat: true,
 			}
-			return gowebp.Encode(w, nrgba, opts)
+			return gowebp.Encode(w, src, opts)
 		} else {
 			// Lossy WebP with deepteams/webp
 			opts := deepwebp.DefaultOptions()
 			opts.Lossless = false
 			opts.Quality = float32(q)
-			if params.Effort >= 0 && params.Effort <= 6 {
-				opts.Method = params.Effort
-			} else {
-				opts.Method = 4
-			}
-			return deepwebp.Encode(w, nrgba, opts)
+			opts.Method = webpMethod(params.Effort)
+			return deepwebp.Encode(w, src, opts)
 		}
 
 	case "avif":
 		if mode == "lossless" {
 			opts := &goavif.Options{
 				Lossless: true,
-				Speed:    params.Effort,
+				Speed:    avifSpeed(params.Effort),
 			}
-			return goavif.Encode(w, nrgba, opts)
+			return goavif.Encode(w, src, opts)
 		} else {
 			// Lossy AVIF with gav1d/avif
-			speed := params.Effort
-			if speed < 0 || speed > 10 {
-				speed = gav1davif.DefaultSpeed
-			}
 			opts := gav1davif.EncodeOptions{
 				Quality: q,
-				Speed:   speed,
+				Speed:   avifSpeed(params.Effort),
 			}
-			return gav1davif.Encode(w, nrgba, opts)
+			return gav1davif.Encode(w, src, opts)
 		}
 
 	case "jxl":
 		opts := genjxl.EncodeOptions{
 			Quality:  q,
-			Effort:   params.Effort,
+			Effort:   jxlEffort(params.Effort),
 			Lossless: (mode == "lossless"),
 		}
-		return genjxl.Encode(w, nrgba, opts)
+		return genjxl.Encode(w, src, opts)
 
 	default:
 		return fmt.Errorf("%w: %q", ErrUnsupportedFormat, format)
 	}
+}
+
+// encoderInput picks the in-memory layout handed to every encoder: depth 3 becomes an
+// opaque *image.RGBA (the encoders then emit no alpha plane and the stdlib JPEG encoder
+// takes its RGBA fast path), depth 4 stays straight-alpha *image.NRGBA like the PAM samples.
+func encoderInput(pamImg *pam.Image) image.Image {
+	nrgba := pamImg.ToNRGBA()
+	if pamImg.Depth == 3 {
+		return &image.RGBA{Pix: nrgba.Pix, Stride: nrgba.Stride, Rect: nrgba.Rect}
+	}
+	return nrgba
 }
 
 // Decode decodes a compressed image into a Netpbm PAM image.
