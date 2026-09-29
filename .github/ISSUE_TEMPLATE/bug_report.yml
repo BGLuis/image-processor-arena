@@ -1,0 +1,102 @@
+name: "🐛 Relato de Bug / Bug Report"
+description: "Relate uma falha, inconsistência de decodificação/codificação ou erro de execução na arena."
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por relatar um problema! Por favor, forneça o máximo de detalhes possível para nos ajudar a reproduzi-lo.
+        *Lembre-se: este projeto adota 100% Go puro e 100% Rust puro (sem CGO ou FFI).*
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: "Componente Afetado / Affected Component"
+      description: "Qual componente apresentou o problema?"
+      options:
+        - "Servidor / Engine Go (Porta 8080)"
+        - "Servidor / Engine Rust (Porta 8081)"
+        - "Batch CLI (arena-batch)"
+        - "Harness de Benchmark (Python)"
+        - "Docker Compose / Ambientes Isolados"
+        - "Scripts de Pureza (check-purity)"
+        - "Documentação / Outro"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: codec
+    attributes:
+      label: "Formato / Codec Relacionado"
+      options:
+        - "PNG"
+        - "JPEG"
+        - "WebP (lossy / lossless)"
+        - "AVIF (lossy / lossless)"
+        - "JPEG XL (lossy / lossless)"
+        - "Métricas de Análise (analyze-spec)"
+        - "Não aplicável / Geral"
+    validations:
+      required: false
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Descrição do Problema / Problem Description"
+      description: "Descreva o que aconteceu de forma clara e objetiva."
+      placeholder: "Ao tentar transcodificar o arquivo photo.pam para WebP lossless..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Passos para Reproduzir / Steps to Reproduce"
+      description: "Quais passos exatos reproduzem o bug?"
+      placeholder: |
+        1. Executar o comando '...'
+        2. Enviar requisição POST para '/run?op=encode...'
+        3. Observar erro '...'
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Comportamento Esperado / Expected Behavior"
+      description: "O que deveria ter acontecido?"
+      placeholder: "A imagem deveria ser codificada com sucesso e retornar status 200..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Logs e Saída de Terminal / Logs & Output"
+      description: "Cole aqui as saídas do terminal ou logs do servidor/Docker."
+      render: shell
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: "Ambiente / Environment"
+      description: "Informações sobre seu sistema operacional e versões utilizadas."
+      value: |
+        - SO: Linux / macOS / Windows
+        - Go Version: 
+        - Rust Version: 
+        - Docker / Docker Compose Version: 
+        - Python Version: 
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: "Checklist de Validação"
+      options:
+        - label: "Confirmo que pesquisei nas issues abertas e não encontrei relatório duplicado."
+          required: true
+        - label: "Executei os scripts `./scripts/check-purity-*.sh` e eles concluíram com êxito."
+          required: false

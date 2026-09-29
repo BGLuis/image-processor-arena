@@ -1,0 +1,57 @@
+name: "✨ Sugestão de Melhoria / Feature Request"
+description: "Sugira um novo codec puro, nova métrica de análise ou otimização para a arena."
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por propor uma evolução para a **Image Processor Arena**!
+        **Atenção aos requisitos de pureza**: qualquer novo codec ou dependência sugerida deve ser **100% puro** (sem CGO, FFI, bindgen ou bibliotecas compiladas em C).
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: "Categoria da Proposta / Feature Category"
+      options:
+        - "Novo Codec 100% Puro (Go ou Rust)"
+        - "Nova Métrica de Imagem (analyze)"
+        - "Otimização de Performance"
+        - "Melhoria no Harness de Benchmark (Python / CLI)"
+        - "Orquestração Docker & Cgroups"
+        - "Outro"
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: "Motivação e Caso de Uso / Motivation & Use Case"
+      description: "Qual problema essa melhoria resolve ou qual comparação ela viabiliza?"
+      placeholder: "Atualmente, a arena compara X, mas adicionar Y permitiria entender..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: "Descrição da Proposta / Proposed Solution"
+      description: "Descreva em detalhes a solução pretendida, bibliotecas puras candidatas, etc."
+      placeholder: "Proponho adicionar a biblioteca pura Z para Go/Rust..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Alternativas Consideradas / Alternatives Considered"
+      description: "Quais outras alternativas ou abordagens foram cogitadas?"
+      placeholder: "Avaliei também a biblioteca W, porém..."
+
+  - type: checkboxes
+    id: purity_confirmation
+    attributes:
+      label: "Garantia de Pureza de Dependência"
+      options:
+        - label: "Confirmo que a solução proposta não requer CGO, FFI, wrappers em C ou compilação de código nativo não gerenciado pela linguagem pura."
+          required: true
