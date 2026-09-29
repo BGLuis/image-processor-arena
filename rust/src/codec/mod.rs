@@ -257,4 +257,42 @@ mod tests {
         assert_eq!(decoded_avif.width, 32);
         assert_eq!(decoded_avif.height, 32);
     }
+
+    // zenrav1e nunca entra no modo lossless do AV1, então o modo é recusado em vez de
+    // gerar um arquivo com perdas rotulado como lossless.
+    #[test]
+    fn test_avif_lossless_is_refused() {
+        let pam = create_test_pam(512, 512);
+        let params = EncodeParams {
+            format: ImageFormat::Avif,
+            mode: CodecMode::Lossless,
+            quality: 100,
+            effort: 4,
+        };
+
+        let result = encode(&pam, &params);
+
+        assert!(
+            matches!(result, Err(CodecError::UnsupportedFormat(_))),
+            "AVIF lossless deveria ser recusado, obtido: {:?}",
+            result.map(|bytes| bytes.len())
+        );
+    }
+
+    #[test]
+    fn test_lossless_roundtrip_is_pixel_exact_512() {
+        let pam = create_test_pam(512, 512);
+
+        for format in [ImageFormat::Png, ImageFormat::Webp] {
+            let params = EncodeParams {
+                format,
+                mode: CodecMode::Lossless,
+                quality: 100,
+                effort: 4,
+            };
+            let bytes = encode(&pam, &params).expect("encode lossless falhou");
+            let decoded = decode(&bytes, format).expect("decode lossless falhou");
+            assert_eq!(decoded.data, pam.data, "{} lossless divergiu", format.as_str());
+        }
+    }
 }

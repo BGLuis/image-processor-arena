@@ -112,11 +112,9 @@ func Encode(w io.Writer, pamImg *pam.Image, params Params) error {
 
 	case "avif":
 		if mode == "lossless" {
-			opts := &goavif.Options{
-				Lossless: true,
-				Speed:    params.Effort,
-			}
-			return goavif.Encode(w, nrgba, opts)
+			// goavif ignores Options.Lossless and gav1d/avif always converts RGB to
+			// BT.601 4:2:0, so no available pure-Go encoder round-trips RGB exactly.
+			return fmt.Errorf("%w: avif lossless", ErrUnsupportedFormat)
 		} else {
 			// Lossy AVIF with gav1d/avif
 			speed := params.Effort

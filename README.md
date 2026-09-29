@@ -34,7 +34,7 @@ O projeto opera sob uma política estrita de pureza de ecossistema: **zero CGO, 
   - `decode`: Decodificação de arquivos comprimidos para representação de pixels em memória.
   - `transcode`: Conversão direta de formato para formato sem persistência em disco.
   - `analyze`: Cálculo simultâneo de 16 métricas matemáticas estritas (definidas formalmente em [`docs/analyze-spec.md`](docs/analyze-spec.md)), incluindo pHash (DCT-II), blurHash (base83), Spatial Information (Sobel), Luminância BT.601 inteira, histogramas de cor, desvio padrão e entropia de Shannon.
-- **Formatos Suportados**: PNG, JPEG, WebP (lossy e lossless), AVIF (lossy e lossless) e JPEG XL.
+- **Formatos Suportados**: PNG, JPEG, WebP (lossy e lossless), AVIF (somente lossy) e JPEG XL.
 - **Formato de Intercâmbio Canônico**: Netpbm PAM binário (`P7`, tuplas `RGB` e `RGB_ALPHA`, `MAXVAL 255`), eliminando distorções de formato intermediário entre as duas linguagens.
 - **Modos de Operação**:
   - **Batch CLI**: Binários de linha de comando (`arena-batch`) para benchmarks de throughput máximo com I/O de alta velocidade.
@@ -138,6 +138,12 @@ Se desejar executar os binários e scripts diretamente no host:
    # Benchmark no modo HTTP (com os servidores em execução)
    python3 harness/benchmark_arena.py --mode http --go-url http://localhost:8080/run --rust-url http://localhost:8081/run
    ```
+
+# ⚠️ Limitações conhecidas
+
+- **AVIF lossless não é suportado.** Nenhuma biblioteca pura disponível preserva o RGB no round-trip, então `mode=lossless` com `format=avif` retorna erro nos dois lados e o modo não faz parte do benchmark:
+  - Go: `KarpelesLab/goavif` ignora `Options.Lossless` (a saída é idêntica com e sem a opção) e `gen2brain/gav1d/avif` sempre converte RGB para YCbCr BT.601 4:2:0 (na foto do corpus, 236.705 bytes RGB divergem, com erro de até 55).
+  - Rust: `zenrav1e` (usado por `zenravif`) força `base_q_idx >= 1`, então `quantizer 0` nunca ativa o modo lossless do AV1 (na foto do corpus, 42.803 bytes RGB divergem mesmo com matriz identidade).
 
 # 📊 Resultados e Pódio
 Os resultados consolidados da arena, comparativos de latência, throughput em Megapixels por segundo (MP/s) e detalhamento por codec estão documentados em:

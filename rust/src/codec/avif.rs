@@ -1,7 +1,7 @@
 // rust/src/codec/avif.rs
 // Adaptador do codec AVIF puro:
 // Lossy encode: ravif (sem asm)
-// Lossless encode: zenravif (quantizer = 0)
+// Lossless encode: não suportado
 // Decode: zenavif (baseado em rav1d-safe)
 
 use super::{CodecError, CodecMode, EncodeParams};
@@ -11,30 +11,9 @@ pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecErr
     let speed = params.effort.clamp(1, 10);
 
     match params.mode {
-        CodecMode::Lossless => {
-            let enc = zenravif::Encoder::new()
-                .with_libavif_quality(100.0) // quantizer = 0
-                .with_speed(speed);
-
-            let w = pam.width as usize;
-            let h = pam.height as usize;
-
-            if pam.depth == 4 {
-                let pixels: &[rgb::RGBA8] = bytemuck::cast_slice(&pam.data);
-                let img = imgref::Img::new(pixels, w, h);
-                let res = enc
-                    .encode_rgba(img)
-                    .map_err(|e| CodecError::Encode(e.to_string()))?;
-                Ok(res.avif_file)
-            } else {
-                let pixels: &[rgb::RGB8] = bytemuck::cast_slice(&pam.data);
-                let img = imgref::Img::new(pixels, w, h);
-                let res = enc
-                    .encode_rgb(img)
-                    .map_err(|e| CodecError::Encode(e.to_string()))?;
-                Ok(res.avif_file)
-            }
-        }
+        // zenrav1e clamps base_q_idx to at least 1, so quantizer 0 never enters AV1
+        // lossless mode; the RGB it produces differs from the input.
+        CodecMode::Lossless => Err(CodecError::UnsupportedFormat("avif lossless".to_string())),
         CodecMode::Lossy => {
             let enc = ravif::Encoder::new()
                 .with_quality(params.quality as f32)

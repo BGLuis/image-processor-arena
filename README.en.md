@@ -34,7 +34,7 @@ The arena enforces a strict ecosystem purity rule: **zero CGO, zero FFI, zero co
   - `decode`: Decodes compressed images into in-memory pixel representations.
   - `transcode`: Direct format-to-format conversion without touching disk storage.
   - `analyze`: Simultaneous computation of 16 rigorous mathematical metrics (formally specified in [`docs/analyze-spec.md`](docs/analyze-spec.md)), including pHash (DCT-II), blurHash (base83), Spatial Information (Sobel), integer BT.601 luminance, color histograms, standard deviation, and Shannon entropy.
-- **Supported Formats**: PNG, JPEG, WebP (lossy and lossless), AVIF (lossy and lossless), and JPEG XL.
+- **Supported Formats**: PNG, JPEG, WebP (lossy and lossless), AVIF (lossy only), and JPEG XL.
 - **Canonical Interchange Format**: Binary Netpbm PAM (`P7`, `RGB` and `RGB_ALPHA` tuples, `MAXVAL 255`), guaranteeing an identical, uncompressed baseline between both engines.
 - **Execution Modes**:
   - **Batch CLI**: High-throughput command-line binaries (`arena-batch`) for maximum I/O speed on disk or tmpfs ramdisks.
@@ -138,6 +138,12 @@ If you prefer running the binaries and harness directly on your host machine:
    # HTTP benchmark against running server instances
    python3 harness/benchmark_arena.py --mode http --go-url http://localhost:8080/run --rust-url http://localhost:8081/run
    ```
+
+# ⚠️ Known Limitations
+
+- **AVIF lossless is not supported.** No available pure library preserves RGB on a round trip, so `mode=lossless` with `format=avif` returns an error on both sides and the mode is not part of the benchmark:
+  - Go: `KarpelesLab/goavif` ignores `Options.Lossless` (the output is identical with and without it) and `gen2brain/gav1d/avif` always converts RGB to BT.601 4:2:0 YCbCr (on the corpus photo, 236,705 RGB bytes differ, with error up to 55).
+  - Rust: `zenrav1e` (used by `zenravif`) forces `base_q_idx >= 1`, so `quantizer 0` never enables AV1 lossless mode (on the corpus photo, 42,803 RGB bytes differ even with the identity matrix).
 
 # 📊 Results & Podium
 Consolidated benchmark findings, latency comparisons, throughput numbers in Megapixels per second (MP/s), and codec-by-codec analyses are documented in:

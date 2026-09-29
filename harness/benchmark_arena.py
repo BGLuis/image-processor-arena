@@ -4,7 +4,7 @@ benchmark_arena.py - Suite Oficial de Benchmark e Construção do Pódio (Go Pur
 
 Executa a matriz comparativa completa da Arena de Processamento de Imagens:
 - Operações: analyze, encode, decode, transcode
-- Formatos: PNG, JPEG, WebP (lossy/lossless), AVIF (lossy/lossless), JPEG XL (lossy/lossless)
+- Formatos: PNG, JPEG, WebP (lossy/lossless), AVIF (lossy), JPEG XL (lossy/lossless)
 - Corpus: photo, screenshot, illustration, alpha (Netpbm PAM P7)
 - Modos:
     --mode http: executa requisições HTTP contra servidores (/run); a métrica primária é o tempo de codec
@@ -311,12 +311,10 @@ class ArenaBenchmark:
             name_ll = f"Encode WebP Lossless [{os.path.basename(img)}]"
             tasks.append((name_ll, "encode", "webp", "lossless", 100, 4, img, None))
 
-        # 5. ENCODE AVIF Lossy & Lossless
+        # 5. ENCODE AVIF Lossy (lossless não é suportado por nenhuma biblioteca pura)
         for img in corpus_images[:2]:  # photo e screenshot para avif
             name = f"Encode AVIF Lossy [{os.path.basename(img)}]"
             tasks.append((name, "encode", "avif", "lossy", 80, 4, img, None))
-            name_ll = f"Encode AVIF Lossless [{os.path.basename(img)}]"
-            tasks.append((name_ll, "encode", "avif", "lossless", 100, 4, img, None))
 
         # 6. ENCODE JPEG XL Lossy & Lossless
         for img in corpus_images[:2]:  # photo e screenshot para jxl
