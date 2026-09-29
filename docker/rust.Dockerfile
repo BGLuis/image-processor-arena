@@ -5,7 +5,7 @@
 # -----------------------------------------------------------------------------
 # Base: Ambiente com toolchain Rust e dependências essenciais
 # -----------------------------------------------------------------------------
-FROM rust:1.85-bookworm AS base
+FROM rust:bookworm AS base
 
 WORKDIR /app
 
