@@ -26,6 +26,7 @@ WORKDIR /arena
 COPY rust/Cargo.toml rust/Cargo.lock* ./rust/
 COPY rust/deny.toml ./rust/
 COPY rust/src/ ./rust/src/
+COPY rust/vendor/ ./rust/vendor/
 COPY harness/ ./harness/
 COPY docs/ ./docs/
 COPY scripts/ ./scripts/
@@ -54,6 +55,7 @@ WORKDIR /app
 COPY rust/Cargo.toml rust/Cargo.lock* ./rust/
 COPY rust/deny.toml ./rust/
 COPY rust/src/ ./rust/src/
+COPY rust/vendor/ ./rust/vendor/
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
