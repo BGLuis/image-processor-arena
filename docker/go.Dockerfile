@@ -25,6 +25,7 @@ COPY go/ ./go/
 COPY harness/ ./harness/
 COPY docs/ ./docs/
 COPY scripts/ ./scripts/
+COPY arena.toml ./arena.toml
 
 RUN chmod +x ./scripts/check-purity-go.sh
 

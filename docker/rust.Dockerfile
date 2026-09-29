@@ -29,6 +29,7 @@ COPY rust/src/ ./rust/src/
 COPY harness/ ./harness/
 COPY docs/ ./docs/
 COPY scripts/ ./scripts/
+COPY arena.toml ./arena.toml
 
 RUN chmod +x ./scripts/check-purity-rust.sh
 

@@ -45,6 +45,7 @@ WORKDIR /arena
 # Copia scripts do harness
 COPY harness/ /arena/harness/
 COPY docs/ /arena/docs/
+COPY arena.toml /arena/arena.toml
 
 # Cria ponto de montagem de ramdisk para corpus em memória
 RUN mkdir -p /arena/ramdisk /arena/results
