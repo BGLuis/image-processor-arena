@@ -106,6 +106,9 @@ if command -v cargo-deny &>/dev/null; then
     echo "[*] Executando cargo-deny check bans..."
     (cd "${RUST_DIR}" && cargo-deny --config "${RUST_DIR}/deny.toml" check bans)
     echo "[+] cargo-deny aprovou a configuração de bans!"
+    echo "[*] Executando cargo-deny check licenses..."
+    (cd "${RUST_DIR}" && cargo-deny --config "${RUST_DIR}/deny.toml" check licenses)
+    echo "[+] cargo-deny aprovou as licenças (AGPL só nas exceções nomeadas de deny.toml)!"
 else
     echo "[*] cargo-deny não instalado no host; verificação estrita via metadata realizada com sucesso."
 fi

@@ -26,6 +26,16 @@ name = "rav1d"
 [[bans.skip-tree]]
 name = "rav1d-safe"
 
+# Licenças (issue #11).
+#
+# O projeto é AGPL-3.0-or-later (arquivo LICENSE na raiz). Sete dependências Rust são licenciadas como
+# "AGPL-3.0-only OR LicenseRef-Imazen-Commercial"; usamos a opção AGPL, nunca a licença comercial, que NÃO
+# está na lista abaixo. Binários que as incluem são distribuídos sob a AGPL-3.0 (o "-only" delas prevalece
+# sobre o "or-later" do código deste repositório), e quem serve a arena em rede deve oferecer o código
+# fonte aos usuários (AGPL, seção 13).
+#
+# A AGPL é permitida só por exceção NOMEADA, de modo que uma nova dependência AGPL não entra sem uma
+# decisão explícita aqui. Se o projeto trocar de licença, estas exceções precisam ser revistas.
 [licenses]
 allow = [
     "MIT",
@@ -33,7 +43,22 @@ allow = [
     "BSD-2-Clause",
     "BSD-3-Clause",
     "MPL-2.0",
-    "AGPL-3.0-only",
-    "AGPL-3.0-or-later",
     "Zlib",
+    # Presentes na árvore real, e permissivas; sem elas `cargo deny check licenses` falhava.
+    "CC0-1.0",       # to_method (dedicação ao domínio público)
+    "Unicode-3.0",   # unicode-ident
+    "IJG",           # jpeg-encoder (código derivado do libjpeg do Independent JPEG Group, BSD-like)
+]
+
+exceptions = [
+    # O próprio crate do projeto.
+    { crate = "arena-rust", allow = ["AGPL-3.0-or-later"] },
+    # Dependências AGPL-3.0-only (a outra metade da expressão é uma licença comercial que NÃO usamos).
+    { crate = "jxl-encoder", allow = ["AGPL-3.0-only"] },
+    { crate = "jxl-encoder-simd", allow = ["AGPL-3.0-only"] },
+    { crate = "rav1d-safe", allow = ["AGPL-3.0-only"] },
+    { crate = "zenavif", allow = ["AGPL-3.0-only"] },
+    { crate = "zenrav1e", allow = ["AGPL-3.0-only"] },
+    { crate = "zenravif", allow = ["AGPL-3.0-only"] },
+    { crate = "zenwebp", allow = ["AGPL-3.0-only"] },
 ]
