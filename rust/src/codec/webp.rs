@@ -51,6 +51,14 @@ pub fn decode(data: &[u8]) -> Result<PamImage, CodecError> {
     let mut decoder = image_webp::WebPDecoder::new(Cursor::new(data))
         .map_err(|e| CodecError::Decode(e.to_string()))?;
 
+    // Cada biblioteca compõe os quadros de um jeito (o blend do image-webp erra por um nível),
+    // então não existe "primeiro quadro" portável: os dois engines recusam WebP animado.
+    if decoder.is_animated() {
+        return Err(CodecError::Decode(
+            "WebP animado não é suportado".to_string(),
+        ));
+    }
+
     let (width, height) = decoder.dimensions();
     let has_alpha = decoder.has_alpha();
     let total_bytes = checked_len(width, height, if has_alpha { 4 } else { 3 })?;

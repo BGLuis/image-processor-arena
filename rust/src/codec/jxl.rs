@@ -55,10 +55,25 @@ pub fn decode(data: &[u8]) -> Result<PamImage, CodecError> {
     let mut buf = vec![0u8; checked_len(width, height, channels)?];
     stream.write_to_buffer(&mut buf);
 
-    if channels >= 4 {
-        PamImage::new_rgba(width, height, buf).map_err(|e| CodecError::Decode(e.to_string()))
-    } else {
-        PamImage::new_rgb(width, height, buf).map_err(|e| CodecError::Decode(e.to_string()))
+    let decode_err = |e: crate::pam::PamError| CodecError::Decode(e.to_string());
+    match channels {
+        // Tons de cinza viram R = G = B, como no engine Go.
+        1 => {
+            let rgb = buf.iter().flat_map(|&g| [g, g, g]).collect();
+            PamImage::new_rgb(width, height, rgb).map_err(decode_err)
+        }
+        2 => {
+            let rgba = buf
+                .chunks_exact(2)
+                .flat_map(|ga| [ga[0], ga[0], ga[0], ga[1]])
+                .collect();
+            PamImage::new_rgba(width, height, rgba).map_err(decode_err)
+        }
+        3 => PamImage::new_rgb(width, height, buf).map_err(decode_err),
+        4 => PamImage::new_rgba(width, height, buf).map_err(decode_err),
+        other => Err(CodecError::UnsupportedFormat(format!(
+            "JXL com {other} canais por pixel"
+        ))),
     }
 }
 

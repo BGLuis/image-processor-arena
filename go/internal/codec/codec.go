@@ -46,6 +46,13 @@ func checkSide(img *pam.Image, name string, max int) error {
 	return nil
 }
 
+// isAnimatedWebP reads the animation flag of the VP8X chunk, the same flag the Rust decoder checks.
+func isAnimatedWebP(data []byte) bool {
+	return len(data) > 20 &&
+		string(data[0:4]) == "RIFF" && string(data[8:12]) == "WEBP" && string(data[12:16]) == "VP8X" &&
+		data[20]&0x02 != 0
+}
+
 // NormalizeFormat standardizes format string.
 func NormalizeFormat(fmtStr string) string {
 	s := strings.ToLower(strings.TrimSpace(fmtStr))
@@ -157,6 +164,11 @@ func Decode(r io.Reader, format string) (*pam.Image, error) {
 		data, readErr := io.ReadAll(r)
 		if readErr != nil {
 			return nil, readErr
+		}
+		// Each library composites animation frames its own way (the Rust blend drifts by one
+		// level), so there is no portable "first frame": both engines refuse animated WebP.
+		if isAnimatedWebP(data) {
+			return nil, fmt.Errorf("decode webp: animated WebP is not supported")
 		}
 		decoded, err = deepwebp.Decode(bytes.NewReader(data))
 		if err != nil {

@@ -148,6 +148,13 @@ pub(crate) fn check_side(pam: &PamImage, format: &str, max: u32) -> Result<(), C
     Ok(())
 }
 
+/// Reduz uma amostra de 16 bits para 8 com arredondamento, `round(v / 257)`, a inversa exata da
+/// expansão `v8 * 257`. O engine Go aplica a mesma conta em `pam.FromImage`; a truncagem
+/// `v >> 8` perdia até um nível e dava resultados diferentes dos decoders de outras ferramentas.
+pub(crate) fn u16_to_u8(v: u16) -> u8 {
+    ((u32::from(v) + 128) / 257) as u8
+}
+
 /// Tamanho em bytes de um buffer decodificado `width * height * channels`, recusando imagens
 /// acima do teto de pixels do processo e contas que estourem `usize`. Os decoders chamam isto
 /// antes de alocar, com as dimensões declaradas pelo arquivo.
@@ -342,6 +349,28 @@ mod tests {
                 "{} lossless divergiu",
                 format.as_str()
             );
+        }
+    }
+}
+
+#[cfg(test)]
+mod sample_tests {
+    use super::u16_to_u8;
+
+    /// A conta é round(v / 257): conferida contra `(v * 255 + 32767) / 65535` para todo u16,
+    /// a mesma verificação independente do teste do engine Go.
+    #[test]
+    fn u16_to_u8_rounds_every_sample() {
+        for v in 0..=u16::MAX {
+            let want = ((u32::from(v) * 255 + 32767) / 65535) as u8;
+            assert_eq!(u16_to_u8(v), want, "v = {v:#06x}");
+        }
+    }
+
+    #[test]
+    fn u16_to_u8_inverts_the_8_bit_expansion() {
+        for v in 0..=u8::MAX {
+            assert_eq!(u16_to_u8(u16::from(v) * 257), v);
         }
     }
 }

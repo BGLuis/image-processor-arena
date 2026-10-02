@@ -3,6 +3,9 @@ package pam
 import (
 	"bytes"
 	"errors"
+	"image"
+	"image/color"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -159,6 +162,179 @@ func TestDecodeBoundsTheHeader(t *testing.T) {
 		if _, err := Decode(strings.NewReader(header)); !errors.Is(err, ErrInvalidHeader) {
 			t.Errorf("%s: got err=%v, want ErrInvalidHeader", name, err)
 		}
+	}
+}
+
+func samePAM(t *testing.T, name string, got, want *Image) {
+	t.Helper()
+	if got.Width != want.Width || got.Height != want.Height || got.Depth != want.Depth || got.TuplType != want.TuplType {
+		t.Errorf("%s: got %dx%d depth %d %s, want %dx%d depth %d %s", name,
+			got.Width, got.Height, got.Depth, got.TuplType, want.Width, want.Height, want.Depth, want.TuplType)
+		return
+	}
+	if !bytes.Equal(got.Pix, want.Pix) {
+		t.Errorf("%s: pixels differ from the generic conversion", name)
+	}
+}
+
+// Every fast path must return exactly what the At()-based conversion returns for 8-bit sources,
+// including sub-images whose Rect does not start at the origin.
+func TestFromImageFastPathsMatchTheGenericConversion(t *testing.T) {
+	rng := rand.New(rand.NewSource(7))
+	rect := image.Rect(0, 0, 13, 7)
+	inner := image.Rect(2, 1, 9, 5)
+
+	nrgba := image.NewNRGBA(rect)
+	rng.Read(nrgba.Pix)
+	opaqueNRGBA := image.NewNRGBA(rect)
+	rng.Read(opaqueNRGBA.Pix)
+	for i := 3; i < len(opaqueNRGBA.Pix); i += 4 {
+		opaqueNRGBA.Pix[i] = 255
+	}
+	opaqueRGBA := image.NewRGBA(rect)
+	rng.Read(opaqueRGBA.Pix)
+	for i := 3; i < len(opaqueRGBA.Pix); i += 4 {
+		opaqueRGBA.Pix[i] = 255
+	}
+	translucentRGBA := image.NewRGBA(rect)
+	for i := 0; i < len(translucentRGBA.Pix); i += 4 { // valid premultiplied samples
+		a := byte(rng.Intn(256))
+		translucentRGBA.Pix[i], translucentRGBA.Pix[i+1], translucentRGBA.Pix[i+2], translucentRGBA.Pix[i+3] =
+			byte(rng.Intn(int(a)+1)), byte(rng.Intn(int(a)+1)), byte(rng.Intn(int(a)+1)), a
+	}
+	gray := image.NewGray(rect)
+	rng.Read(gray.Pix)
+
+	images := map[string]image.Image{
+		"nrgba":              nrgba,
+		"nrgba opaque":       opaqueNRGBA,
+		"nrgba sub-image":    nrgba.SubImage(inner),
+		"nrgba opaque sub":   opaqueNRGBA.SubImage(inner),
+		"rgba opaque":        opaqueRGBA,
+		"rgba opaque sub":    opaqueRGBA.SubImage(inner),
+		"rgba translucent":   translucentRGBA,
+		"gray":               gray,
+		"gray sub-image":     gray.SubImage(inner),
+		"ycbcr 4:2:0":        newYCbCr(rng, rect, image.YCbCrSubsampleRatio420),
+		"ycbcr 4:2:2":        newYCbCr(rng, rect, image.YCbCrSubsampleRatio422),
+		"ycbcr 4:4:4":        newYCbCr(rng, rect, image.YCbCrSubsampleRatio444),
+		"ycbcr 4:2:0 sub":    newYCbCr(rng, rect, image.YCbCrSubsampleRatio420).SubImage(inner),
+		"ycbcr 4:4:0":        newYCbCr(rng, rect, image.YCbCrSubsampleRatio440),
+		"paletted (At path)": newPaletted(rng, rect),
+	}
+	for name, img := range images {
+		samePAM(t, name, FromImage(img), fromGeneric(img))
+	}
+}
+
+func newYCbCr(rng *rand.Rand, rect image.Rectangle, ratio image.YCbCrSubsampleRatio) *image.YCbCr {
+	img := image.NewYCbCr(rect, ratio)
+	rng.Read(img.Y)
+	rng.Read(img.Cb)
+	rng.Read(img.Cr)
+	return img
+}
+
+func newPaletted(rng *rand.Rand, rect image.Rectangle) *image.Paletted {
+	palette := color.Palette{
+		color.NRGBA{255, 0, 0, 255}, color.NRGBA{0, 255, 0, 128}, color.NRGBA{0, 0, 255, 0}, color.NRGBA{9, 9, 9, 255},
+	}
+	img := image.NewPaletted(rect, palette)
+	for i := range img.Pix {
+		img.Pix[i] = uint8(rng.Intn(len(palette)))
+	}
+	return img
+}
+
+func TestFromImageRoundsSixteenBitSamples(t *testing.T) {
+	// round(v/257), computed independently as (v*255 + 32767) / 65535.
+	want := func(v uint32) byte { return byte((v*255 + 32767) / 65535) }
+
+	samples := []uint32{0, 1, 127, 128, 255, 256, 257, 0x00FF, 0x01FF, 0x7FFF, 0x8000, 0xABCD, 0xFE01, 0xFFFE, 0xFFFF}
+	rect := image.Rect(0, 0, len(samples), 1)
+
+	gray16 := image.NewGray16(rect)
+	nrgba64 := image.NewNRGBA64(rect)
+	rgba64 := image.NewRGBA64(rect)
+	for i, v := range samples {
+		gray16.SetGray16(i, 0, color.Gray16{Y: uint16(v)})
+		nrgba64.SetNRGBA64(i, 0, color.NRGBA64{R: uint16(v), G: uint16(v), B: uint16(v), A: 0xFFFF})
+		rgba64.SetRGBA64(i, 0, color.RGBA64{R: uint16(v), G: uint16(v), B: uint16(v), A: 0xFFFF})
+	}
+
+	for name, img := range map[string]image.Image{"gray16": gray16, "nrgba64": nrgba64, "rgba64": rgba64} {
+		got := FromImage(img)
+		if got.Depth != 3 {
+			t.Fatalf("%s: opaque image should be depth 3, got %d", name, got.Depth)
+		}
+		for i, v := range samples {
+			for c := 0; c < 3; c++ {
+				if g := got.Pix[i*3+c]; g != want(v) {
+					t.Errorf("%s: sample %#x channel %d: got %d, want %d", name, v, c, g, want(v))
+				}
+			}
+		}
+	}
+
+	// 8-bit values expanded to 16 bits (v*257) must come back unchanged.
+	exact := image.NewNRGBA64(image.Rect(0, 0, 256, 1))
+	for v := 0; v < 256; v++ {
+		exact.SetNRGBA64(v, 0, color.NRGBA64{R: uint16(v * 257), G: uint16(v * 257), B: uint16(v * 257), A: 0xFFFF})
+	}
+	back := FromImage(exact)
+	for v := 0; v < 256; v++ {
+		if back.Pix[v*3] != byte(v) {
+			t.Fatalf("8-bit value %d expanded to 16 bits came back as %d", v, back.Pix[v*3])
+		}
+	}
+}
+
+func TestFromImageSixteenBitAlpha(t *testing.T) {
+	rect := image.Rect(0, 0, 2, 1)
+
+	straight := image.NewNRGBA64(rect)
+	straight.SetNRGBA64(0, 0, color.NRGBA64{R: 0xFFFF, G: 0x8000, B: 0x0000, A: 0x8000})
+	straight.SetNRGBA64(1, 0, color.NRGBA64{R: 0x0100, G: 0x0200, B: 0x0300, A: 0xFFFF})
+	got := FromImage(straight)
+	want := []byte{255, 128, 0, 128, 1, 2, 3, 255}
+	if got.Depth != 4 || !bytes.Equal(got.Pix, want) {
+		t.Errorf("nrgba64: got depth %d %v, want depth 4 %v", got.Depth, got.Pix, want)
+	}
+
+	// Premultiplied input is divided by alpha in 16 bits first, with integer division like
+	// color.NRGBAModel: 0x8000*0xFFFF/0x8000 = 0xFFFF (255) and 0x4000*0xFFFF/0x8000 = 0x7FFF (127).
+	premult := image.NewRGBA64(rect)
+	premult.SetRGBA64(0, 0, color.RGBA64{R: 0x8000, G: 0x4000, B: 0, A: 0x8000})
+	premult.SetRGBA64(1, 0, color.RGBA64{A: 0xFFFF})
+	got = FromImage(premult)
+	want = []byte{255, 127, 0, 128, 0, 0, 0, 255}
+	if got.Depth != 4 || !bytes.Equal(got.Pix, want) {
+		t.Errorf("rgba64 premultiplied: got depth %d %v, want depth 4 %v", got.Depth, got.Pix, want)
+	}
+}
+
+func BenchmarkFromImage(b *testing.B) {
+	rect := image.Rect(0, 0, 1024, 1024)
+	rng := rand.New(rand.NewSource(1))
+	ycbcr := newYCbCr(rng, rect, image.YCbCrSubsampleRatio420)
+	nrgba := image.NewNRGBA(rect)
+	for i := range nrgba.Pix {
+		nrgba.Pix[i] = 255
+	}
+
+	for name, img := range map[string]image.Image{"ycbcr": ycbcr, "nrgba opaque": nrgba} {
+		b.Run(name+"/fast", func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_ = FromImage(img)
+			}
+		})
+		b.Run(name+"/generic", func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_ = fromGeneric(img)
+			}
+		})
 	}
 }
 

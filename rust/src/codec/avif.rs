@@ -4,7 +4,7 @@
 // Lossless encode: não suportado
 // Decode: zenavif (baseado em rav1d-safe)
 
-use super::{checked_len, params as contract, CodecError, CodecMode, EncodeParams};
+use super::{checked_len, params as contract, u16_to_u8, CodecError, CodecMode, EncodeParams};
 use crate::pam::PamImage;
 
 pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecError> {
@@ -72,7 +72,7 @@ pub fn decode(data: &[u8]) -> Result<PamImage, CodecError> {
         let pixels: Vec<u8> = img
             .buf()
             .iter()
-            .flat_map(|px| [(px.r >> 8) as u8, (px.g >> 8) as u8, (px.b >> 8) as u8])
+            .flat_map(|px| [u16_to_u8(px.r), u16_to_u8(px.g), u16_to_u8(px.b)])
             .collect();
         PamImage::new_rgb(width, height, pixels).map_err(|e| CodecError::Decode(e.to_string()))
     } else if desc.layout_compatible(zenpixels::PixelDescriptor::RGBA16) {
@@ -84,10 +84,10 @@ pub fn decode(data: &[u8]) -> Result<PamImage, CodecError> {
             .iter()
             .flat_map(|px| {
                 [
-                    (px.r >> 8) as u8,
-                    (px.g >> 8) as u8,
-                    (px.b >> 8) as u8,
-                    (px.a >> 8) as u8,
+                    u16_to_u8(px.r),
+                    u16_to_u8(px.g),
+                    u16_to_u8(px.b),
+                    u16_to_u8(px.a),
                 ]
             })
             .collect();
@@ -119,7 +119,7 @@ pub fn decode(data: &[u8]) -> Result<PamImage, CodecError> {
             let pixels: Vec<u8> = img
                 .buf()
                 .iter()
-                .flat_map(|px| [(px.r >> 8) as u8, (px.g >> 8) as u8, (px.b >> 8) as u8])
+                .flat_map(|px| [u16_to_u8(px.r), u16_to_u8(px.g), u16_to_u8(px.b)])
                 .collect();
             PamImage::new_rgb(width, height, pixels).map_err(|e| CodecError::Decode(e.to_string()))
         } else if let Some(img) = image.try_as_imgref::<rgb::Rgba<u16>>() {
@@ -128,10 +128,10 @@ pub fn decode(data: &[u8]) -> Result<PamImage, CodecError> {
                 .iter()
                 .flat_map(|px| {
                     [
-                        (px.r >> 8) as u8,
-                        (px.g >> 8) as u8,
-                        (px.b >> 8) as u8,
-                        (px.a >> 8) as u8,
+                        u16_to_u8(px.r),
+                        u16_to_u8(px.g),
+                        u16_to_u8(px.b),
+                        u16_to_u8(px.a),
                     ]
                 })
                 .collect();

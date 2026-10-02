@@ -98,105 +98,213 @@ func (img *Image) ToNRGBA() *image.NRGBA {
 	return nrgba
 }
 
-// FromImage converts any image.Image into a PAM image.
+// to8 reduces a 16-bit sample to 8 bits with rounding, round(v / 257): the exact inverse of the
+// expansion v8*257. The Rust engine applies the same formula (codec::u16_to_u8), where the old
+// v >> 8 truncation lost up to one level and disagreed with other decoders.
+func to8(v uint32) uint8 { return uint8((v + 128) / 257) }
+
+// FromImage converts any image.Image into a PAM image. Every concrete stdlib type the decoders
+// return has a fast path that reads Pix directly; At() is only the fallback, because alpha
+// detection through At() visited every pixel and its cost was charged to X-Arena-Decode-Ns.
 func FromImage(m image.Image) *Image {
+	switch src := m.(type) {
+	case *image.NRGBA:
+		return fromNRGBA(src)
+	case *image.RGBA:
+		if src.Opaque() {
+			return fromOpaqueRGBA(src)
+		}
+	case *image.Gray:
+		return fromGray(src)
+	case *image.YCbCr:
+		return fromYCbCr(src)
+	case *image.NRGBA64:
+		return fromNRGBA64(src)
+	case *image.RGBA64:
+		return fromRGBA64(src)
+	case *image.Gray16:
+		return fromGray16(src)
+	}
+	return fromGeneric(m)
+}
+
+func newImage(w, h, depth int) *Image {
+	tupl := "RGB"
+	if depth == 4 {
+		tupl = "RGB_ALPHA"
+	}
+	return &Image{Width: w, Height: h, Depth: depth, MaxVal: 255, TuplType: tupl, Pix: make([]byte, w*h*depth)}
+}
+
+// fromNRGBA keeps straight alpha. The pure-Go WebP, AVIF and JPEG XL decoders always return
+// *image.NRGBA, so this is how an opaque RGB file comes back as depth 3.
+func fromNRGBA(src *image.NRGBA) *Image {
+	b := src.Bounds()
+	w, h := b.Dx(), b.Dy()
+	if src.Opaque() {
+		img := newImage(w, h, 3)
+		for y := 0; y < h; y++ {
+			row := src.Pix[src.PixOffset(b.Min.X, b.Min.Y+y):]
+			dst := img.Pix[y*w*3:]
+			for x := 0; x < w; x++ {
+				dst[x*3], dst[x*3+1], dst[x*3+2] = row[x*4], row[x*4+1], row[x*4+2]
+			}
+		}
+		return img
+	}
+	img := newImage(w, h, 4)
+	for y := 0; y < h; y++ {
+		off := src.PixOffset(b.Min.X, b.Min.Y+y)
+		copy(img.Pix[y*w*4:(y+1)*w*4], src.Pix[off:off+w*4])
+	}
+	return img
+}
+
+func fromOpaqueRGBA(src *image.RGBA) *Image {
+	b := src.Bounds()
+	w, h := b.Dx(), b.Dy()
+	img := newImage(w, h, 3)
+	for y := 0; y < h; y++ {
+		row := src.Pix[src.PixOffset(b.Min.X, b.Min.Y+y):]
+		dst := img.Pix[y*w*3:]
+		for x := 0; x < w; x++ {
+			dst[x*3], dst[x*3+1], dst[x*3+2] = row[x*4], row[x*4+1], row[x*4+2]
+		}
+	}
+	return img
+}
+
+func fromGray(src *image.Gray) *Image {
+	b := src.Bounds()
+	w, h := b.Dx(), b.Dy()
+	img := newImage(w, h, 3)
+	for y := 0; y < h; y++ {
+		row := src.Pix[src.PixOffset(b.Min.X, b.Min.Y+y):]
+		dst := img.Pix[y*w*3:]
+		for x := 0; x < w; x++ {
+			dst[x*3], dst[x*3+1], dst[x*3+2] = row[x], row[x], row[x]
+		}
+	}
+	return img
+}
+
+// fromYCbCr is what image/jpeg returns; it never carries alpha.
+func fromYCbCr(src *image.YCbCr) *Image {
+	b := src.Bounds()
+	w, h := b.Dx(), b.Dy()
+	img := newImage(w, h, 3)
+	for y := 0; y < h; y++ {
+		dst := img.Pix[y*w*3:]
+		for x := 0; x < w; x++ {
+			yi := src.YOffset(b.Min.X+x, b.Min.Y+y)
+			ci := src.COffset(b.Min.X+x, b.Min.Y+y)
+			dst[x*3], dst[x*3+1], dst[x*3+2] = color.YCbCrToRGB(src.Y[yi], src.Cb[ci], src.Cr[ci])
+		}
+	}
+	return img
+}
+
+func be16(p []byte) uint32 { return uint32(p[0])<<8 | uint32(p[1]) }
+
+func fromGray16(src *image.Gray16) *Image {
+	b := src.Bounds()
+	w, h := b.Dx(), b.Dy()
+	img := newImage(w, h, 3)
+	for y := 0; y < h; y++ {
+		row := src.Pix[src.PixOffset(b.Min.X, b.Min.Y+y):]
+		dst := img.Pix[y*w*3:]
+		for x := 0; x < w; x++ {
+			g := to8(be16(row[x*2:]))
+			dst[x*3], dst[x*3+1], dst[x*3+2] = g, g, g
+		}
+	}
+	return img
+}
+
+// fromNRGBA64 keeps straight alpha, like fromNRGBA, and rounds each 16-bit sample to 8 bits.
+func fromNRGBA64(src *image.NRGBA64) *Image {
+	b := src.Bounds()
+	w, h := b.Dx(), b.Dy()
+	depth := 4
+	if src.Opaque() {
+		depth = 3
+	}
+	img := newImage(w, h, depth)
+	for y := 0; y < h; y++ {
+		row := src.Pix[src.PixOffset(b.Min.X, b.Min.Y+y):]
+		dst := img.Pix[y*w*depth:]
+		for x := 0; x < w; x++ {
+			px := row[x*8:]
+			dst[x*depth], dst[x*depth+1], dst[x*depth+2] = to8(be16(px)), to8(be16(px[2:])), to8(be16(px[4:]))
+			if depth == 4 {
+				dst[x*4+3] = to8(be16(px[6:]))
+			}
+		}
+	}
+	return img
+}
+
+// fromRGBA64 receives premultiplied samples (image/png returns it for opaque 16-bit RGB) and
+// un-premultiplies them in 16 bits, as color.NRGBAModel does, before rounding to 8 bits.
+func fromRGBA64(src *image.RGBA64) *Image {
+	b := src.Bounds()
+	w, h := b.Dx(), b.Dy()
+	depth := 4
+	if src.Opaque() {
+		depth = 3
+	}
+	img := newImage(w, h, depth)
+	for y := 0; y < h; y++ {
+		row := src.Pix[src.PixOffset(b.Min.X, b.Min.Y+y):]
+		dst := img.Pix[y*w*depth:]
+		for x := 0; x < w; x++ {
+			px := row[x*8:]
+			r, g, bl, a := be16(px), be16(px[2:]), be16(px[4:]), be16(px[6:])
+			if a != 0 && a != 0xffff {
+				r, g, bl = r*0xffff/a, g*0xffff/a, bl*0xffff/a
+			}
+			dst[x*depth], dst[x*depth+1], dst[x*depth+2] = to8(r), to8(g), to8(bl)
+			if depth == 4 {
+				dst[x*4+3] = to8(a)
+			}
+		}
+	}
+	return img
+}
+
+// fromGeneric handles any other image.Image (image.Paletted from indexed PNG, for instance)
+// through At(), converting every pixel with color.NRGBAModel.
+func fromGeneric(m image.Image) *Image {
 	bounds := m.Bounds()
 	w, h := bounds.Dx(), bounds.Dy()
 
-	// Check if source is already *image.NRGBA
-	if nrgba, ok := m.(*image.NRGBA); ok && nrgba.Rect == bounds && nrgba.Stride == w*4 {
-		if nrgba.Opaque() {
-			return fromOpaqueNRGBA(nrgba)
-		}
-		pixCopy := make([]byte, len(nrgba.Pix))
-		copy(pixCopy, nrgba.Pix)
-		return &Image{
-			Width:    w,
-			Height:   h,
-			Depth:    4,
-			MaxVal:   255,
-			TuplType: "RGB_ALPHA",
-			Pix:      pixCopy,
-		}
-	}
-
-	// Check if source image has transparency
 	hasAlpha := false
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+	for y := bounds.Min.Y; y < bounds.Max.Y && !hasAlpha; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			_, _, _, a := m.At(x, y).RGBA()
-			if a < 0xFFFF {
+			if _, _, _, a := m.At(x, y).RGBA(); a < 0xFFFF {
 				hasAlpha = true
 				break
 			}
 		}
-		if hasAlpha {
-			break
-		}
 	}
 
+	depth := 3
 	if hasAlpha {
-		pix := make([]byte, w*h*4)
-		idx := 0
-		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-			for x := bounds.Min.X; x < bounds.Max.X; x++ {
-				c := color.NRGBAModel.Convert(m.At(x, y)).(color.NRGBA)
-				pix[idx] = c.R
-				pix[idx+1] = c.G
-				pix[idx+2] = c.B
-				pix[idx+3] = c.A
-				idx += 4
-			}
-		}
-		return &Image{
-			Width:    w,
-			Height:   h,
-			Depth:    4,
-			MaxVal:   255,
-			TuplType: "RGB_ALPHA",
-			Pix:      pix,
-		}
+		depth = 4
 	}
-
-	// 3-channel RGB
-	pix := make([]byte, w*h*3)
+	img := newImage(w, h, depth)
 	idx := 0
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
 			c := color.NRGBAModel.Convert(m.At(x, y)).(color.NRGBA)
-			pix[idx] = c.R
-			pix[idx+1] = c.G
-			pix[idx+2] = c.B
-			idx += 3
+			img.Pix[idx], img.Pix[idx+1], img.Pix[idx+2] = c.R, c.G, c.B
+			if hasAlpha {
+				img.Pix[idx+3] = c.A
+			}
+			idx += depth
 		}
 	}
-	return &Image{
-		Width:    w,
-		Height:   h,
-		Depth:    3,
-		MaxVal:   255,
-		TuplType: "RGB",
-		Pix:      pix,
-	}
-}
-
-// fromOpaqueNRGBA drops the alpha channel of a fully opaque image. The pure-Go WebP, AVIF
-// and JPEG XL decoders always return *image.NRGBA, so this is how an RGB file comes back as depth 3.
-func fromOpaqueNRGBA(nrgba *image.NRGBA) *Image {
-	n := nrgba.Rect.Dx() * nrgba.Rect.Dy()
-	pix := make([]byte, n*3)
-	src := nrgba.Pix
-	for i, j := 0, 0; i < n*3; i, j = i+3, j+4 {
-		pix[i], pix[i+1], pix[i+2] = src[j], src[j+1], src[j+2]
-	}
-	return &Image{
-		Width:    nrgba.Rect.Dx(),
-		Height:   nrgba.Rect.Dy(),
-		Depth:    3,
-		MaxVal:   255,
-		TuplType: "RGB",
-		Pix:      pix,
-	}
+	return img
 }
 
 // MaxPixelsFromEnv returns ARENA_MAX_PIXELS, or DefaultMaxPixels when it is unset or empty.
