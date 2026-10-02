@@ -14,13 +14,13 @@ pub fn compute_phash(y_pixels: &[u8], width: usize, height: usize) -> String {
     let sw = width as f64 / 32.0;
     let sh = height as f64 / 32.0;
 
-    for v in 0..32 {
+    for (v, grid_row) in grid.iter_mut().enumerate() {
         let y0 = v as f64 * sh;
         let y1 = (v + 1) as f64 * sh;
         let sy_min = y0.floor() as usize;
         let sy_max = (y1.ceil() as usize).min(height);
 
-        for u in 0..32 {
+        for (u, cell) in grid_row.iter_mut().enumerate() {
             let x0 = u as f64 * sw;
             let x1 = (u + 1) as f64 * sw;
             let sx_min = x0.floor() as usize;
@@ -44,7 +44,7 @@ pub fn compute_phash(y_pixels: &[u8], width: usize, height: usize) -> String {
                 }
             }
 
-            grid[v][u] = if total_weight > 0.0 {
+            *cell = if total_weight > 0.0 {
                 total / total_weight
             } else {
                 0.0
@@ -52,33 +52,41 @@ pub fn compute_phash(y_pixels: &[u8], width: usize, height: usize) -> String {
         }
     }
 
-    // 2. 2D DCT-II para submatriz 8x8 de baixas frequências
+    // 2. 2D DCT-II para submatriz 8x8 de baixas frequências. A tabela 8x32 de cossenos é
+    // calculada uma vez (a expressão é a mesma de antes), em vez de ~65 mil chamadas a `cos`.
+    let mut cos_tab = [[0.0f64; 32]; 8];
+    for (k, row) in cos_tab.iter_mut().enumerate() {
+        for (n, cell) in row.iter_mut().enumerate() {
+            *cell = (PI * ((2 * n + 1) as f64) * (k as f64) / 64.0).cos();
+        }
+    }
+
     let mut d = [[0.0f64; 8]; 8];
-    for v in 0..8 {
-        for u in 0..8 {
+    for (v, d_row) in d.iter_mut().enumerate() {
+        for (u, cell) in d_row.iter_mut().enumerate() {
             let mut s = 0.0f64;
-            for y in 0..32 {
-                let cos_y = (PI * ((2 * y + 1) as f64) * (v as f64) / 64.0).cos();
-                for x in 0..32 {
-                    let cos_x = (PI * ((2 * x + 1) as f64) * (u as f64) / 64.0).cos();
-                    s += grid[y][x] * cos_x * cos_y;
+            for (y, grid_row) in grid.iter().enumerate() {
+                let cos_y = cos_tab[v][y];
+                for (x, &value) in grid_row.iter().enumerate() {
+                    let cos_x = cos_tab[u][x];
+                    s += value * cos_x * cos_y;
                 }
             }
             if s.abs() < 1e-6 {
                 s = 0.0;
             }
-            d[v][u] = s;
+            *cell = s;
         }
     }
 
     // 3. Submatriz 8x8 excluindo DC (0,0) -> C[0] = 0.0
     let mut coeffs = Vec::with_capacity(64);
-    for v in 0..8 {
-        for u in 0..8 {
+    for (v, d_row) in d.iter().enumerate() {
+        for (u, &value) in d_row.iter().enumerate() {
             if u == 0 && v == 0 {
                 coeffs.push(0.0);
             } else {
-                coeffs.push(d[v][u]);
+                coeffs.push(value);
             }
         }
     }

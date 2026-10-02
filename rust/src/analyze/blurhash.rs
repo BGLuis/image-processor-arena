@@ -44,33 +44,52 @@ fn encode_base83(value: u32, length: usize) -> String {
     String::from_utf8(res).unwrap()
 }
 
+/// Tabela de cossenos `cos(PI * k * n / len)` para k em 0..comps e n em 0..len. A expressão é a
+/// mesma que o laço interno avaliava pixel a pixel, então os valores são idênticos; o Go monta
+/// as mesmas tabelas, e nenhum dos dois engines chama `cos` por pixel.
+fn cosine_table(comps: usize, len: usize) -> Vec<Vec<f64>> {
+    (0..comps)
+        .map(|k| {
+            (0..len)
+                .map(|n| (PI * (k as f64) * (n as f64) / (len as f64)).cos())
+                .collect()
+        })
+        .collect()
+}
+
 pub fn compute_blurhash(
-    rgb_bytes: &[u8],
+    r_list: &[u8],
+    g_list: &[u8],
+    b_list: &[u8],
     width: usize,
     height: usize,
     x_comp: usize,
     y_comp: usize,
 ) -> String {
+    // sRGB -> linear só tem 256 entradas; o `powf` roda 256 vezes, não 3 * 12 * N.
+    let linear: [f64; 256] = std::array::from_fn(|v| srgb_to_linear(v as u8));
+    let cos_x = cosine_table(x_comp, width);
+    let cos_y = cosine_table(y_comp, height);
+
     let mut factors = Vec::with_capacity(y_comp);
 
-    for y in 0..y_comp {
+    for (y, cos_y_row) in cos_y.iter().enumerate() {
         let mut row = Vec::with_capacity(x_comp);
-        for x in 0..x_comp {
+        for (x, cos_x_row) in cos_x.iter().enumerate() {
             let norm = if x == 0 && y == 0 { 1.0f64 } else { 2.0f64 };
             let mut r_acc = 0.0f64;
             let mut g_acc = 0.0f64;
             let mut b_acc = 0.0f64;
 
-            for py in 0..height {
-                let cos_y = (PI * (y as f64) * (py as f64) / (height as f64)).cos();
-                let row_offset = py * width * 3;
+            for (py, &cy) in cos_y_row.iter().enumerate() {
+                let row_offset = py * width;
 
-                for px in 0..width {
-                    let basis = (PI * (x as f64) * (px as f64) / (width as f64)).cos() * cos_y;
-                    let idx = row_offset + px * 3;
-                    r_acc += basis * srgb_to_linear(rgb_bytes[idx]);
-                    g_acc += basis * srgb_to_linear(rgb_bytes[idx + 1]);
-                    b_acc += basis * srgb_to_linear(rgb_bytes[idx + 2]);
+                for (px, &cx) in cos_x_row.iter().enumerate() {
+                    let basis = cx * cy;
+                    let idx = row_offset + px;
+                    r_acc += basis * linear[r_list[idx] as usize];
+                    g_acc += basis * linear[g_list[idx] as usize];
+                    b_acc += basis * linear[b_list[idx] as usize];
                 }
             }
 
@@ -82,10 +101,10 @@ pub fn compute_blurhash(
 
     let dc = factors[0][0];
     let mut ac = Vec::new();
-    for y in 0..y_comp {
-        for x in 0..x_comp {
+    for (y, row) in factors.iter().enumerate() {
+        for (x, &component) in row.iter().enumerate() {
             if x != 0 || y != 0 {
-                ac.push(factors[y][x]);
+                ac.push(component);
             }
         }
     }

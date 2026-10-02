@@ -28,7 +28,7 @@ pub struct AspectRatio {
 pub struct BlockInfo {
     pub w_mod: u32,
     pub h_mod: u32,
-    pub partial_pixels: u32,
+    pub partial_pixels: u64,
     pub partial_pct: f64,
 }
 
@@ -125,10 +125,11 @@ pub fn analyze(width: u32, height: u32, depth: u8, raster: &[u8]) -> AnalyzeResu
     };
 
     // 2. Alinhamento a blocos
+    // As contas de área usam u64: width*height em u32 estoura em imagens grandes.
     let compute_block = |b: u32| {
-        let full_w = (width / b) * b;
-        let full_h = (height / b) * b;
-        let partial_pixels = (num_pixels as u32) - (full_w * full_h);
+        let full_w = u64::from(width / b) * u64::from(b);
+        let full_h = u64::from(height / b) * u64::from(b);
+        let partial_pixels = (num_pixels as u64) - full_w * full_h;
         BlockInfo {
             w_mod: width % b,
             h_mod: height % b,
@@ -224,10 +225,7 @@ pub fn analyze(width: u32, height: u32, depth: u8, raster: &[u8]) -> AnalyzeResu
 
     if n_valid > 0 {
         let mut sobel_m_list = Vec::with_capacity(n_valid);
-        let mut gx_sq_gy_sq_list = Vec::with_capacity(n_valid);
         let mut laplacian_list = Vec::with_capacity(n_valid);
-        let mut gx_sq_gy_sq_cb = Vec::with_capacity(n_valid);
-        let mut gx_sq_gy_sq_cr = Vec::with_capacity(n_valid);
 
         let mut sum_m = 0.0f64;
         let mut sum_lap = 0.0f64;
@@ -258,7 +256,6 @@ pub fn analyze(width: u32, height: u32, depth: u8, raster: &[u8]) -> AnalyzeResu
                 let mag_sq = (gx * gx + gy * gy) as f64;
                 let m = mag_sq.sqrt();
                 sobel_m_list.push(m);
-                gx_sq_gy_sq_list.push(mag_sq);
                 sum_m += m;
                 sum_ge += mag_sq;
 
@@ -285,7 +282,6 @@ pub fn analyze(width: u32, height: u32, depth: u8, raster: &[u8]) -> AnalyzeResu
                         + 2 * (cb_list[y_prev + x_idx] as i32)
                         + (cb_list[y_prev + x_idx + 1] as i32));
                 let mag_sq_cb = (gx_cb * gx_cb + gy_cb * gy_cb) as f64;
-                gx_sq_gy_sq_cb.push(mag_sq_cb);
                 sum_ge_cb += mag_sq_cb;
 
                 // Cr Sobel
@@ -302,7 +298,6 @@ pub fn analyze(width: u32, height: u32, depth: u8, raster: &[u8]) -> AnalyzeResu
                         + 2 * (cr_list[y_prev + x_idx] as i32)
                         + (cr_list[y_prev + x_idx + 1] as i32));
                 let mag_sq_cr = (gx_cr * gx_cr + gy_cr * gy_cr) as f64;
-                gx_sq_gy_sq_cr.push(mag_sq_cr);
                 sum_ge_cr += mag_sq_cr;
             }
         }
@@ -504,14 +499,9 @@ pub fn analyze(width: u32, height: u32, depth: u8, raster: &[u8]) -> AnalyzeResu
     // 13. pHash 64-bit
     let phash_str = super::phash::compute_phash(&y_list, w_usize, h_usize);
 
-    // 14. BlurHash (RGB contíguo)
-    let mut rgb_raw = Vec::with_capacity(num_pixels * 3);
-    for i in 0..num_pixels {
-        rgb_raw.push(r_list[i]);
-        rgb_raw.push(g_list[i]);
-        rgb_raw.push(b_list[i]);
-    }
-    let blurhash_str = super::blurhash::compute_blurhash(&rgb_raw, w_usize, h_usize, 4, 3);
+    // 14. BlurHash (canais separados, como no engine Go)
+    let blurhash_str =
+        super::blurhash::compute_blurhash(&r_list, &g_list, &b_list, w_usize, h_usize, 4, 3);
 
     AnalyzeResult {
         width,
