@@ -9,6 +9,9 @@ env/
 ramdisk/
 tmp/
 
+# Corpus grande (gerado por make_corpus.py --large)
+harness/fixtures/corpus-large/
+
 # Go build artifacts
 go/bin/
 *.test
