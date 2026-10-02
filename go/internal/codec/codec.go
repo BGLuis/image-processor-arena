@@ -31,6 +31,21 @@ type Params struct {
 	Effort int    // Effort [1..10], 0 means default
 }
 
+// Largest side each format can represent. The Rust engine enforces the same ceilings, so a
+// request beyond them is a client error (400) in both servers instead of an encoder failure.
+const (
+	jpegMaxSide = 65535
+	webpMaxSide = 16383
+)
+
+func checkSide(img *pam.Image, name string, max int) error {
+	if img.Width > max || img.Height > max {
+		return fmt.Errorf("%w: %s supports at most %d pixels per side, got %dx%d",
+			ErrUnsupportedFormat, name, max, img.Width, img.Height)
+	}
+	return nil
+}
+
 // NormalizeFormat standardizes format string.
 func NormalizeFormat(fmtStr string) string {
 	s := strings.ToLower(strings.TrimSpace(fmtStr))
@@ -58,6 +73,9 @@ func Encode(w io.Writer, pamImg *pam.Image, params Params) error {
 		return enc.Encode(w, src)
 
 	case "jpeg":
+		if err := checkSide(pamImg, "jpeg", jpegMaxSide); err != nil {
+			return err
+		}
 		// Standard library JPEG encoder only supports lossy baseline
 		opts := &jpeg.Options{
 			Quality: q,
@@ -66,6 +84,9 @@ func Encode(w io.Writer, pamImg *pam.Image, params Params) error {
 		return jpeg.Encode(w, src, opts)
 
 	case "webp":
+		if err := checkSide(pamImg, "webp", webpMaxSide); err != nil {
+			return err
+		}
 		if mode == "lossless" {
 			opts := &gowebp.Options{
 				Lossy:             false,

@@ -106,6 +106,9 @@ pub enum CodecError {
     Decode(String),
     UnsupportedFormat(String),
     InvalidParam(String),
+    /// A imagem de entrada é válida como PAM, mas o formato de destino não a comporta
+    /// (dimensões acima do limite do formato). É erro do cliente, não do encoder.
+    InvalidInput(String),
 }
 
 impl fmt::Display for CodecError {
@@ -115,11 +118,50 @@ impl fmt::Display for CodecError {
             Self::Decode(msg) => write!(f, "Erro de decodificação: {msg}"),
             Self::UnsupportedFormat(msg) => write!(f, "Formato não suportado: {msg}"),
             Self::InvalidParam(msg) => write!(f, "Parâmetro inválido: {msg}"),
+            Self::InvalidInput(msg) => write!(f, "Entrada inválida: {msg}"),
         }
     }
 }
 
 impl std::error::Error for CodecError {}
+
+impl CodecError {
+    /// Erros causados pela requisição (formato, parâmetro, entrada ou arquivo corrompido)
+    /// em oposição a uma falha interna do encoder.
+    pub fn is_client_error(&self) -> bool {
+        !matches!(self, Self::Encode(_))
+    }
+}
+
+/// Lado máximo suportado pelo JPEG (campos de 16 bits no quadro) e pelo WebP (14 bits).
+/// O Go aplica os mesmos tetos, para que a recusa seja igual nos dois engines.
+pub const JPEG_MAX_SIDE: u32 = 65_535;
+pub const WEBP_MAX_SIDE: u32 = 16_383;
+
+pub(crate) fn check_side(pam: &PamImage, format: &str, max: u32) -> Result<(), CodecError> {
+    if pam.width > max || pam.height > max {
+        return Err(CodecError::InvalidInput(format!(
+            "{format} suporta no máximo {max} pixels por lado, recebido {}x{}",
+            pam.width, pam.height
+        )));
+    }
+    Ok(())
+}
+
+/// Tamanho em bytes de um buffer decodificado `width * height * channels`, recusando imagens
+/// acima do teto de pixels do processo e contas que estourem `usize`. Os decoders chamam isto
+/// antes de alocar, com as dimensões declaradas pelo arquivo.
+pub(crate) fn checked_len(width: u32, height: u32, channels: u32) -> Result<usize, CodecError> {
+    let pixels = u64::from(width) * u64::from(height);
+    let max = crate::limits::max_pixels();
+    if pixels > max as u64 {
+        return Err(CodecError::Decode(format!(
+            "imagem de {width}x{height} excede o limite de {max} pixels"
+        )));
+    }
+    usize::try_from(pixels * u64::from(channels))
+        .map_err(|_| CodecError::Decode(format!("imagem de {width}x{height} grande demais")))
+}
 
 /// Codifica uma imagem PAM no formato desejado
 pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecError> {

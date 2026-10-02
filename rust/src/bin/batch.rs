@@ -3,6 +3,7 @@
 
 use arena_rust::analyze::analyze;
 use arena_rust::codec::{self, EncodeParams, ImageFormat};
+use arena_rust::limits::{self, Limits};
 use arena_rust::pam::PamImage;
 use clap::Parser;
 use std::fs;
@@ -64,6 +65,14 @@ fn write_output(path: Option<&str>, data: &[u8]) -> io::Result<()> {
 fn main() {
     let args = Args::parse();
     let op = args.op.to_ascii_lowercase();
+
+    match Limits::from_env() {
+        Ok(limits) => limits::set_max_pixels(limits.max_pixels),
+        Err(e) => {
+            eprintln!("[-] Configuração inválida: {e}");
+            process::exit(1);
+        }
+    }
 
     let input_bytes = match read_input(&args.input) {
         Ok(b) => b,

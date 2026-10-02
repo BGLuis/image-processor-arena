@@ -3,7 +3,7 @@
 // Encode: jxl-encoder
 // Decode: jxl-oxide
 
-use super::{params as contract, CodecError, CodecMode, EncodeParams};
+use super::{checked_len, params as contract, CodecError, CodecMode, EncodeParams};
 use crate::pam::PamImage;
 use std::io::Cursor;
 
@@ -52,7 +52,7 @@ pub fn decode(data: &[u8]) -> Result<PamImage, CodecError> {
     let height = stream.height();
     let channels = stream.channels();
 
-    let mut buf = vec![0u8; (width * height * channels) as usize];
+    let mut buf = vec![0u8; checked_len(width, height, channels)?];
     stream.write_to_buffer(&mut buf);
 
     if channels >= 4 {

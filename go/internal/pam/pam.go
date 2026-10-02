@@ -20,6 +20,9 @@ var (
 )
 
 const (
+	// EnvMaxPixels overrides the pixel ceiling on the servers and the batch CLIs of both engines.
+	EnvMaxPixels = "ARENA_MAX_PIXELS"
+
 	// DefaultMaxPixels is the pixel ceiling shared with the Rust engine ([limits] in arena.toml).
 	// The raster is never allocated before WIDTH*HEIGHT is checked against it.
 	DefaultMaxPixels = 40_000_000
@@ -194,6 +197,19 @@ func fromOpaqueNRGBA(nrgba *image.NRGBA) *Image {
 		TuplType: "RGB",
 		Pix:      pix,
 	}
+}
+
+// MaxPixelsFromEnv returns ARENA_MAX_PIXELS, or DefaultMaxPixels when it is unset or empty.
+func MaxPixelsFromEnv(getenv func(string) string) (int, error) {
+	raw := getenv(EnvMaxPixels)
+	if raw == "" {
+		return DefaultMaxPixels, nil
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer, got %q", EnvMaxPixels, raw)
+	}
+	return v, nil
 }
 
 // readHeaderLine reads one header line, refusing lines longer than maxHeaderLine so a hostile

@@ -61,8 +61,9 @@ path = "src/lib.rs"
 [patch.crates-io]
 jxl-modular = { path = "vendor/jxl-modular" }
 
+# panic fica no padrão (unwind): com `abort`, um panic em qualquer requisição derrubaria o
+# servidor inteiro, e o `spawn_blocking` do servidor só consegue devolver 500 se o unwind existir.
 [profile.release]
 opt-level = 3
 lto = "thin"
 codegen-units = 1
-panic = "abort"

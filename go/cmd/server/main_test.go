@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"runtime"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/image-processor-arena/go/internal/pam"
@@ -246,6 +248,60 @@ func TestRunClientErrorsAreNot500(t *testing.T) {
 		if rr := postRun(t, tc.query, tc.body); rr.Code != http.StatusBadRequest {
 			t.Errorf("%s: expected 400, got %d: %s", tc.name, rr.Code, rr.Body.String())
 		}
+	}
+}
+
+func rgbPAM(width, height int) []byte {
+	return pam.EncodeBytes(&pam.Image{
+		Width: width, Height: height, Depth: 3, MaxVal: 255, TuplType: "RGB",
+		Pix: make([]byte, width*height*3),
+	})
+}
+
+func TestRunFormatSideLimitsAreClientErrors(t *testing.T) {
+	cases := []struct {
+		name  string
+		query string
+		body  []byte
+	}{
+		{"jpeg 70000x1", "op=encode&format=jpeg", rgbPAM(70000, 1)},
+		{"webp lossy 16384x1", "op=encode&format=webp&mode=lossy", rgbPAM(16384, 1)},
+		{"webp lossless 16384x1", "op=encode&format=webp&mode=lossless", rgbPAM(16384, 1)},
+	}
+	for _, tc := range cases {
+		if rr := postRun(t, tc.query, tc.body); rr.Code != http.StatusBadRequest {
+			t.Errorf("%s: expected 400, got %d: %s", tc.name, rr.Code, rr.Body.String())
+		}
+	}
+
+	// One pixel under each ceiling still encodes.
+	if rr := postRun(t, "op=encode&format=jpeg", rgbPAM(65535, 1)); rr.Code != http.StatusOK {
+		t.Errorf("jpeg 65535x1: expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestLimitDefaultsMatchArenaToml(t *testing.T) {
+	raw, err := os.ReadFile("../../../arena.toml")
+	if err != nil {
+		t.Fatalf("read arena.toml: %v", err)
+	}
+	found := map[string]string{}
+	inLimits := false
+	for _, line := range strings.Split(string(raw), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[") {
+			inLimits = line == "[limits]"
+			continue
+		}
+		if key, value, ok := strings.Cut(line, "="); inLimits && ok && !strings.HasPrefix(line, "#") {
+			found[strings.TrimSpace(key)] = strings.TrimSpace(value)
+		}
+	}
+	if got, want := found["max_body_bytes"], strconv.FormatInt(defaultMaxBodyBytes, 10); got != want {
+		t.Errorf("max_body_bytes: arena.toml has %q, server default is %q", got, want)
+	}
+	if got, want := found["max_pixels"], strconv.Itoa(defaultMaxPixels); got != want {
+		t.Errorf("max_pixels: arena.toml has %q, server default is %q", got, want)
 	}
 }
 

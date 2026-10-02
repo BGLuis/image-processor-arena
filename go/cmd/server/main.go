@@ -23,7 +23,7 @@ import (
 // overridden through the same environment variables on both.
 const (
 	envMaxBodyBytes = "ARENA_MAX_BODY_BYTES"
-	envMaxPixels    = "ARENA_MAX_PIXELS"
+	envMaxPixels    = pam.EnvMaxPixels
 
 	defaultMaxBodyBytes int64 = 256 << 20
 	defaultMaxPixels          = pam.DefaultMaxPixels
@@ -52,13 +52,11 @@ func loadLimits(getenv func(string) string) (limits, error) {
 		}
 		l.maxBodyBytes = v
 	}
-	if raw := getenv(envMaxPixels); raw != "" {
-		v, err := strconv.Atoi(raw)
-		if err != nil || v <= 0 {
-			return limits{}, fmt.Errorf("%s must be a positive integer, got %q", envMaxPixels, raw)
-		}
-		l.maxPixels = v
+	maxPixels, err := pam.MaxPixelsFromEnv(getenv)
+	if err != nil {
+		return limits{}, err
 	}
+	l.maxPixels = maxPixels
 	return l, nil
 }
 

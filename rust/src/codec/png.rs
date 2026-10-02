@@ -1,7 +1,7 @@
 // rust/src/codec/png.rs
 // Adaptador do codec PNG puro.
 
-use super::{params as contract, CodecError, EncodeParams};
+use super::{checked_len, params as contract, CodecError, EncodeParams};
 use crate::pam::PamImage;
 use std::io::Cursor;
 
@@ -41,9 +41,14 @@ pub fn decode(data: &[u8]) -> Result<PamImage, CodecError> {
     let color_type = info.color_type;
     let bit_depth = info.bit_depth;
 
-    let buf_size = reader
-        .output_buffer_size()
-        .unwrap_or((width * height * 4) as usize);
+    // O tamanho declarado no IHDR é conferido contra o teto de pixels antes de qualquer alocação.
+    let max_len = checked_len(width, height, 8)?;
+    let buf_size = reader.output_buffer_size().unwrap_or(max_len);
+    if buf_size > max_len {
+        return Err(CodecError::Decode(format!(
+            "imagem de {width}x{height} excede o limite de pixels"
+        )));
+    }
     let mut buf = vec![0u8; buf_size];
     let output_info = reader
         .next_frame(&mut buf)
