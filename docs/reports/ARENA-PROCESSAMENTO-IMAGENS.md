@@ -2,15 +2,138 @@
 
 | Campo | Valor |
 |-------|-------|
-| **Status** | ❌ Não iniciado — o diretório do projeto está vazio |
-| **Cobertura** | ~0 % (0 de 7 fases) |
-| **Esforço** | 17–22 dias-dev no escopo completo; 9–11 d no mínimo viável |
-| **Depende de** | Nada (pode começar já) |
-| **Atenção** | ⚠️ Os melhores codecs Rust puros para WebP, AVIF lossless e JPEG XL são AGPL-3.0 |
+| **Status** | ✅ Implementado (`go/`, `rust/`, `harness/`, `docker/`); este documento é a proposta original de 2026-09-28, atualizada em 2026-10-02 — **leia a seção 0 primeiro** |
+| **Cobertura** | F0–F4 entregues; F5 parcial (servidores, `arena-batch`, runner `oha` e containers, sem coletor de cgroup nem `/metrics`); F6 parcial (tabelas e JSON, sem gráfico tempo × bytes); itens não implementados na seção 0.6 |
+| **Esforço** | 17–22 dias-dev no escopo completo; 9–11 d no mínimo viável (estimativa original) |
+| **Depende de** | — |
+| **Atenção** | ⚠️ AVIF **lossless não existe** na arena (nenhuma biblioteca pura o implementa). O projeto é AGPL-3.0-or-later porque sete crates Rust são AGPL (seção 0.2) |
 
 ---
 
-## 1. Estado atual — evidências
+## 0. Atualização de 2026-10-02: o que mudou desde a proposta
+
+As seções 1 a 8 abaixo são a proposta de 2026-09-28, escrita com o diretório vazio. O projeto foi
+implementado e algumas decisões mudaram ou se mostraram inviáveis. Esta seção é a fonte de verdade
+quando houver conflito com o restante do texto; os trechos que ficaram falsos estão marcados com
+**[atualizado]**.
+
+### 0.1 Estado atual
+
+| Parte | Onde |
+|---|---|
+| Engine Go (servidor, `arena-batch`, codecs, `analyze`, PAM) | `go/cmd/`, `go/internal/` |
+| Engine Rust (idem) | `rust/src/`, `rust/src/bin/`, testes de integração em `rust/tests/` |
+| Contrato único de parâmetros e limites | `arena.toml` (`[params]`, `[limits]`) |
+| Harness: benchmark, validação das saídas, qualidade, carga | `harness/benchmark_arena.py`, `arena_quality.py`, `arena_load.py` |
+| Validação cruzada de `analyze` | `harness/verify_cross.py`, `harness/fixtures/ground_truth.json` |
+| Resultados | [`results/PODIUM.md`](../../results/PODIUM.md) e `results/benchmark_results.json` |
+| Decisões e rascunhos para projetos a montante | `docs/decisions/`, `docs/upstream/` |
+
+### 0.2 Correções à proposta
+
+| Tema | Proposta (seções 2 a 6) | Hoje | Evidência |
+|---|---|---|---|
+| **AVIF lossless** | Célula Go com `goavif` e célula Rust com `zenravif` + `quantizer = 0` (2.2) | **Não existe.** `mode=lossless` com `format=avif` é recusado (HTTP 400) nos dois engines e a tarefa não faz parte do benchmark. O `goavif` ignora `Options.Lossless` e o `gen2brain/gav1d/avif` sempre converte RGB para YCbCr BT.601 4:2:0; o `zenrav1e` força `base_q_idx >= 1`, então `quantizer 0` nunca ativa o modo lossless do AV1 | `go/internal/codec/codec.go:116`, `rust/src/codec/avif.rs:16`; testes `TestCodecAVIFLosslessIsRefused` e `test_avif_lossless_is_refused` |
+| **Parâmetros e qualidade** | Bisseção por alvo SSIMULACRA2 por imagem (2.4) | Contrato único `q`/`effort`/`mode`, mapeado por codec (0.3), mais uma comparação a **qualidade equivalente em PSNR** para AVIF e JXL lossy. SSIMULACRA2 **não** foi implementado | `arena.toml` `[params]`; `harness/benchmark_arena.py:633` (`run_equal_quality`) |
+| **O que é cronometrado em `analyze`** | Mesma função nas duas linguagens (2.9) | Passou a ser verdade em 2026-10-02 (issue #7): antes o servidor Rust cronometrava cópia do corpo, parse do PAM e JSON, e o Go só a análise; o BlurHash do Rust chamava `powf` por pixel | `rust/src/bin/server.rs` (`Plan::Analyze`), `rust/src/analyze/blurhash.rs` |
+| **Validação das saídas** | Só os arquivos de referência de `decode` (2.6) | Toda saída de todo engine é decodificada por um decoder de referência (Pillow + libjxl + libavif) antes de o tempo valer: lossless exige igualdade exata, lossy um PSNR mínimo por classe; falha vira entrada na seção "Falhas" e código de saída 1 | `harness/benchmark_arena.py:451` (`validate_output`) |
+| **Carga HTTP** | `oha` em saturação e a taxa fixa (2.10) | `--mode load` mede em **saturação** (p50/p95/p99 e req/s). A corrida a taxa fixa com `--latency-correction` **não** foi implementada | `harness/benchmark_arena.py:950`, `harness/arena_load.py` |
+| **Versões** | `zenwebp` 0.4.5 (2.2) | `zenwebp` 0.4.4 | `rust/Cargo.toml:18` |
+| **Limites e erros** | — | Corpo máximo (413), teto de pixels (400), validação antes do processamento, JPEG/WebP acima do limite do formato (400); o perfil release do Rust usa unwind | `arena.toml` `[limits]`; `go/cmd/server/main.go:165`; `rust/src/limits.rs`; `rust/src/bin/server.rs:48` |
+| **Licença** | "Aceitar para *benchmark* local; decidir antes de publicar binários" (armadilhas, risco 5) | Decidido: **AGPL-3.0-or-later**. São **sete** os crates AGPL (`jxl-encoder`, `jxl-encoder-simd`, `rav1d-safe`, `zenavif`, `zenrav1e`, `zenravif`, `zenwebp`), permitidos por exceção nomeada em `rust/deny.toml` | `LICENSE`, `rust/deny.toml` |
+| **WebP animado** | Não-objetivo (1) | Continua fora, e agora é **recusado** com erro nos dois engines (as bibliotecas compõem quadros de modos diferentes) | `go/internal/codec/codec.go` (`isAnimatedWebP`), `rust/src/codec/webp.rs` |
+
+### 0.3 Contrato de parâmetros (`arena.toml`, `[params]`)
+
+Os dois servidores e os dois `arena-batch` seguem a mesma tabela; valor fora da faixa é recusado (HTTP 400,
+`arena-batch` com saída 1), nunca truncado, e valor ausente ou vazio seleciona o padrão. Testes em Go
+(`go/internal/codec/params_test.go`) e em Rust (`rust/src/codec/params.rs`, `contract_matches_arena_toml`)
+leem o `arena.toml` e falham se o código divergir.
+
+| Parâmetro | Faixa | Padrão |
+|---|---|---|
+| `q` | inteiro 1..100 | 75 |
+| `effort` | inteiro 1..10 (maior é mais lento e menor) | 4 |
+| `mode` | `lossy` ou `lossless` | `lossy` (PNG é sempre lossless e ignora `mode`; JPEG é sempre lossy) |
+
+`effort` 1..10 vira uma escala 0..6 pela tabela `effort_step = [0, 1, 1, 2, 3, 3, 4, 5, 5, 6]`: o `method` do
+WebP lossy é o degrau, o `effort` do JXL é o degrau + 1 (1..7, a faixa nativa do Go; o encoder Rust tem
+defeitos acima de 8, ver 0.5), o `speed` do AVIF é `11 - effort` (invertido) e o PNG usa três faixas
+(1-2 mais rápido, 3-6 padrão, 7-10 melhor). `q` é nativo em JPEG e WebP, vira o índice de quantização AV1
+`(100 - q) * 255 / 100` no AVIF (o Rust usa a curva inversa do `ravif` para chegar ao mesmo índice) e a
+distância Butteraugli do `gen2brain/jxl` no JXL lossy. A tabela completa por codec está no
+[README](../../README.md#-contrato-http-e-parâmetros). Os níveis são casados **por posição**, não por algoritmo.
+
+### 0.4 Startup do processo × tempo de codec
+
+Os dois números respondem perguntas diferentes e o benchmark os mantém separados:
+
+- **Modo `http`** (a métrica primária do pódio): o tempo de codec vem dos *headers* `X-Arena-*-Ns` que o
+  próprio servidor mede em volta da chamada do codec (`CODEC_TIME_HEADERS`, `harness/benchmark_arena.py:49`).
+  O init de pacotes e a abertura do socket acontecem uma vez, na partida, fora de qualquer requisição medida.
+  O tempo de parede do cliente (rede, PAM, JSON) é uma coluna à parte.
+- **Modo `batch`**: cronometra o **processo inteiro**. O startup de cada binário é medido executando-o com
+  entrada inválida (`measure_startup`, `harness/benchmark_arena.py:344`) e a coluna "líquido de startup" é a
+  amostra menos a mediana do startup. Esse modo **não mede velocidade de codec**, e o relatório diz isso.
+- **Por que importa:** o `init()` do `gen2brain/jxl` custa ~38 ms e 2,1 MB em todo processo Go
+  (`GODEBUG=inittrace=1`; 40,5 ms de init no total), contra ~1,6 ms do startup do binário Rust. Em um corpus
+  de 0,26 MP isso supera o tempo de codec da maioria das operações. A decisão de manter o custo e reportá-lo
+  à parte está em [`docs/decisions/0001-go-jxl-init-cost.md`](../decisions/0001-go-jxl-init-cost.md), e o corpus
+  grande (`make_corpus.py --large`, 4,19 MP) reduz o peso relativo do custo fixo.
+
+### 0.5 Resultados e limites conhecidos
+
+Os resultados vigentes estão em [`results/PODIUM.md`](../../results/PODIUM.md): modo `http`, tempo de codec do
+servidor, mediana [p25-p75] sobre 10 iterações, PSNR RGB de cada tarefa lossy contra o original decodificado pela
+referência, razão geométrica Go/Rust por operação e a comparação a qualidade equivalente de AVIF e JXL. O
+`results/LOAD.md` (modo `load`) é gerado à parte. **Os números publicados foram coletados no ambiente descrito
+no próprio arquivo e não substituem uma corrida no host isolado de 2.10** (CPU pinada, sem vizinhos).
+
+**Coleta de 2026-10-02 09:57** (Intel Xeon 2,1 GHz, 4 CPUs lógicas, sem CPU pinada; modo `http`, 10 iterações
+medidas + 3 de warmup; 34 tarefas, todas com a saída validada, **0 falhas**):
+
+| Operação | Tarefas | Vitórias Go | Vitórias Rust | Empates | Razão geométrica Go/Rust | Leitura |
+|---|---|---|---|---|---|---|
+| analyze | 4 | 0 | 3 | 1 | 1,11 | Rust 1,11× mais rápido |
+| encode | 21 | 3 | 18 | 0 | 4,14 | Rust 4,14× mais rápido |
+| decode | 5 | 2 | 3 | 0 | 1,99 | Rust 1,99× mais rápido |
+| transcode | 4 | 2 | 2 | 0 | 0,91 | Go 1,10× mais rápido |
+| **total** | **34** | **7** | **26** | **1** | **2,67** | **Rust 2,67× mais rápido** |
+
+A razão geométrica pondera a magnitude, que a contagem de vitórias ignora. Os tempos de `encode` e `decode`
+comparam codecs de bibliotecas diferentes (2.3): medem o ecossistema, não a linguagem; só `analyze` roda o
+mesmo algoritmo nas duas.
+
+**A qualidade equivalente muda a leitura do AVIF.** No mesmo `q` o Rust gera PSNR bem acima do Go (o `gav1d`
+grava 4:2:0 e o `ravif` 4:4:4). Alvo = PSNR do Go em `q` 75; o Rust usa o menor `q` que o alcança:
+
+| Tarefa | Rust `q` | Bytes Go ÷ Rust | Tempo de codec a qualidade equivalente |
+|---|---|---|---|
+| AVIF lossy, photo | 46 | 1,46 | Go 3,63× mais rápido |
+| AVIF lossy, screenshot | 36 | 3,17 | empate estatístico (1,07×) |
+| JXL lossy, photo | 66 | 1,28 | Rust 4,32× mais rápido |
+| JXL lossy, screenshot | 71 | 0,95 | Rust 3,93× mais rápido |
+
+Ou seja: a q equivalente o AVIF do Rust escreve arquivos 1,5× a 3,2× menores, e o Go é mais rápido ou empata
+na velocidade; comparar os dois ao mesmo `q` esconderia as duas coisas.
+
+Limites que afetam a leitura: o `jxl-oxide` 0.12.6 não decodifica JXL lossy com alpha de vários grupos (o caso
+está explícito em `rust/tests/quality.rs`); o `jxl-encoder` 0.3.1 escreve streams inválidos nos efforts 9 e 10
+(por isso o contrato fica em 7); o AVIF do Go é 4:2:0 e o do Rust 4:4:4, então o mesmo `q` não é a mesma
+qualidade; o `jxl-encoder` imprime `DIAG` em stderr em lossless no `effort` 10. Detalhes no README e em
+`docs/upstream/README.md`.
+
+### 0.6 Da proposta, não implementado
+
+Coletor de cgroup (`collect_cgroup.py`), `/metrics` do Go, contador de alocação do Rust (`count-alloc`) e
+`criterion`; calibração por SSIMULACRA2; as corridas a taxa fixa com `--latency-correction`; o tier
+*portável* da matriz (o modo `--portable` de `check-purity-go.sh` existe, mas falha por limitação conhecida das
+dependências); corpus de ~24 imagens com licença confirmada (o corpus são quatro imagens procedurais por
+tamanho, `make_corpus.py`).
+
+---
+
+## 1. Estado atual — evidências **[histórico, 2026-09-28]**
 
 O projeto não tem **nenhum** arquivo nem controle de versão:
 
@@ -83,16 +206,16 @@ Imposição mecânica, em CI, antes de qualquer benchmark:
 ### 2.2 Matriz de codecs
 
 Um codec por célula, fixado num manifesto (`arena.toml`) com versão; célula sem codec puro fica ❌ e
-é publicada como lacuna, **nunca** preenchida com FFI.
+é publicada como lacuna, **nunca** preenchida com FFI. **[atualizado]** A célula AVIF lossless virou ❌ (0.2).
 
 | Formato | Go — encode | Go — decode | Rust — encode | Rust — decode |
 |---|---|---|---|---|
 | PNG | `image/png`, níveis `BestSpeed`…`BestCompression` [F2] | `image/png` | `png` 0.18.1 [F12] | `png` 0.18.1 |
 | JPEG | `image/jpeg`, só *baseline* 4:2:0, `Quality` 1–100 [F1] | `image/jpeg` | `jpeg-encoder` 0.7.1 [F13] | `zune-jpeg` 0.5.16-rc2 [F26] |
-| WebP lossy | `deepteams/webp` [F5] | `deepteams/webp` | `zenwebp` 0.4.5 (AGPL) [F16] | `image-webp` 0.2.4 [F15] |
+| WebP lossy | `deepteams/webp` [F5] | `deepteams/webp` | `zenwebp` 0.4.4 (AGPL) [F16] | `image-webp` 0.2.4 [F15] |
 | WebP lossless | `KarpelesLab/gowebp` [F6] | idem | `image-webp` 0.2.4 [F15] | idem |
 | AVIF lossy | `gen2brain/gav1d` — 8 bits, 4:2:0, *all-intra* [F8] | `gen2brain/gav1d` | `ravif` 0.13.0 sem `asm` [F17] | `rav1d` 1.1.0 sem `asm` [F23] |
-| AVIF lossless | `KarpelesLab/goavif` [F7] | `goavif` | `zenravif` 0.1.3 (AGPL), `quantizer = 0` do `zenrav1e` [F20] [F21] | `rav1d` 1.1.0 sem `asm` |
+| AVIF lossless **[atualizado]** | ❌ não existe: `goavif` ignora `Options.Lossless` e o `gav1d` converte para 4:2:0 [F7] | ❌ | ❌ não existe: `quantizer = 0` do `zenrav1e` nunca ativa o lossless do AV1 [F20] [F21] | ❌ |
 | JPEG XL | `gen2brain/jxl`, VarDCT e Modular [F9] | `gen2brain/jxl` | `jxl-encoder` 0.3.1 (AGPL) [F22] | `jxl-oxide` 0.12.6 [F25] |
 
 Rejeitadas, com o motivo:
@@ -116,7 +239,7 @@ pessoa, com outro algoritmo de busca. O resultado mede o **ecossistema** de cada
 linguagem. O relatório de resultados precisa dizer isso no título de cada tabela. Só `analyze`
 (decisão 2.9) compara algoritmo idêntico nas duas linguagens.
 
-### 2.4 Iso-qualidade
+### 2.4 Iso-qualidade **[atualizado: implementado em PSNR, não em SSIMULACRA2; ver 0.2]**
 
 | Opção | O que é | Custo | Base | Veredito |
 |---|---|---|---|---|
@@ -300,7 +423,7 @@ sintéticos com resposta esperada.
 | Stdlib Go só gera JPEG *baseline* 4:2:0 [F1]; `jpeg-encoder` tem *progressive* e Huffman otimizado [F13] | Configurar o Rust em *baseline* na célula comparável; *progressive* vira célula separada, ❌ no Go |
 | `jpeg-encoder` com `simd` adiciona `unsafe` AVX2 [F13]; `zune-jpeg` usa intrínsecos no `x86` [F26] | Feature ligada só no tier nativo |
 | Tier portável não é escalar: Go e Rust ainda autovetorizam, e dependências de *checksum*/*deflate* podem trazer SIMD sem chave `[modelado]` | Definir tier portável pela lista de chaves por codec; célula sem chave fica ⚠️ "portável parcial" |
-| Licença AGPL de `zenwebp`, `zenravif`, `jxl-encoder`, `rav1d-safe` [F16] [F20] [F22] [F24] | Aceitar para *benchmark* local; decidir antes de publicar binários ou imagens de container |
+| Licença AGPL de `zenwebp`, `zenravif`, `jxl-encoder`, `rav1d-safe` [F16] [F20] [F22] [F24] | **[atualizado]** Decidido: o projeto é AGPL-3.0-or-later; exceções nomeadas em `rust/deny.toml` (são sete crates, 0.2) |
 | *Scavenger* do Go devolve memória com atraso: `memory.current` pós-carga engana `[modelado]` | Comparar só `memory.peak` resetado por janela [F33] |
 | *Page cache* dos arquivos lidos infla `memory.peak` [F33] | Corpus em memória; separar `file` de `anon` em `memory.stat` |
 | `/cpu/classes/*` do Go não é comparável à CPU do sistema [F3] | Usar só como proporção interna; CPU comparável vem do cgroup |
@@ -312,6 +435,9 @@ sintéticos com resposta esperada.
 
 ## 5. Verificação
 
+Itens marcados `[x]` foram verificados em 2026-10-02 com a evidência indicada; os demais continuam como na
+proposta, sem verificação nesta data.
+
 **Guardas de pureza em CI (`scripts/check-purity-go.sh`, `scripts/check-purity-rust.sh`):**
 - [ ] Adicionar `github.com/ebitengine/purego` ao `go.mod` faz a guarda Go falhar — guarda 2.1 e o
       comportamento de *fallback* documentado em [F10].
@@ -319,18 +445,23 @@ sintéticos com resposta esperada.
 - [ ] Tier portável: `go list -deps -tags noasm` sem `SFiles` fora da stdlib — guarda 2.1 [F8] [F9].
 
 **Automatizável no host (`go test ./...`, `cargo test`):**
-- [ ] Lossless (PNG, WebP, AVIF, JXL): decodificar pelo decoder de referência devolve pixels
-      idênticos à entrada — guarda 2.2 e a ausência de lossless no `ravif` [F19].
-- [ ] `decode` de cada arquivo de referência bate com o decoder de referência (exato em lossless,
-      dentro da tolerância declarada em lossy) — guarda 2.6.
+- [x] Lossless (PNG, WebP, JXL; **AVIF não existe**, 0.2): decodificar devolve pixels idênticos à entrada —
+      guarda 2.2 e a ausência de lossless no `ravif` [F19]. Go: `TestLosslessRoundtripIsPixelExact`
+      (`go/internal/codec/codec_test.go`); Rust: `lossless_roundtrip_is_pixel_exact_on_the_corpus`
+      (`rust/tests/quality.rs`); e o harness valida cada saída contra a referência.
+- [x] `decode` de cada arquivo de referência bate com o decoder de referência (exato em PNG, PSNR ≥ 40 dB nos
+      demais) — guarda 2.6. `validate_output` em `harness/benchmark_arena.py`.
 - [ ] Parâmetro calibrado reproduz SSIMULACRA2 no alvo ± 1 — guarda 2.4 [F29].
 - [ ] Teste de contrato: as quatro `op` com os mesmos parâmetros são aceitas pelos dois servidores
       e `transcode` devolve os dois *headers* de fase — guarda 2.5.
-- [ ] `analyze` em imagem sólida: entropia 0, SI 0, 1 cor única, área plana 100 %, binaridade de
-      alpha 100 % — guarda 2.9.
-- [ ] `analyze` em xadrez 1×1: SI e energia de gradiente iguais ao valor calculado à mão na spec.
+- [x] `analyze` em imagem sólida: entropia 0, SI 0, 1 cor única, área plana 100 %, binaridade de
+      alpha 100 % — guarda 2.9. Fixtures `solid_black.pam` e `solid_red.pam` em `ground_truth.json`
+      (`verify_cross.py --mode batch --target all`: 16 de 16).
+- [x] `analyze` em xadrez 1×1: SI e energia de gradiente iguais ao valor calculado à mão na spec — fixture
+      `checkerboard_1x1.pam`, mesmo gabarito.
 - [ ] blurHash das imagens de exemplo do repositório de referência igual à *string* publicada [F35].
-- [ ] Go × Rust: todas as métricas inteiras idênticas e as de *float* dentro de ε, no corpus inteiro.
+- [x] Go × Rust: todas as métricas inteiras idênticas e as de *float* dentro de ε. Nas fixtures sintéticas pelo
+      gabarito e no corpus de 4 MP diretamente (`verify_cross.py --mode compare`: 4 de 4).
 
 **Desempenho — protocolo de `medicao-desempenho.md` (só no host de medição, pendente):**
 - [ ] Saturação: `oha -c <2 × workers> -z 20s --output-format json -D <img.pam>` depois de 5 s de
@@ -365,6 +496,8 @@ sintéticos com resposta esperada.
    discussão de algoritmo. É o maior item do plano (4–5 d) e a razão de a spec vir primeiro.
 5. **Licença AGPL** restringe publicar binários da arena com os crates `zen*` e `jxl-encoder`
    [F16] [F22]; a alternativa MIT/Apache deixa WebP lossy e AVIF lossless sem codec Rust.
+   **[atualizado]** Decidido em 2026-10-02: AGPL-3.0-or-later (seção 0.2); quem serve a arena em rede
+   deve oferecer o código-fonte (AGPL, seção 13).
 6. **Host compartilhado.** Com ~4 GiB livres na coleta, medições de memória no *desktop* de uso
    diário são frágeis; um host dedicado ou uma VM com recursos fixos elimina o risco.
 
@@ -442,6 +575,6 @@ portável); crates de blurHash em Go e Rust; a licença do corpus.
 
 ---
 
-> Nenhum item deste relatório foi executado: o diretório do projeto está vazio e não é repositório
-> git. A análise vem das fontes da seção 8, consultadas em 2026-09-28, e do ambiente medido no host
-> i5-12600K; toda a validação, inclusive as estimativas de tempo de rodada, está pendente na seção 5.
+> **[atualizado]** A nota original ("nenhum item foi executado, o diretório está vazio") vale só para as seções
+> 1 a 8 como estavam em 2026-09-28. O que foi executado, o que mudou e o que ficou de fora está na seção 0; a
+> verificação da seção 5 está parcialmente automatizada (ver o estado de cada item ali).
