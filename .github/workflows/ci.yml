@@ -244,3 +244,31 @@ jobs:
       - name: Build Docker dev profile images
         run: |
           docker compose --profile dev build
+
+  # ---------------------------------------------------------------------------
+  # 6. Harness: testes unitários do benchmark (regra de empate, razão geométrica, busca do q
+  # equivalente, parser do oha e a recusa de saídas inválidas contra o decoder de referência)
+  # ---------------------------------------------------------------------------
+  harness-tests:
+    name: "Benchmark Harness Tests"
+    needs: purity-guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Setup Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38  # v5.4.0
+        with:
+          python-version: '3.12'
+
+      - name: Install reference decoders (Pillow + libjxl plugin)
+        run: |
+          python3 -m pip install -r harness/requirements.txt
+
+      - name: Run harness unit tests
+        run: |
+          python3 -W error::ResourceWarning -m unittest discover -s harness/tests -v

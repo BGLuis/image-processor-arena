@@ -254,6 +254,11 @@ def run_self_analyze(pam_path: str) -> Tuple[Optional[Dict[str, Any]], Optional[
 # ---------------------------------------------------------------------------
 # Ponto de Entrada Principal
 # ---------------------------------------------------------------------------
+def read_file(path: str) -> bytes:
+    with open(path, "rb") as f:
+        return f.read()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validação Cruzada de op=analyze para Go, Rust e Python.")
     parser.add_argument(
@@ -300,9 +305,9 @@ def main() -> int:
         targets.append(("Python Oracle", run_self_analyze, None))
     elif args.mode == "http":
         if args.target in ["all", "go"]:
-            targets.append(("Go HTTP (Port 8080)", lambda p: run_http_analyze(args.go_url, open(p, "rb").read()), args.go_url))
+            targets.append(("Go HTTP (Port 8080)", lambda p: run_http_analyze(args.go_url, read_file(p)), args.go_url))
         if args.target in ["all", "rust"]:
-            targets.append(("Rust HTTP (Port 8081)", lambda p: run_http_analyze(args.rust_url, open(p, "rb").read()), args.rust_url))
+            targets.append(("Rust HTTP (Port 8081)", lambda p: run_http_analyze(args.rust_url, read_file(p)), args.rust_url))
     elif args.mode == "batch":
         if args.target in ["all", "go"]:
             targets.append(("Go Batch CLI", lambda p: run_batch_analyze(args.go_bin, p), args.go_bin))
