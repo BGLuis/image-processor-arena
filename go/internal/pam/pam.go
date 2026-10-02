@@ -16,6 +16,16 @@ var (
 	ErrInvalidHeader = errors.New("pam: invalid header")
 	ErrUnsupported   = errors.New("pam: unsupported format (only MAXVAL 255 and DEPTH 3 or 4 are supported)")
 	ErrTruncated     = errors.New("pam: truncated pixel data")
+	ErrTooLarge      = errors.New("pam: image exceeds the pixel limit")
+)
+
+const (
+	// DefaultMaxPixels is the pixel ceiling shared with the Rust engine ([limits] in arena.toml).
+	// The raster is never allocated before WIDTH*HEIGHT is checked against it.
+	DefaultMaxPixels = 40_000_000
+
+	maxHeaderLine  = 4096
+	maxHeaderBytes = 64 << 10
 )
 
 // Image represents a Netpbm PAM (P7) image in memory.
@@ -186,16 +196,53 @@ func fromOpaqueNRGBA(nrgba *image.NRGBA) *Image {
 	}
 }
 
-// Decode reads a Netpbm PAM P7 image from an io.Reader.
+// readHeaderLine reads one header line, refusing lines longer than maxHeaderLine so a hostile
+// header cannot make the parser buffer an unbounded amount of text.
+func readHeaderLine(br *bufio.Reader, budget *int) (string, error) {
+	var line []byte
+	for {
+		chunk, err := br.ReadSlice('\n')
+		line = append(line, chunk...)
+		*budget -= len(chunk)
+		if *budget < 0 || len(line) > maxHeaderLine {
+			return "", fmt.Errorf("%w: header line too long", ErrInvalidHeader)
+		}
+		if err == nil {
+			return string(line), nil
+		}
+		if !errors.Is(err, bufio.ErrBufferFull) {
+			return "", ErrInvalidHeader
+		}
+	}
+}
+
+// remaining reports how many bytes are left to read when the underlying reader knows its size
+// (bytes.Reader, bytes.Buffer), or -1.
+func remaining(br *bufio.Reader, r io.Reader) int64 {
+	sized, ok := r.(interface{ Len() int })
+	if !ok || r == io.Reader(br) {
+		return -1
+	}
+	return int64(br.Buffered()) + int64(sized.Len())
+}
+
+// Decode reads a Netpbm PAM P7 image from an io.Reader, accepting up to DefaultMaxPixels pixels.
 func Decode(r io.Reader) (*Image, error) {
+	return DecodeLimit(r, DefaultMaxPixels)
+}
+
+// DecodeLimit is Decode with an explicit pixel ceiling. WIDTH*HEIGHT*DEPTH is checked against the
+// ceiling, and against the bytes actually available when they are known, before the raster is allocated.
+func DecodeLimit(r io.Reader, maxPixels int) (*Image, error) {
 	br, ok := r.(*bufio.Reader)
 	if !ok {
 		br = bufio.NewReader(r)
 	}
+	budget := maxHeaderBytes
 
-	magic, err := br.ReadString('\n')
+	magic, err := readHeaderLine(br, &budget)
 	if err != nil {
-		return nil, ErrInvalidHeader
+		return nil, err
 	}
 	magic = strings.TrimSpace(magic)
 	if magic != "P7" {
@@ -211,9 +258,9 @@ func Decode(r io.Reader) (*Image, error) {
 	)
 
 	for {
-		line, err := br.ReadString('\n')
+		line, err := readHeaderLine(br, &budget)
 		if err != nil {
-			return nil, ErrInvalidHeader
+			return nil, err
 		}
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
@@ -223,11 +270,12 @@ func Decode(r io.Reader) (*Image, error) {
 			break
 		}
 
-		parts := strings.SplitN(trimmed, " ", 2)
+		// The spec separates the key from the value with any whitespace run, like the Rust parser.
+		parts := strings.Fields(trimmed)
 		key := strings.ToUpper(parts[0])
 		val := ""
 		if len(parts) > 1 {
-			val = strings.TrimSpace(parts[1])
+			val = parts[1]
 		}
 
 		switch key {
@@ -273,7 +321,18 @@ func Decode(r io.Reader) (*Image, error) {
 		}
 	}
 
+	if maxPixels <= 0 {
+		maxPixels = DefaultMaxPixels
+	}
+	// Dividing instead of multiplying keeps the check itself free of int overflow.
+	if width > maxPixels/height {
+		return nil, fmt.Errorf("%w: %dx%d exceeds %d pixels", ErrTooLarge, width, height, maxPixels)
+	}
 	totalBytes := width * height * depth
+	if avail := remaining(br, r); avail >= 0 && avail < int64(totalBytes) {
+		return nil, ErrTruncated
+	}
+
 	pix := make([]byte, totalBytes)
 	if _, err := io.ReadFull(br, pix); err != nil {
 		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {

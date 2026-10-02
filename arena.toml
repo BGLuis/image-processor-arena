@@ -54,6 +54,15 @@ avif_lossy = "q: AV1 base_q_idx = (100-q)*255/100, gav1d's native mapping; ravif
 jxl_lossy = "q: Butteraugli distance = 0.1+(100-q)*0.09 for q>=30, else 53/3000*q^2-23/20*q+25 (gen2brain/jxl native mapping; jxl-encoder's own quality_to_distance differs, so rust computes the distance itself). effort: jxl effort = effort_step[effort-1]+1 (1..7, the native range of gen2brain/jxl; rust is capped to it)."
 jxl_lossless = "q: none. effort: jxl effort = effort_step[effort-1]+1."
 
+[limits]
+# Request limits enforced identically by both servers; the Go and Rust tests read these values.
+# Override at run time with ARENA_MAX_BODY_BYTES and ARENA_MAX_PIXELS (positive integers).
+# A body above max_body_bytes is answered with HTTP 413. A PAM whose WIDTH*HEIGHT exceeds
+# max_pixels, or whose declared raster cannot fit in the body, is answered with HTTP 400 before
+# any raster is allocated. The batch CLIs apply max_pixels too.
+max_body_bytes = 268435456
+max_pixels = 40000000
+
 [benchmarks]
 server_go_port = 8080
 server_rust_port = 8081

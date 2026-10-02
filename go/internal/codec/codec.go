@@ -155,8 +155,7 @@ func Decode(r io.Reader, format string) (*pam.Image, error) {
 	case "jxl":
 		decoded, err = genjxl.Decode(r)
 	default:
-		// Attempt standard image.Decode
-		decoded, _, err = image.Decode(r)
+		return nil, fmt.Errorf("%w: %q", ErrUnsupportedFormat, fmtNorm)
 	}
 
 	if err != nil {

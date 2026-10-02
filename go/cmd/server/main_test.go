@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"runtime"
 	"testing"
 
 	"github.com/image-processor-arena/go/internal/pam"
@@ -153,6 +155,129 @@ func TestRunRejectsParamsOutsideContract(t *testing.T) {
 
 	if rr := postRun(t, "op=encode&format=bmp", pamData); rr.Code != http.StatusBadRequest {
 		t.Errorf("unknown format: expected 400, got %d", rr.Code)
+	}
+}
+
+func withLimits(t *testing.T, l limits) {
+	t.Helper()
+	old := srvLimits
+	srvLimits = l
+	t.Cleanup(func() { srvLimits = old })
+}
+
+func TestRunRejectsHugePAMHeaderWithoutAllocating(t *testing.T) {
+	header := []byte("P7\nWIDTH 100000\nHEIGHT 100000\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n")
+
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	rr := postRun(t, "op=encode&format=png", header)
+	runtime.ReadMemStats(&after)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if alloc := after.TotalAlloc - before.TotalAlloc; alloc > 4<<20 {
+		t.Fatalf("allocated %d bytes before refusing the header", alloc)
+	}
+}
+
+func TestRunRejectsBodyAboveTheLimit(t *testing.T) {
+	pamData := loadSamplePAM(t)
+	withLimits(t, limits{maxBodyBytes: int64(len(pamData)) - 1, maxPixels: defaultMaxPixels})
+
+	for _, query := range []string{"op=analyze", "op=encode&format=png", "op=decode&format=png"} {
+		if rr := postRun(t, query, pamData); rr.Code != http.StatusRequestEntityTooLarge {
+			t.Errorf("%s: expected 413, got %d", query, rr.Code)
+		}
+	}
+
+	withLimits(t, limits{maxBodyBytes: int64(len(pamData)), maxPixels: defaultMaxPixels})
+	if rr := postRun(t, "op=analyze", pamData); rr.Code != http.StatusOK {
+		t.Errorf("body exactly at the limit: expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestRunRejectsOversizedContentLengthWithoutReading(t *testing.T) {
+	withLimits(t, limits{maxBodyBytes: 1024, maxPixels: defaultMaxPixels})
+
+	req := httptest.NewRequest(http.MethodPost, "/run?op=analyze", io.LimitReader(zeroReader{}, 1<<30))
+	req.ContentLength = 1 << 30
+	rr := httptest.NewRecorder()
+	handleRun(rr, req)
+
+	if rr.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413, got %d", rr.Code)
+	}
+}
+
+type zeroReader struct{}
+
+func (zeroReader) Read(p []byte) (int, error) { return len(p), nil }
+
+func TestRunHonoursThePixelLimit(t *testing.T) {
+	pamData := loadSamplePAM(t) // 64x64
+	withLimits(t, limits{maxBodyBytes: defaultMaxBodyBytes, maxPixels: 64*64 - 1})
+
+	if rr := postRun(t, "op=encode&format=png", pamData); rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+}
+
+func TestRunClientErrorsAreNot500(t *testing.T) {
+	pamData := loadSamplePAM(t)
+	encoded := postRun(t, "op=encode&format=png", pamData).Body.Bytes()
+
+	cases := []struct {
+		name  string
+		query string
+		body  []byte
+	}{
+		{"unknown encode format", "op=encode&format=bmp", pamData},
+		{"unknown decode format", "op=decode&format=bmp", encoded},
+		{"unknown transcode source", "op=transcode&format=bmp&to=png", encoded},
+		{"unknown transcode target", "op=transcode&format=png&to=bmp", encoded},
+		{"avif lossless encode", "op=encode&format=avif&mode=lossless", pamData},
+		{"avif lossless transcode", "op=transcode&format=png&to=avif&mode=lossless", encoded},
+		{"unknown op", "op=resize", pamData},
+		{"missing format", "op=encode", pamData},
+	}
+	for _, tc := range cases {
+		if rr := postRun(t, tc.query, tc.body); rr.Code != http.StatusBadRequest {
+			t.Errorf("%s: expected 400, got %d: %s", tc.name, rr.Code, rr.Body.String())
+		}
+	}
+}
+
+func TestLoadLimits(t *testing.T) {
+	env := func(vars map[string]string) func(string) string {
+		return func(key string) string { return vars[key] }
+	}
+
+	l, err := loadLimits(env(nil))
+	if err != nil || l.maxBodyBytes != defaultMaxBodyBytes || l.maxPixels != defaultMaxPixels {
+		t.Fatalf("defaults: got %+v, err=%v", l, err)
+	}
+
+	l, err = loadLimits(env(map[string]string{envMaxBodyBytes: "1024", envMaxPixels: "256"}))
+	if err != nil || l.maxBodyBytes != 1024 || l.maxPixels != 256 {
+		t.Fatalf("overrides: got %+v, err=%v", l, err)
+	}
+
+	for _, vars := range []map[string]string{
+		{envMaxBodyBytes: "0"}, {envMaxBodyBytes: "-1"}, {envMaxBodyBytes: "lots"},
+		{envMaxPixels: "0"}, {envMaxPixels: "1.5"},
+	} {
+		if _, err := loadLimits(env(vars)); err == nil {
+			t.Errorf("%v: expected an error", vars)
+		}
+	}
+}
+
+func TestServerHasTimeouts(t *testing.T) {
+	s := newServer(":0")
+	if s.ReadHeaderTimeout <= 0 || s.ReadTimeout <= 0 || s.WriteTimeout <= 0 || s.IdleTimeout <= 0 || s.MaxHeaderBytes <= 0 {
+		t.Fatalf("server must set every timeout and MaxHeaderBytes: %+v", s)
 	}
 }
 
