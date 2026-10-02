@@ -10,7 +10,7 @@ services:
     container_name: arena-go-server
     environment:
       - PORT=8080
-      - GOMAXPROCS=6
+      - GOMAXPROCS=${ARENA_GOMAXPROCS:-6}
       - GOGC=100
     ports:
       - "8080:8080"
@@ -58,6 +58,8 @@ services:
       dockerfile: docker/harness.Dockerfile
     image: arena-harness:latest
     container_name: arena-harness
+    # Com ./results montado do host, rode com o uid/gid do dono dele: ARENA_UID=$(id -u) ARENA_GID=$(id -g)
+    user: "${ARENA_UID:-10001}:${ARENA_GID:-10001}"
     volumes:
       - ./harness:/arena/harness
       - ./docs:/arena/docs
@@ -73,8 +75,24 @@ services:
       - bench
 
 # -----------------------------------------------------------------------------
-# Configurações de Recursos e Isolamento para Benchmarking (Perfil 'bench')
-# P-Cores (0-11) para servidores; E-Cores (12-15) para gerador de carga (oha)
+# Configurações de Recursos e Isolamento para Benchmarking (Perfil 'bench-isolated')
+#
+# O perfil 'bench' roda os servidores e o harness SEM limites de CPU nem memória. O isolamento está
+# neste perfil: `docker compose --profile bench-isolated up --build`. Os servidores ficam num conjunto
+# de CPUs e o harness (e o gerador de carga) em outro, para um não disputar núcleo com o outro.
+#
+# Os valores padrão (CPUs 0-11 para os servidores, 12-15 para o harness) são de uma máquina de 16 CPUs
+# lógicas com 12 núcleos de desempenho; NÃO servem para qualquer hardware. Ajuste com variáveis de
+# ambiente (ou um arquivo .env), de acordo com `lscpu -e`:
+#
+#   ARENA_SERVER_CPUSET   CPUs dos servidores        (padrão 0-11)
+#   ARENA_SERVER_CPUS     limite de CPU de cada um   (padrão 6.0)
+#   ARENA_SERVER_MEMORY   limite de memória de cada  (padrão 3G)
+#   ARENA_HARNESS_CPUSET  CPUs do harness e do oha   (padrão 12-15)
+#   ARENA_HARNESS_CPUS    limite de CPU do harness   (padrão 4.0)
+#   ARENA_HARNESS_MEMORY  limite de memória          (padrão 2G)
+#
+# Os dois conjuntos de CPUs não devem se sobrepor.
 # -----------------------------------------------------------------------------
   go-server-bench:
     extends:
@@ -83,9 +101,9 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "6.0"
-          memory: 3G
-    cpuset: "0-11"
+          cpus: "${ARENA_SERVER_CPUS:-6.0}"
+          memory: ${ARENA_SERVER_MEMORY:-3G}
+    cpuset: "${ARENA_SERVER_CPUSET:-0-11}"
     tmpfs:
       - /tmp:rw,size=512M
     profiles:
@@ -98,9 +116,9 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "6.0"
-          memory: 3G
-    cpuset: "0-11"
+          cpus: "${ARENA_SERVER_CPUS:-6.0}"
+          memory: ${ARENA_SERVER_MEMORY:-3G}
+    cpuset: "${ARENA_SERVER_CPUSET:-0-11}"
     tmpfs:
       - /tmp:rw,size=512M
     profiles:
@@ -112,6 +130,7 @@ services:
       dockerfile: docker/harness.Dockerfile
     image: arena-harness:latest
     container_name: arena-harness-bench
+    user: "${ARENA_UID:-10001}:${ARENA_GID:-10001}"
     volumes:
       - ./harness:/arena/harness
       - ./docs:/arena/docs
@@ -125,9 +144,9 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "4.0"
-          memory: 2G
-    cpuset: "12-15"
+          cpus: "${ARENA_HARNESS_CPUS:-4.0}"
+          memory: ${ARENA_HARNESS_MEMORY:-2G}
+    cpuset: "${ARENA_HARNESS_CPUSET:-12-15}"
     tmpfs:
       - /arena/ramdisk:rw,size=1024M
     profiles:

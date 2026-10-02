@@ -48,6 +48,15 @@ func pngCompression(effort int) png.CompressionLevel {
 
 var supportedFormats = map[string]bool{"png": true, "jpeg": true, "webp": true, "avif": true, "jxl": true}
 
+// ParseFormat normalizes a format name and rejects anything the engine cannot decode or encode.
+func ParseFormat(format string) (string, error) {
+	f := NormalizeFormat(format)
+	if !supportedFormats[f] {
+		return "", fmt.Errorf("%w: %q", ErrUnsupportedFormat, f)
+	}
+	return f, nil
+}
+
 // ParseParams builds validated Params from the raw textual values of a request.
 // An empty value selects the default; anything outside the contract is rejected, never clamped.
 func ParseParams(format, mode, q, effort string) (Params, error) {

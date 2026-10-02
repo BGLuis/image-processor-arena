@@ -1,0 +1,11 @@
+# Toolchain único do engine Rust. O desenvolvimento local, o CI (.github/workflows/ci.yml) e a imagem
+# docker/rust.Dockerfile usam esta mesma versão; scripts/check-toolchain-sync.sh confere os três e também
+# que nenhuma dependência do Cargo.lock declare um rust-version maior que ele (a origem da issue #12:
+# a imagem Docker ficou num compilador mais velho que o exigido pelas dependências).
+#
+# Para atualizar: troque `channel` aqui, a tag `FROM rust:<versão>-bookworm` em docker/rust.Dockerfile e
+# `toolchain:` no ci.yml, e rode scripts/check-toolchain-sync.sh.
+[toolchain]
+channel = "1.97.0"
+profile = "minimal"
+components = ["rustfmt", "clippy"]

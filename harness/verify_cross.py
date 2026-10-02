@@ -12,6 +12,11 @@ Modos de uso:
   python3 harness/verify_cross.py --mode http --target rust# Valida servidor Rust HTTP
   python3 harness/verify_cross.py --mode http --target all # Valida ambos servidores HTTP
   python3 harness/verify_cross.py --mode batch            # Valida binários CLI locais
+  python3 harness/verify_cross.py --mode compare          # Go x Rust diretamente, sobre o corpus grande
+
+O modo `compare` não usa gabarito: não existe oráculo Python rápido para imagens de 4 MP. Ele roda
+os dois arena-batch em cada .pam de --corpus-dir (padrão harness/fixtures/corpus-large, gerado por
+`make_corpus.py --large`) e exige que Rust e Go concordem dentro das mesmas tolerâncias.
 """
 
 import os
@@ -225,7 +230,7 @@ def run_http_analyze(url: str, pam_bytes: bytes) -> Tuple[Optional[Dict[str, Any
         return None, str(e)
 
 
-def run_batch_analyze(bin_path: str, pam_path: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+def run_batch_analyze(bin_path: str, pam_path: str, timeout: int = 10) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     if not os.path.exists(bin_path):
         return None, f"Binário não encontrado: {bin_path}"
     try:
@@ -234,7 +239,7 @@ def run_batch_analyze(bin_path: str, pam_path: str) -> Tuple[Optional[Dict[str, 
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            timeout=10,
+            timeout=timeout,
             check=True,
         )
         return json.loads(proc.stdout), None
@@ -254,13 +259,60 @@ def run_self_analyze(pam_path: str) -> Tuple[Optional[Dict[str, Any]], Optional[
 # ---------------------------------------------------------------------------
 # Ponto de Entrada Principal
 # ---------------------------------------------------------------------------
+def read_file(path: str) -> bytes:
+    with open(path, "rb") as f:
+        return f.read()
+
+
+def compare_engines(corpus_dir: str, go_bin: str, rust_bin: str) -> int:
+    """Go e Rust sobre os mesmos arquivos, um contra o outro (sem gabarito)."""
+    import glob
+
+    pams = sorted(glob.glob(os.path.join(corpus_dir, "*.pam")))
+    print("=" * 70)
+    print("Arena de Processamento de Imagens — Go × Rust (op=analyze, sem gabarito)")
+    print(f"Corpus: {corpus_dir} ({len(pams)} imagens)")
+    print("=" * 70)
+    if not pams:
+        print(f"[!] Nenhum .pam em {corpus_dir}. Gere o corpus: python3 harness/generators/make_corpus.py --large")
+        return 1
+
+    failed = 0
+    for path in pams:
+        name = os.path.basename(path)
+        go, go_err = run_batch_analyze(go_bin, path, timeout=300)
+        rust, rust_err = run_batch_analyze(rust_bin, path, timeout=300)
+        if go_err or rust_err:
+            print(f"  [X] {name:20s} -> ERRO: go={go_err} rust={rust_err}")
+            failed += 1
+            continue
+        diffs = compare_result(rust, go)
+        if diffs:
+            print(f"  [X] {name:20s} -> FALHA ({len(diffs)} divergências entre Rust e Go)")
+            for d in diffs:
+                print(d)
+            failed += 1
+        else:
+            print(f"  [✓] {name:20s} -> Go e Rust concordam nas 16 métricas ({go['width']}x{go['height']})")
+    print("\n" + "=" * 70)
+    print(f"Resumo: Total={len(pams)}, Concordam={len(pams) - failed}, Divergem={failed}")
+    print("=" * 70)
+    return 0 if failed == 0 else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validação Cruzada de op=analyze para Go, Rust e Python.")
     parser.add_argument(
         "--mode",
-        choices=["self", "http", "batch"],
+        choices=["self", "http", "batch", "compare"],
         default="self",
-        help="Modo de teste: 'self' (oráculo Python), 'http' (endpoint POST), 'batch' (CLI)",
+        help="Modo de teste: 'self' (oráculo Python), 'http' (endpoint POST), 'batch' (CLI), "
+        "'compare' (Go x Rust sem gabarito, sobre --corpus-dir)",
+    )
+    parser.add_argument(
+        "--corpus-dir",
+        default=None,
+        help="[compare] Diretório com os .pam (padrão: harness/fixtures/corpus-large)",
     )
     parser.add_argument(
         "--target",
@@ -277,6 +329,9 @@ def main() -> int:
     args = parser.parse_args()
 
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    if args.mode == "compare":
+        corpus_dir = args.corpus_dir or os.path.join(base_dir, "harness", "fixtures", "corpus-large")
+        return compare_engines(corpus_dir, args.go_bin, args.rust_bin)
     fixtures_dir = args.fixtures_dir or os.path.join(base_dir, "harness", "fixtures", "synthetic")
     gt_path = args.ground_truth or os.path.join(base_dir, "harness", "fixtures", "ground_truth.json")
 
@@ -300,9 +355,9 @@ def main() -> int:
         targets.append(("Python Oracle", run_self_analyze, None))
     elif args.mode == "http":
         if args.target in ["all", "go"]:
-            targets.append(("Go HTTP (Port 8080)", lambda p: run_http_analyze(args.go_url, open(p, "rb").read()), args.go_url))
+            targets.append(("Go HTTP (Port 8080)", lambda p: run_http_analyze(args.go_url, read_file(p)), args.go_url))
         if args.target in ["all", "rust"]:
-            targets.append(("Rust HTTP (Port 8081)", lambda p: run_http_analyze(args.rust_url, open(p, "rb").read()), args.rust_url))
+            targets.append(("Rust HTTP (Port 8081)", lambda p: run_http_analyze(args.rust_url, read_file(p)), args.rust_url))
     elif args.mode == "batch":
         if args.target in ["all", "go"]:
             targets.append(("Go Batch CLI", lambda p: run_batch_analyze(args.go_bin, p), args.go_bin))

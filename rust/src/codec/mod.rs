@@ -106,6 +106,9 @@ pub enum CodecError {
     Decode(String),
     UnsupportedFormat(String),
     InvalidParam(String),
+    /// A imagem de entrada é válida como PAM, mas o formato de destino não a comporta
+    /// (dimensões acima do limite do formato). É erro do cliente, não do encoder.
+    InvalidInput(String),
 }
 
 impl fmt::Display for CodecError {
@@ -115,11 +118,57 @@ impl fmt::Display for CodecError {
             Self::Decode(msg) => write!(f, "Erro de decodificação: {msg}"),
             Self::UnsupportedFormat(msg) => write!(f, "Formato não suportado: {msg}"),
             Self::InvalidParam(msg) => write!(f, "Parâmetro inválido: {msg}"),
+            Self::InvalidInput(msg) => write!(f, "Entrada inválida: {msg}"),
         }
     }
 }
 
 impl std::error::Error for CodecError {}
+
+impl CodecError {
+    /// Erros causados pela requisição (formato, parâmetro, entrada ou arquivo corrompido)
+    /// em oposição a uma falha interna do encoder.
+    pub fn is_client_error(&self) -> bool {
+        !matches!(self, Self::Encode(_))
+    }
+}
+
+/// Lado máximo suportado pelo JPEG (campos de 16 bits no quadro) e pelo WebP (14 bits).
+/// O Go aplica os mesmos tetos, para que a recusa seja igual nos dois engines.
+pub const JPEG_MAX_SIDE: u32 = 65_535;
+pub const WEBP_MAX_SIDE: u32 = 16_383;
+
+pub(crate) fn check_side(pam: &PamImage, format: &str, max: u32) -> Result<(), CodecError> {
+    if pam.width > max || pam.height > max {
+        return Err(CodecError::InvalidInput(format!(
+            "{format} suporta no máximo {max} pixels por lado, recebido {}x{}",
+            pam.width, pam.height
+        )));
+    }
+    Ok(())
+}
+
+/// Reduz uma amostra de 16 bits para 8 com arredondamento, `round(v / 257)`, a inversa exata da
+/// expansão `v8 * 257`. O engine Go aplica a mesma conta em `pam.FromImage`; a truncagem
+/// `v >> 8` perdia até um nível e dava resultados diferentes dos decoders de outras ferramentas.
+pub(crate) fn u16_to_u8(v: u16) -> u8 {
+    ((u32::from(v) + 128) / 257) as u8
+}
+
+/// Tamanho em bytes de um buffer decodificado `width * height * channels`, recusando imagens
+/// acima do teto de pixels do processo e contas que estourem `usize`. Os decoders chamam isto
+/// antes de alocar, com as dimensões declaradas pelo arquivo.
+pub(crate) fn checked_len(width: u32, height: u32, channels: u32) -> Result<usize, CodecError> {
+    let pixels = u64::from(width) * u64::from(height);
+    let max = crate::limits::max_pixels();
+    if pixels > max as u64 {
+        return Err(CodecError::Decode(format!(
+            "imagem de {width}x{height} excede o limite de {max} pixels"
+        )));
+    }
+    usize::try_from(pixels * u64::from(channels))
+        .map_err(|_| CodecError::Decode(format!("imagem de {width}x{height} grande demais")))
+}
 
 /// Codifica uma imagem PAM no formato desejado
 pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecError> {
@@ -300,6 +349,28 @@ mod tests {
                 "{} lossless divergiu",
                 format.as_str()
             );
+        }
+    }
+}
+
+#[cfg(test)]
+mod sample_tests {
+    use super::u16_to_u8;
+
+    /// A conta é round(v / 257): conferida contra `(v * 255 + 32767) / 65535` para todo u16,
+    /// a mesma verificação independente do teste do engine Go.
+    #[test]
+    fn u16_to_u8_rounds_every_sample() {
+        for v in 0..=u16::MAX {
+            let want = ((u32::from(v) * 255 + 32767) / 65535) as u8;
+            assert_eq!(u16_to_u8(v), want, "v = {v:#06x}");
+        }
+    }
+
+    #[test]
+    fn u16_to_u8_inverts_the_8_bit_expansion() {
+        for v in 0..=u8::MAX {
+            assert_eq!(u16_to_u8(u16::from(v) * 257), v);
         }
     }
 }

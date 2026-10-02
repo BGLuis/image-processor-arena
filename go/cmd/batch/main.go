@@ -27,13 +27,18 @@ func main() {
 	)
 	flag.Parse()
 
+	maxPixels, err := pam.MaxPixelsFromEnv(os.Getenv)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
 	if *opFlag == "" {
 		fmt.Fprintln(os.Stderr, "Error: --op flag is required (analyze, encode, decode, transcode)")
 		os.Exit(1)
 	}
 
 	var inputData []byte
-	var err error
 
 	if *inputFlag == "" || *inputFlag == "-" {
 		inputData, err = io.ReadAll(os.Stdin)
@@ -52,7 +57,7 @@ func main() {
 
 	switch *opFlag {
 	case "analyze":
-		pamImg, err := pam.Decode(bytes.NewReader(inputData))
+		pamImg, err := pam.DecodeLimit(bytes.NewReader(inputData), maxPixels)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error decoding PAM input: %v\n", err)
 			os.Exit(1)
@@ -87,7 +92,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		pamImg, err := pam.Decode(bytes.NewReader(inputData))
+		pamImg, err := pam.DecodeLimit(bytes.NewReader(inputData), maxPixels)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error decoding PAM input: %v\n", err)
 			os.Exit(1)

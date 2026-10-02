@@ -5,7 +5,9 @@
 # -----------------------------------------------------------------------------
 # Base: Ambiente com toolchain Rust e dependências essenciais
 # -----------------------------------------------------------------------------
-FROM rust:bookworm AS base
+# A versão vem de rust-toolchain.toml (scripts/check-toolchain-sync.sh confere os dois): uma tag flutuante
+# (`rust:bookworm`) deixava a imagem num compilador diferente do usado no desenvolvimento e no CI.
+FROM rust:1.97.0-bookworm AS base
 
 WORKDIR /app
 
@@ -22,10 +24,12 @@ FROM base AS test
 
 WORKDIR /arena
 
-# Copia manifests, código, fixtures e scripts
+# Copia manifests, código, testes de integração, fixtures e scripts
+COPY rust-toolchain.toml ./
 COPY rust/Cargo.toml rust/Cargo.lock* ./rust/
 COPY rust/deny.toml ./rust/
 COPY rust/src/ ./rust/src/
+COPY rust/tests/ ./rust/tests/
 COPY rust/vendor/ ./rust/vendor/
 COPY harness/ ./harness/
 COPY docs/ ./docs/
@@ -53,6 +57,7 @@ FROM base AS builder
 
 WORKDIR /app
 
+COPY rust-toolchain.toml ./
 COPY rust/Cargo.toml rust/Cargo.lock* ./rust/
 COPY rust/deny.toml ./rust/
 COPY rust/src/ ./rust/src/

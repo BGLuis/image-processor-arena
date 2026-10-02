@@ -1,0 +1,5 @@
+# Decoders de referência do harness (validação das saídas e PSNR). Só o harness usa estes pacotes;
+# os engines Go e Rust continuam 100% puros.
+# Pillow 11.3+ traz AVIF (libavif) nos wheels; pillow-jxl-plugin traz libjxl.
+pillow>=11.3
+pillow-jxl-plugin>=1.3

@@ -156,7 +156,7 @@ O algoritmo pHash gera uma impressão digital perceptual de 64 bits (16 caracter
 
 2. **Transformada Discreta de Cosseno 2D (DCT-II):**
    - Para $u, v \in [0, 7]$ (apenas a submatriz $8 \times 8$ de baixas frequências é calculada):
-     $$D(u, v) = \sum_{y=0}^{31} \sum_{x=0}^{31} I(u, v) \cos\left(\frac{\pi (2x + 1) u}{64}\right) \cos\left(\frac{\pi (2y + 1) v}{64}\right)$$
+     $$D(u, v) = \sum_{y=0}^{31} \sum_{x=0}^{31} I(x, y) \cos\left(\frac{\pi (2x + 1) u}{64}\right) \cos\left(\frac{\pi (2y + 1) v}{64}\right)$$
    - *Estabilidade Numérica:* Resíduos de ponto flutuante com magnitude $|D(u, v)| < 10^{-6}$ decorrentes de somas trigonométricas finitas devem ser truncados para $0.0$.
 
 3. **Exclusão do Componente DC $(0, 0)$:**

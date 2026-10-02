@@ -4,11 +4,12 @@
 // Lossless encode: image-webp
 // Decode: image-webp
 
-use super::{params as contract, CodecError, CodecMode, EncodeParams};
+use super::{check_side, checked_len, params as contract, CodecError, CodecMode, EncodeParams};
 use crate::pam::PamImage;
 use std::io::Cursor;
 
 pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecError> {
+    check_side(pam, "WebP", super::WEBP_MAX_SIDE)?;
     match params.mode {
         CodecMode::Lossy => {
             let quality = params.quality.clamp(1, 100) as f32;
@@ -50,10 +51,17 @@ pub fn decode(data: &[u8]) -> Result<PamImage, CodecError> {
     let mut decoder = image_webp::WebPDecoder::new(Cursor::new(data))
         .map_err(|e| CodecError::Decode(e.to_string()))?;
 
+    // Cada biblioteca compõe os quadros de um jeito (o blend do image-webp erra por um nível),
+    // então não existe "primeiro quadro" portável: os dois engines recusam WebP animado.
+    if decoder.is_animated() {
+        return Err(CodecError::Decode(
+            "WebP animado não é suportado".to_string(),
+        ));
+    }
+
     let (width, height) = decoder.dimensions();
     let has_alpha = decoder.has_alpha();
-    let depth = if has_alpha { 4 } else { 3 };
-    let total_bytes = (width as usize) * (height as usize) * (depth as usize);
+    let total_bytes = checked_len(width, height, if has_alpha { 4 } else { 3 })?;
 
     let mut buf = vec![0u8; total_bytes];
     decoder

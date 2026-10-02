@@ -565,15 +565,23 @@ func ComputePHash(yPixels []uint8, width, height int) string {
 		}
 	}
 
-	// 2. 2D DCT-II for 8x8 low-frequency submatrix
+	// 2. 2D DCT-II for 8x8 low-frequency submatrix. The 8x32 cosine table is computed once
+	// (same expression as before) instead of ~65 thousand math.Cos calls per image.
+	var cosTab [8][32]float64
+	for k := 0; k < 8; k++ {
+		for n := 0; n < 32; n++ {
+			cosTab[k][n] = math.Cos(math.Pi * float64(2*n+1) * float64(k) / 64.0)
+		}
+	}
+
 	var D [8][8]float64
 	for v := 0; v < 8; v++ {
 		for u := 0; u < 8; u++ {
 			s := 0.0
 			for y := 0; y < 32; y++ {
-				cosY := math.Cos(math.Pi * float64(2*y+1) * float64(v) / 64.0)
+				cosY := cosTab[v][y]
 				for x := 0; x < 32; x++ {
-					cosX := math.Cos(math.Pi * float64(2*x+1) * float64(u) / 64.0)
+					cosX := cosTab[u][x]
 					s += I[y][x] * cosX * cosY
 				}
 			}
@@ -649,19 +657,28 @@ func encodeBase83(value int, length int) string {
 	return string(res)
 }
 
+// cosineTable returns cos(pi*k*n/length) for k in [0, comps) and n in [0, length). The Rust engine
+// builds the same tables, so neither engine calls cos once per pixel.
+func cosineTable(comps, length int) [][]float64 {
+	table := make([][]float64, comps)
+	for k := range table {
+		table[k] = make([]float64, length)
+		for n := range table[k] {
+			table[k][n] = math.Cos(math.Pi * float64(k*n) / float64(length))
+		}
+	}
+	return table
+}
+
 // ComputeBlurHash computes the official Wolt BlurHash with xComp=4, yComp=3.
 func ComputeBlurHash(rList, gList, bList []uint8, width, height, xComp, yComp int) string {
-	numPixels := width * height
-
-	// Pre-convert RGB to linear
-	linR := make([]float64, numPixels)
-	linG := make([]float64, numPixels)
-	linB := make([]float64, numPixels)
-	for i := 0; i < numPixels; i++ {
-		linR[i] = srgbToLinear(rList[i])
-		linG[i] = srgbToLinear(gList[i])
-		linB[i] = srgbToLinear(bList[i])
+	// sRGB -> linear only has 256 inputs, so Pow runs 256 times instead of once per pixel and channel.
+	var linear [256]float64
+	for v := range linear {
+		linear[v] = srgbToLinear(uint8(v))
 	}
+	cosX := cosineTable(xComp, width)
+	cosY := cosineTable(yComp, height)
 
 	factors := make([][][3]float64, yComp)
 	for y := 0; y < yComp; y++ {
@@ -673,14 +690,14 @@ func ComputeBlurHash(rList, gList, bList []uint8, width, height, xComp, yComp in
 			}
 			var rAcc, gAcc, bAcc float64
 			for py := 0; py < height; py++ {
-				cosY := math.Cos(math.Pi * float64(y*py) / float64(height))
+				cy := cosY[y][py]
 				rowOff := py * width
 				for px := 0; px < width; px++ {
-					basis := math.Cos(math.Pi*float64(x*px)/float64(width)) * cosY
+					basis := cosX[x][px] * cy
 					idx := rowOff + px
-					rAcc += basis * linR[idx]
-					gAcc += basis * linG[idx]
-					bAcc += basis * linB[idx]
+					rAcc += basis * linear[rList[idx]]
+					gAcc += basis * linear[gList[idx]]
+					bAcc += basis * linear[bList[idx]]
 				}
 			}
 			scale := norm / float64(width*height)

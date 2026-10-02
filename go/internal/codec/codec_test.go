@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"math"
 	"os"
 	"testing"
 
@@ -24,6 +25,8 @@ func getTestPAM(t *testing.T) *pam.Image {
 	return img
 }
 
+// testRoundtrip encodes the gradient fixture, decodes it again and compares pixels: exactly for
+// lossless modes, by PSNR for lossy ones. Comparing only the dimensions let broken encoders pass.
 func testRoundtrip(t *testing.T, format string, mode string, q int) {
 	img := getTestPAM(t)
 
@@ -50,6 +53,16 @@ func testRoundtrip(t *testing.T, format string, mode string, q int) {
 	if decPAM.Width != img.Width || decPAM.Height != img.Height {
 		t.Fatalf("Dimension mismatch for %s: got %dx%d, want %dx%d",
 			format, decPAM.Width, decPAM.Height, img.Width, img.Height)
+	}
+
+	if mode == "lossless" || format == "png" {
+		if diff := countChannelDiffs(t, img, decPAM); diff != 0 {
+			t.Fatalf("%s %s: %d channel bytes differ after the round-trip", format, mode, diff)
+		}
+		return
+	}
+	if psnr := rgbPSNR(img, decPAM); psnr < 30 {
+		t.Fatalf("%s %s q=%d: PSNR %.2f dB is below 30 dB", format, mode, q, psnr)
 	}
 }
 
@@ -105,6 +118,27 @@ func TestLosslessRoundtripIsPixelExact(t *testing.T) {
 			})
 		}
 	}
+}
+
+// rgbPSNR is the RGB peak signal-to-noise ratio in dB, over the pixels that are fully opaque in
+// want (an encoder is free to change the colour under transparent pixels). Identical images give +Inf.
+func rgbPSNR(want, got *pam.Image) float64 {
+	var sum float64
+	var n int
+	for i := 0; i < want.Width*want.Height; i++ {
+		if want.Depth == 4 && want.Pix[i*4+3] != 255 {
+			continue
+		}
+		for c := 0; c < 3; c++ {
+			d := float64(want.Pix[i*want.Depth+c]) - float64(got.Pix[i*got.Depth+c])
+			sum += d * d
+			n++
+		}
+	}
+	if sum == 0 || n == 0 {
+		return math.Inf(1)
+	}
+	return 10 * math.Log10(255*255/(sum/float64(n)))
 }
 
 func loadCorpusPAM(t *testing.T, name string) *pam.Image {

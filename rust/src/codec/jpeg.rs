@@ -3,11 +3,23 @@
 // Encode: jpeg-encoder
 // Decode: zune-jpeg
 
-use super::{CodecError, EncodeParams};
+use super::{check_side, CodecError, EncodeParams, JPEG_MAX_SIDE};
 use crate::pam::PamImage;
 use std::io::Cursor;
 
 pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecError> {
+    check_side(pam, "JPEG", JPEG_MAX_SIDE)?;
+    // check_side garante que cabem em u16; a conversão checada impede um truncamento silencioso.
+    let (width, height) = match (u16::try_from(pam.width), u16::try_from(pam.height)) {
+        (Ok(w), Ok(h)) => (w, h),
+        _ => {
+            return Err(CodecError::InvalidInput(format!(
+                "JPEG suporta no máximo {JPEG_MAX_SIDE} pixels por lado, recebido {}x{}",
+                pam.width, pam.height
+            )))
+        }
+    };
+
     let mut out = Vec::new();
     let quality = params.quality.clamp(1, 100);
     let mut encoder = jpeg_encoder::Encoder::new(&mut out, quality);
@@ -18,21 +30,11 @@ pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecErr
     if pam.depth == 4 {
         let rgb_data = pam.to_rgb_bytes();
         encoder
-            .encode(
-                &rgb_data,
-                pam.width as u16,
-                pam.height as u16,
-                jpeg_encoder::ColorType::Rgb,
-            )
+            .encode(&rgb_data, width, height, jpeg_encoder::ColorType::Rgb)
             .map_err(|e| CodecError::Encode(e.to_string()))?;
     } else {
         encoder
-            .encode(
-                &pam.data,
-                pam.width as u16,
-                pam.height as u16,
-                jpeg_encoder::ColorType::Rgb,
-            )
+            .encode(&pam.data, width, height, jpeg_encoder::ColorType::Rgb)
             .map_err(|e| CodecError::Encode(e.to_string()))?;
     }
 

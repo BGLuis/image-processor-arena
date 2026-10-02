@@ -2,61 +2,85 @@
 
 **Modo de Execução**: `HTTP`  
 **Métrica primária**: codec (servidor, X-Arena-*-Ns)  
-**Iterações por teste**: 7 medidas (+ 3 warmup); tempos como mediana [p25-p75]  
-**Data da Coleta**: 2026-09-29 01:35:46
+**Iterações por teste**: 10 medidas (+ 3 warmup); tempos como mediana [p25-p75]  
+**Máquina**: Intel(R) Xeon(R) Processor @ 2.10GHz (4 CPUs lógicas), Linux-6.18.44-fc-v51-x86_64-with-glibc2.39  
+**Data da Coleta**: 2026-10-02 09:57:36
 
 ## Notas de Medição
 
-- Métrica primária: tempo de codec reportado pelo servidor nos headers X-Arena-*-Ns (transcode = decode + encode). A coluna de parede do cliente inclui rede, PAM e serialização.
-- op=analyze: os servidores cronometram trechos diferentes (Rust inclui parse do PAM e serialização JSON; Go mede só a análise), então o tempo de analyze não é comparável entre Go e Rust (issue #7).
+- Métrica primária: tempo de codec reportado pelo servidor nos headers X-Arena-*-Ns (transcode = decode + encode; analyze = só a análise nos dois servidores). A coluna de parede do cliente inclui rede, PAM e serialização. Requisições sequenciais em conexão persistente.
+- Regra de empate (a mesma no console, no Markdown e no JSON): há empate estatístico quando os intervalos p25-p75 das duas medianas se sobrepõem; só vale como vitória uma diferença fora deles.
+- Razão geométrica = média geométrica de (tempo do Go ÷ tempo do Rust) sobre as tarefas; acima de 1 o Rust é mais rápido, abaixo de 1 o Go. Ela pondera a magnitude, que a contagem de vitórias ignora.
+- Cada saída é decodificada por um decoder de referência (Pillow/libjxl/libavif) antes de o tempo ser aceito; lossless exige igualdade exata e lossy um PSNR mínimo por classe de imagem. PSNR RGB sobre os pixels opacos do original. O tempo só é comparável junto do tamanho e da qualidade.
 
 ## 🥇 Classificação Geral
 
+**Razão geométrica Go/Rust (tempo): 2.67x** (Rust 2.67x mais rápido).
+
 Vitórias em tempo de codec (empate estatístico quando os intervalos p25-p75 se sobrepõem):
 
-- Go Puro: 11/34 (32.4%)
-- Rust Puro: 23/34 (67.6%)
-- Empates estatísticos: 0/34 (0.0%)
+- Go Puro: 7/34 (20.6%)
+- Rust Puro: 26/34 (76.5%)
+- Empates estatísticos: 1/34 (2.9%)
+
+## 🧮 Por Operação
+
+| Operação | Tarefas | Go | Rust | Empates | Razão geométrica Go/Rust | Leitura |
+|---|---|---|---|---|---|---|
+| analyze | 4 | 0 | 3 | 1 | 1.11x | Rust 1.11x mais rápido |
+| encode | 21 | 3 | 18 | 0 | 4.14x | Rust 4.14x mais rápido |
+| decode | 5 | 2 | 3 | 0 | 1.99x | Rust 1.99x mais rápido |
+| transcode | 4 | 2 | 2 | 0 | 0.91x | Go 1.10x mais rápido |
+| total | 34 | 7 | 26 | 1 | 2.67x | Rust 2.67x mais rápido |
 
 ## 📊 Tabela Completa de Resultados
 
-Parâmetros (arena.toml `[params]`): q=75, effort=4, mode padrão `lossy`. Go/Rust acima de 1 significa saída maior no Go; o tempo só é comparável junto do tamanho.
+Parâmetros (arena.toml `[params]`): q=75, effort=4, mode padrão `lossy`. Go/Rust acima de 1 significa saída maior no Go; o tempo só é comparável junto do tamanho e da qualidade (PSNR RGB contra o original, decodificado pela referência; `exato` = idêntico bit a bit).
 
-| Tarefa / Operação | Go codec (ms) | Go MP/s | Rust codec (ms) | Rust MP/s | Go parede cliente (ms) | Rust parede cliente (ms) | Go (bytes) | Rust (bytes) | Go/Rust | 🥇 Vencedor (codec) | Vantagem |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| Analyze [photo.pam] † | 73.64 [73.37-79.49] | 3.56 | 159.08 [158.09-160.85] | 1.65 | 75.93 | 160.84 | 0 | 0 | - | Go | **2.16x** |
-| Analyze [screenshot.pam] † | 67.37 [65.64-69.64] | 3.89 | 151.16 [148.11-154.31] | 1.73 | 68.80 | 153.30 | 0 | 0 | - | Go | **2.24x** |
-| Analyze [illustration.pam] † | 62.16 [61.83-63.76] | 4.22 | 145.54 [144.95-145.80] | 1.80 | 64.90 | 146.89 | 0 | 0 | - | Go | **2.34x** |
-| Analyze [alpha.pam] † | 52.84 [52.57-54.79] | 4.96 | 96.10 [95.66-96.26] | 2.73 | 55.04 | 97.96 | 0 | 0 | - | Go | **1.82x** |
-| Encode PNG [photo.pam] | 12.83 [12.46-13.32] | 20.44 | 49.17 [49.04-49.65] | 5.33 | 14.34 | 50.97 | 171296 | 167611 | 1.02x | Go | **3.83x** |
-| Encode PNG [screenshot.pam] | 4.07 [3.97-4.88] | 64.36 | 1.50 [1.47-2.25] | 175.11 | 5.62 | 2.92 | 7687 | 3804 | 2.02x | Rust | **2.72x** |
-| Encode PNG [illustration.pam] | 5.68 [5.52-5.89] | 46.12 | 1.89 [1.87-2.01] | 138.90 | 7.30 | 3.43 | 8910 | 5517 | 1.62x | Rust | **3.01x** |
-| Encode PNG [alpha.pam] | 5.58 [5.28-6.54] | 47.01 | 3.20 [3.12-3.47] | 81.94 | 7.45 | 4.92 | 14825 | 10690 | 1.39x | Rust | **1.74x** |
-| Encode JPEG [photo.pam] | 4.25 [4.23-4.49] | 61.75 | 1.49 [1.48-1.51] | 176.09 | 5.61 | 3.08 | 18501 | 18575 | 1.00x | Rust | **2.85x** |
-| Encode JPEG [screenshot.pam] | 3.87 [3.74-4.19] | 67.82 | 1.62 [1.61-1.66] | 161.78 | 5.53 | 3.10 | 55900 | 56551 | 0.99x | Rust | **2.39x** |
-| Encode JPEG [illustration.pam] | 3.08 [2.97-3.99] | 85.08 | 1.46 [1.42-1.58] | 179.19 | 4.86 | 3.01 | 16992 | 17470 | 0.97x | Rust | **2.11x** |
-| Encode WebP Lossy [photo.pam] | 30.86 [30.83-31.59] | 8.49 | 14.10 [14.01-14.35] | 18.60 | 32.83 | 15.66 | 11456 | 9438 | 1.21x | Rust | **2.19x** |
-| Encode WebP Lossless [photo.pam] | 66.68 [65.96-66.94] | 3.93 | 2.06 [2.02-2.12] | 127.15 | 68.14 | 3.55 | 146178 | 172622 | 0.85x | Rust | **32.34x** |
-| Encode WebP Lossy [screenshot.pam] | 34.67 [34.55-34.87] | 7.56 | 14.44 [14.33-14.62] | 18.16 | 36.24 | 15.96 | 23106 | 15082 | 1.53x | Rust | **2.40x** |
-| Encode WebP Lossless [screenshot.pam] | 55.11 [54.88-55.54] | 4.76 | 0.62 [0.61-0.63] | 421.66 | 56.71 | 1.93 | 1342 | 2866 | 0.47x | Rust | **88.65x** |
-| Encode WebP Lossy [illustration.pam] | 29.84 [29.19-30.76] | 8.78 | 10.99 [10.88-11.08] | 23.86 | 31.40 | 12.94 | 11864 | 9386 | 1.26x | Rust | **2.72x** |
-| Encode WebP Lossless [illustration.pam] | 58.26 [56.93-58.45] | 4.50 | 0.72 [0.71-0.75] | 363.81 | 59.79 | 2.32 | 2602 | 12226 | 0.21x | Rust | **80.86x** |
-| Encode WebP Lossy [alpha.pam] | 40.19 [39.68-40.55] | 6.52 | 10.75 [10.67-10.87] | 24.39 | 42.08 | 12.60 | 18670 | 9276 | 2.01x | Rust | **3.74x** |
-| Encode WebP Lossless [alpha.pam] | 53.84 [53.68-54.43] | 4.87 | 0.72 [0.69-0.73] | 366.27 | 55.29 | 2.23 | 7940 | 9910 | 0.80x | Rust | **75.22x** |
-| Encode AVIF Lossy [photo.pam] | 80.33 [79.09-80.75] | 3.26 | 136.41 [130.35-137.89] | 1.92 | 81.79 | 137.86 | 10788 | 15174 | 0.71x | Go | **1.70x** |
-| Encode AVIF Lossy [screenshot.pam] | 106.20 [105.70-107.20] | 2.47 | 142.20 [135.31-143.64] | 1.84 | 108.31 | 143.60 | 38247 | 29138 | 1.31x | Go | **1.34x** |
-| Encode JXL Lossy [photo.pam] | 39.90 [39.37-40.22] | 6.57 | 10.03 [9.84-10.55] | 26.14 | 41.46 | 11.66 | 11961 | 10765 | 1.11x | Rust | **3.98x** |
-| Encode JXL Lossless [photo.pam] | 155.27 [151.64-156.35] | 1.69 | 20.63 [20.51-21.85] | 12.71 | 156.86 | 22.23 | 139516 | 171924 | 0.81x | Rust | **7.53x** |
-| Encode JXL Lossy [screenshot.pam] | 59.65 [57.38-61.44] | 4.39 | 15.97 [15.65-16.97] | 16.42 | 61.16 | 17.43 | 30793 | 33987 | 0.91x | Rust | **3.74x** |
-| Encode JXL Lossless [screenshot.pam] | 118.03 [117.34-119.88] | 2.22 | 14.16 [14.00-14.38] | 18.51 | 119.66 | 15.55 | 4522 | 6998 | 0.65x | Rust | **8.34x** |
-| Decode PNG [photo.png] | 12.03 [11.99-12.20] | 21.79 | 1.52 [1.48-1.59] | 172.78 | 13.70 | 2.87 | 786495 | 786495 | 1.00x | Rust | **7.93x** |
-| Decode JPEG [photo.jpg] | 11.16 [10.72-12.69] | 23.48 | 0.64 [0.61-0.66] | 411.87 | 12.65 | 1.64 | 786495 | 786495 | 1.00x | Rust | **17.54x** |
-| Decode WebP [photo.webp] | 11.95 [11.87-12.23] | 21.94 | 2.15 [2.13-2.48] | 121.70 | 13.23 | 3.77 | 786495 | 786495 | 1.00x | Rust | **5.55x** |
-| Decode AVIF [photo.avif] | 3.37 [3.23-3.75] | 77.81 | 9.32 [8.91-10.48] | 28.12 | 4.70 | 10.77 | 786495 | 786495 | 1.00x | Go | **2.77x** |
-| Decode JXL [photo.jxl] | 10.18 [10.08-11.29] | 25.75 | 13.07 [12.84-13.57] | 20.06 | 12.05 | 14.78 | 786495 | 786495 | 1.00x | Go | **1.28x** |
-| Transcode PNG -> WebP | 45.20 [43.35-46.93] | 5.80 | 15.71 [15.55-15.97] | 16.68 | 46.85 | 16.99 | 11456 | 9438 | 1.21x | Rust | **2.88x** |
-| Transcode PNG -> AVIF | 92.08 [91.80-93.33] | 2.85 | 134.97 [134.32-139.35] | 1.94 | 93.32 | 136.19 | 10788 | 15174 | 0.71x | Go | **1.47x** |
-| Transcode JPEG -> WebP | 42.73 [42.16-42.85] | 6.14 | 15.67 [15.17-15.74] | 16.72 | 43.71 | 16.68 | 12624 | 9842 | 1.28x | Rust | **2.73x** |
-| Transcode JXL -> PNG | 22.93 [21.82-23.67] | 11.43 | 62.70 [62.21-64.31] | 4.18 | 23.88 | 63.93 | 178784 | 175387 | 1.02x | Go | **2.73x** |
+| Tarefa / Operação | Go codec (ms) | Go MP/s | Rust codec (ms) | Rust MP/s | Go parede cliente (ms) | Rust parede cliente (ms) | Go (bytes) | Rust (bytes) | Go/Rust | PSNR Go | PSNR Rust | 🥇 Vencedor (codec) | Vantagem |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Analyze [photo.pam] | 18.94 [18.34-19.91] | 13.84 | 17.44 [16.76-18.09] | 15.03 | 21.25 | 18.51 | 0 | 0 | - | - | - | Rust | **1.09x** |
+| Analyze [screenshot.pam] | 18.19 [17.98-18.46] | 14.41 | 16.62 [16.41-17.15] | 15.78 | 19.24 | 17.63 | 0 | 0 | - | - | - | Rust | **1.09x** |
+| Analyze [illustration.pam] | 18.91 [18.01-20.30] | 13.86 | 17.80 [15.99-18.28] | 14.73 | 19.95 | 18.83 | 0 | 0 | - | - | - | Empate | **1.06x** |
+| Analyze [alpha.pam] | 19.50 [18.37-20.57] | 13.45 | 16.08 [15.98-16.45] | 16.30 | 21.59 | 17.08 | 0 | 0 | - | - | - | Rust | **1.21x** |
+| Encode PNG [photo.pam] | 16.73 [16.41-17.20] | 15.67 | 68.02 [66.66-68.65] | 3.85 | 18.05 | 69.10 | 171296 | 167611 | 1.02x | exato | exato | Go | **4.07x** |
+| Encode PNG [screenshot.pam] | 5.23 [5.01-5.43] | 50.13 | 1.89 [1.88-1.92] | 138.53 | 7.82 | 2.63 | 7687 | 3804 | 2.02x | exato | exato | Rust | **2.76x** |
+| Encode PNG [illustration.pam] | 7.36 [7.22-7.61] | 35.61 | 2.32 [2.31-2.34] | 112.86 | 8.57 | 2.99 | 8910 | 5517 | 1.62x | exato | exato | Rust | **3.17x** |
+| Encode PNG [alpha.pam] | 7.25 [6.93-7.57] | 36.13 | 4.08 [4.03-4.18] | 64.24 | 8.50 | 4.95 | 14825 | 10690 | 1.39x | exato | exato | Rust | **1.78x** |
+| Encode JPEG [photo.pam] | 6.23 [6.09-6.34] | 42.08 | 2.13 [1.91-2.18] | 123.25 | 6.92 | 2.93 | 18501 | 18575 | 1.00x | 38.45 dB | 38.18 dB | Rust | **2.93x** |
+| Encode JPEG [screenshot.pam] | 5.19 [5.13-5.54] | 50.49 | 2.52 [2.47-2.59] | 103.91 | 5.91 | 3.41 | 55900 | 56551 | 0.99x | 30.69 dB | 29.82 dB | Rust | **2.06x** |
+| Encode JPEG [illustration.pam] | 4.28 [4.21-4.82] | 61.26 | 1.83 [1.82-1.84] | 142.87 | 5.56 | 2.59 | 16992 | 17470 | 0.97x | 31.19 dB | 31.01 dB | Rust | **2.33x** |
+| Encode WebP Lossy [photo.pam] | 45.92 [45.29-47.26] | 5.71 | 18.82 [18.56-19.47] | 13.93 | 47.45 | 19.94 | 11456 | 9438 | 1.21x | 37.96 dB | 38.89 dB | Rust | **2.44x** |
+| Encode WebP Lossless [photo.pam] | 90.45 [89.15-96.88] | 2.90 | 2.85 [2.80-2.92] | 91.83 | 91.30 | 3.66 | 146178 | 172622 | 0.85x | exato | exato | Rust | **31.68x** |
+| Encode WebP Lossy [screenshot.pam] | 50.79 [50.36-60.90] | 5.16 | 19.79 [19.63-20.34] | 13.25 | 54.05 | 20.67 | 23106 | 15082 | 1.53x | 32.17 dB | 32.45 dB | Rust | **2.57x** |
+| Encode WebP Lossless [screenshot.pam] | 93.52 [83.38-96.27] | 2.80 | 1.04 [1.03-1.06] | 253.07 | 94.76 | 1.96 | 1342 | 2866 | 0.47x | exato | exato | Rust | **90.28x** |
+| Encode WebP Lossy [illustration.pam] | 48.44 [46.87-50.27] | 5.41 | 16.84 [16.66-16.96] | 15.56 | 50.01 | 17.72 | 11864 | 9386 | 1.26x | 31.75 dB | 31.68 dB | Rust | **2.88x** |
+| Encode WebP Lossless [illustration.pam] | 92.20 [88.19-94.78] | 2.84 | 1.09 [1.06-1.11] | 239.91 | 93.35 | 1.78 | 2602 | 12226 | 0.21x | exato | exato | Rust | **84.38x** |
+| Encode WebP Lossy [alpha.pam] | 56.22 [53.81-57.30] | 4.66 | 14.24 [14.00-14.66] | 18.41 | 57.39 | 15.56 | 18670 | 9276 | 2.01x | 30.68 dB | 30.86 dB | Rust | **3.95x** |
+| Encode WebP Lossless [alpha.pam] | 74.17 [71.54-75.05] | 3.53 | 0.93 [0.90-0.97] | 282.21 | 75.19 | 1.80 | 7940 | 9910 | 0.80x | exato | exato | Rust | **79.84x** |
+| Encode AVIF Lossy [photo.pam] | 68.51 [66.39-72.14] | 3.83 | 245.53 [241.27-247.82] | 1.07 | 70.41 | 246.54 | 10788 | 14379 | 0.75x | 41.48 dB | 46.73 dB | Go | **3.58x** |
+| Encode AVIF Lossy [screenshot.pam] | 104.95 [98.93-113.08] | 2.50 | 254.03 [252.96-261.78] | 1.03 | 108.04 | 255.01 | 38247 | 27173 | 1.41x | 33.06 dB | 45.28 dB | Go | **2.42x** |
+| Encode JXL Lossy [photo.pam] | 48.61 [47.78-49.62] | 5.39 | 12.63 [12.52-13.16] | 20.75 | 49.62 | 13.35 | 11961 | 10765 | 1.11x | 38.25 dB | 39.41 dB | Rust | **3.85x** |
+| Encode JXL Lossless [photo.pam] | 217.93 [213.14-220.98] | 1.20 | 28.20 [27.47-29.18] | 9.30 | 218.92 | 29.03 | 139516 | 171924 | 0.81x | exato | exato | Rust | **7.73x** |
+| Encode JXL Lossy [screenshot.pam] | 76.40 [74.47-84.54] | 3.43 | 19.85 [19.72-20.13] | 13.21 | 77.82 | 20.95 | 30793 | 33987 | 0.91x | 31.83 dB | 31.85 dB | Rust | **3.85x** |
+| Encode JXL Lossless [screenshot.pam] | 179.40 [172.74-186.09] | 1.46 | 18.90 [18.40-19.27] | 13.87 | 180.55 | 19.75 | 4522 | 6998 | 0.65x | exato | exato | Rust | **9.49x** |
+| Decode PNG [photo.png] | 8.78 [8.09-10.53] | 29.87 | 2.30 [2.21-2.36] | 113.97 | 9.57 | 2.92 | 786495 | 786495 | 1.00x | exato | exato | Rust | **3.82x** |
+| Decode JPEG [photo.jpg] | 6.13 [4.66-6.81] | 42.76 | 1.06 [0.98-1.08] | 247.51 | 7.56 | 1.59 | 786495 | 786495 | 1.00x | 46.87 dB | 55.53 dB | Rust | **5.79x** |
+| Decode WEBP [photo.webp] | 18.14 [17.32-18.60] | 14.45 | 3.15 [3.05-3.46] | 83.29 | 18.77 | 3.70 | 786495 | 786495 | 1.00x | exato | exato | Rust | **5.76x** |
+| Decode AVIF [photo.avif] | 5.54 [4.74-6.26] | 47.31 | 13.57 [12.24-14.54] | 19.32 | 6.23 | 14.20 | 786495 | 786495 | 1.00x | 53.91 dB | 53.91 dB | Go | **2.45x** |
+| Decode JXL [photo.jxl] | 12.07 [11.24-12.75] | 21.72 | 19.85 [18.81-20.51] | 13.20 | 13.00 | 20.58 | 786495 | 786495 | 1.00x | 54.24 dB | 54.23 dB | Go | **1.65x** |
+| Transcode PNG -> WebP | 49.60 [49.03-51.16] | 5.28 | 20.99 [20.85-21.17] | 12.49 | 50.49 | 21.59 | 11456 | 9438 | 1.21x | 37.96 dB | 38.89 dB | Rust | **2.36x** |
+| Transcode PNG -> AVIF | 74.53 [72.72-76.19] | 3.52 | 239.42 [233.82-246.46] | 1.09 | 75.44 | 240.15 | 10788 | 14379 | 0.75x | 41.48 dB | 46.73 dB | Go | **3.21x** |
+| Transcode JPEG -> WebP | 52.73 [51.42-53.18] | 4.97 | 21.71 [20.75-22.50] | 12.07 | 53.37 | 22.20 | 12624 | 9842 | 1.28x | 38.96 dB | 39.70 dB | Rust | **2.43x** |
+| Transcode JXL -> PNG | 38.21 [36.65-39.38] | 6.86 | 100.02 [96.05-103.12] | 2.62 | 38.87 | 100.76 | 178784 | 175387 | 1.02x | 54.24 dB | 54.23 dB | Go | **2.62x** |
 
-† op=analyze: os servidores cronometram trechos diferentes (Rust inclui parse do PAM e serialização JSON; Go mede só a análise), então o tempo de analyze não é comparável entre Go e Rust (issue #7).
+## ⚖️ Comparação a Qualidade Equivalente (AVIF e JXL lossy)
+
+O mesmo `q` não dá a mesma qualidade nos dois engines (o gav1d grava AVIF 4:2:0 e o ravif 4:4:4; os mapeamentos de `q` são nativos de cada biblioteca). Alvo = PSNR do Go no `q` padrão; o Rust usa o menor `q` que alcança esse PSNR. Tamanho e tempo abaixo são medidos nesses `q`.
+
+| Tarefa | Alvo (dB) | Go q | Rust q | PSNR Go | PSNR Rust | Go (bytes) | Rust (bytes) | Go/Rust | Go tempo (ms) | Rust tempo (ms) | 🥇 Vencedor | Vantagem |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Encode AVIF Lossy [photo.pam] | 41.48 | 75 | 46 | 41.482 | 41.734 | 10788 | 7371 | 1.46x | 66.79 [65.23-68.55] | 242.29 [226.96-261.94] | Go | **3.63x** |
+| Encode AVIF Lossy [screenshot.pam] | 33.06 | 75 | 36 | 33.058 | 33.191 | 38247 | 12050 | 3.17x | 110.65 [106.39-115.01] | 118.81 [113.21-126.21] | Empate | **1.07x** |
+| Encode JXL Lossy [photo.pam] | 38.25 | 75 | 66 | 38.254 | 38.293 | 11961 | 9328 | 1.28x | 50.64 [48.36-51.97] | 11.71 [11.65-11.91] | Rust | **4.32x** |
+| Encode JXL Lossy [screenshot.pam] | 31.83 | 75 | 71 | 31.833 | 31.906 | 30793 | 32453 | 0.95x | 82.89 [81.32-87.73] | 21.11 [20.35-21.67] | Rust | **3.93x** |

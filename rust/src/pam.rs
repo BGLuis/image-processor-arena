@@ -2,6 +2,7 @@
 // Leitor e escritor Netpbm PAM P7 de alta performance.
 // Suporta DEPTH=3 (TUPLTYPE RGB) e DEPTH=4 (TUPLTYPE RGB_ALPHA) com MAXVAL 255.
 
+use crate::limits;
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -12,8 +13,16 @@ pub enum PamError {
     UnsupportedMaxval(u32),
     UnsupportedTupltype(String),
     InvalidDimensions(u32, u32),
+    TooLarge {
+        width: u32,
+        height: u32,
+        max_pixels: usize,
+    },
     UnexpectedEof,
-    BufferTooShort { expected: usize, actual: usize },
+    BufferTooShort {
+        expected: usize,
+        actual: usize,
+    },
     InvalidHeaderFormat(String),
 }
 
@@ -29,6 +38,14 @@ impl fmt::Display for PamError {
                 "TUPLTYPE não suportado: '{t}' (esperado RGB ou RGB_ALPHA)"
             ),
             Self::InvalidDimensions(w, h) => write!(f, "Dimensões inválidas: {w}x{h}"),
+            Self::TooLarge {
+                width,
+                height,
+                max_pixels,
+            } => write!(
+                f,
+                "Imagem de {width}x{height} excede o limite de {max_pixels} pixels"
+            ),
             Self::UnexpectedEof => write!(f, "Fim inesperado do fluxo ao ler cabeçalho PAM"),
             Self::BufferTooShort { expected, actual } => {
                 write!(
@@ -53,10 +70,18 @@ pub struct PamImage {
     pub data: Vec<u8>,
 }
 
+/// Tamanho do raster em bytes, ou erro se a conta estourar `usize`.
+fn raster_len(width: u32, height: u32, depth: usize) -> Result<usize, PamError> {
+    (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(depth))
+        .ok_or(PamError::InvalidDimensions(width, height))
+}
+
 impl PamImage {
     /// Cria uma nova imagem PAM RGB (depth 3)
     pub fn new_rgb(width: u32, height: u32, data: Vec<u8>) -> Result<Self, PamError> {
-        let expected = (width as usize) * (height as usize) * 3;
+        let expected = raster_len(width, height, 3)?;
         if data.len() < expected {
             return Err(PamError::BufferTooShort {
                 expected,
@@ -75,7 +100,7 @@ impl PamImage {
 
     /// Cria uma nova imagem PAM RGBA (depth 4)
     pub fn new_rgba(width: u32, height: u32, data: Vec<u8>) -> Result<Self, PamError> {
-        let expected = (width as usize) * (height as usize) * 4;
+        let expected = raster_len(width, height, 4)?;
         if data.len() < expected {
             return Err(PamError::BufferTooShort {
                 expected,
@@ -92,8 +117,13 @@ impl PamImage {
         })
     }
 
-    /// Faz o parsing de um buffer PAM P7 binário
+    /// Faz o parsing de um buffer PAM P7 binário, com o teto de pixels do processo.
     pub fn parse(input: &[u8]) -> Result<Self, PamError> {
+        Self::parse_with_limit(input, limits::max_pixels())
+    }
+
+    /// Como `parse`, recusando WIDTH*HEIGHT acima de `max_pixels` antes de copiar o raster.
+    pub fn parse_with_limit(input: &[u8], max_pixels: usize) -> Result<Self, PamError> {
         // Encontra o marcador ENDHDR
         let endhdr_needle = b"ENDHDR";
         let endhdr_pos = input
@@ -195,7 +225,14 @@ impl PamImage {
             return Err(PamError::UnsupportedMaxval(maxval));
         }
 
-        let expected_bytes = (width as usize) * (height as usize) * (depth as usize);
+        if (width as u64) * (height as u64) > max_pixels as u64 {
+            return Err(PamError::TooLarge {
+                width,
+                height,
+                max_pixels,
+            });
+        }
+        let expected_bytes = raster_len(width, height, depth as usize)?;
         let raster = &input[raster_start..];
         if raster.len() < expected_bytes {
             return Err(PamError::BufferTooShort {
@@ -300,5 +337,55 @@ mod tests {
         assert_eq!(parsed.height, height);
         assert_eq!(parsed.depth, 3);
         assert_eq!(parsed.data, data);
+    }
+
+    fn header(width: u64, height: u64, depth: u8) -> Vec<u8> {
+        format!("P7\nWIDTH {width}\nHEIGHT {height}\nDEPTH {depth}\nMAXVAL 255\nENDHDR\n")
+            .into_bytes()
+    }
+
+    #[test]
+    fn parse_refuses_extreme_dimensions_without_copying() {
+        for (width, height) in [
+            (100_000u64, 100_000u64),
+            (u32::MAX as u64, u32::MAX as u64),
+            (u32::MAX as u64, 1),
+        ] {
+            let err = PamImage::parse(&header(width, height, 4)).unwrap_err();
+            assert!(
+                matches!(err, PamError::TooLarge { .. }),
+                "{width}x{height}: {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_with_limit_honours_the_ceiling() {
+        let mut data = header(8, 8, 3);
+        data.extend_from_slice(&[0u8; 8 * 8 * 3]);
+        assert!(PamImage::parse_with_limit(&data, 64).is_ok());
+        assert!(matches!(
+            PamImage::parse_with_limit(&data, 63),
+            Err(PamError::TooLarge { .. })
+        ));
+    }
+
+    #[test]
+    fn parse_reports_a_raster_shorter_than_the_header_declares() {
+        let mut data = header(16, 16, 3);
+        data.extend_from_slice(&[0u8; 10]);
+        assert!(matches!(
+            PamImage::parse(&data),
+            Err(PamError::BufferTooShort { .. })
+        ));
+    }
+
+    #[test]
+    fn constructors_reject_dimensions_that_overflow() {
+        let err = PamImage::new_rgb(u32::MAX, u32::MAX, Vec::new()).unwrap_err();
+        assert!(matches!(
+            err,
+            PamError::InvalidDimensions(..) | PamError::BufferTooShort { .. }
+        ));
     }
 }

@@ -8,7 +8,16 @@ Gera as 4 classes canônicas de imagens do projeto no formato Netpbm PAM P7:
 3. illustration: Arte vetorial/ilustração gráfica com paleta discreta e formas geométricas.
 4. alpha: Elemento gráfico com canal Alpha contendo transparência total, semitransparência e opacidade.
 
-Gera também referências codificadas (.png, .jxl) quando as ferramentas estiverem disponíveis.
+Gera também referências codificadas (.png, .jpg, .webp, .avif, .jxl): com as ferramentas CLI
+(cjxl, cwebp, avifenc) quando existirem, senão com o Pillow (harness/requirements.txt).
+
+Corpus grande (--large): as mesmas quatro classes em 2048x2048 (4,19 MP) em harness/fixtures/corpus-large,
+fora do git (.gitignore). Os arquivos do corpus padrão têm 0,26 MP, e nessa escala custos fixos (startup,
+init de pacotes) pesam mais que o codec; com 4 MP o throughput em MP/s é mais representativo (issue #17).
+A geração leva cerca de 15 s. Use com o benchmark:
+
+    python3 harness/generators/make_corpus.py --large
+    python3 harness/benchmark_arena.py --mode http --corpus-dir harness/fixtures/corpus-large
 """
 
 import os
@@ -20,6 +29,9 @@ import shutil
 import subprocess
 import argparse
 from typing import Tuple, List
+
+DEFAULT_SIDE = 512
+LARGE_SIDE = 2048  # 2048 x 2048 = 4,19 MP
 
 
 # ---------------------------------------------------------------------------
@@ -359,38 +371,57 @@ def encode_reference_files(pam_path: str, base_name: str, out_dir: str, depth: i
     write_png(png_path, width, height, raster, has_alpha=(depth == 4))
     print(f"       -> Gerado PNG: {os.path.basename(png_path)} ({os.path.getsize(png_path)} bytes)")
 
-    # 2. JXL (via cjxl se disponível)
-    cjxl_bin = shutil.which("cjxl")
-    if cjxl_bin:
-        jxl_path = os.path.join(out_dir, f"{base_name}.jxl")
+    # 2-5. JXL, WebP e AVIF pelas ferramentas CLI; o que faltar, o Pillow gera. O JPEG de referência
+    # vem do Pillow (a imagem alpha não tem JPEG: o formato não tem canal alpha).
+    cli = [
+        ("jxl", "cjxl", lambda b, o: [b, pam_path, o, "-e", "7", "-d", "1.0"]),
+        ("webp", "cwebp", lambda b, o: [b, "-q", "80", pam_path, "-o", o]),
+        ("avif", "avifenc", lambda b, o: [b, "-s", "6", "-q", "75", pam_path, o]),
+    ]
+    missing = []
+    for ext, tool, make_cmd in cli:
+        binary = shutil.which(tool)
+        out_path = os.path.join(out_dir, f"{base_name}.{ext}")
+        if not binary:
+            missing.append(ext)
+            continue
         try:
-            cmd = [cjxl_bin, pam_path, jxl_path, "-e", "7", "-d", "1.0"]
-            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-            print(f"       -> Gerado JXL: {os.path.basename(jxl_path)} ({os.path.getsize(jxl_path)} bytes)")
+            subprocess.run(make_cmd(binary, out_path), stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+            print(f"       -> Gerado {ext.upper()} ({tool}): {os.path.basename(out_path)} ({os.path.getsize(out_path)} bytes)")
         except Exception as e:
-            print(f"       [!] Erro ao invocar cjxl: {e}")
+            print(f"       [!] Erro ao invocar {tool}: {e}")
+            missing.append(ext)
 
-    # 3. WebP (via cwebp se disponível)
-    cwebp_bin = shutil.which("cwebp")
-    if cwebp_bin:
-        webp_path = os.path.join(out_dir, f"{base_name}.webp")
-        try:
-            cmd = [cwebp_bin, "-q", "80", pam_path, "-o", webp_path]
-            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-            print(f"       -> Gerado WebP: {os.path.basename(webp_path)} ({os.path.getsize(webp_path)} bytes)")
-        except Exception as e:
-            print(f"       [!] Erro ao invocar cwebp: {e}")
+    encode_with_pillow(out_dir, base_name, depth, width, height, raster, missing + ([] if depth == 4 else ["jpg"]))
 
-    # 4. AVIF (via avifenc se disponível)
-    avifenc_bin = shutil.which("avifenc")
-    if avifenc_bin:
-        avif_path = os.path.join(out_dir, f"{base_name}.avif")
+
+def encode_with_pillow(out_dir: str, base_name: str, depth: int, width: int, height: int, raster: bytes, wanted: List[str]) -> None:
+    if not wanted:
+        return
+    try:
+        from PIL import Image
+    except ImportError:
+        print(f"       [!] Sem ferramentas CLI nem Pillow: pulei {', '.join(wanted)} (pip install -r harness/requirements.txt)")
+        return
+    try:
+        import pillow_jxl  # noqa: F401
+    except ImportError:
+        pass
+
+    image = Image.frombytes("RGBA" if depth == 4 else "RGB", (width, height), raster)
+    options = {
+        "jpg": {"format": "JPEG", "quality": 80, "subsampling": "4:2:0"},
+        "webp": {"format": "WEBP", "quality": 80},
+        "avif": {"format": "AVIF", "quality": 75, "speed": 6},
+        "jxl": {"format": "JXL", "quality": 90, "effort": 7},
+    }
+    for ext in wanted:
+        out_path = os.path.join(out_dir, f"{base_name}.{ext}")
         try:
-            cmd = [avifenc_bin, "-s", "6", "-q", "75", pam_path, avif_path]
-            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-            print(f"       -> Gerado AVIF: {os.path.basename(avif_path)} ({os.path.getsize(avif_path)} bytes)")
+            image.save(out_path, **options[ext])
+            print(f"       -> Gerado {ext.upper()} (Pillow): {os.path.basename(out_path)} ({os.path.getsize(out_path)} bytes)")
         except Exception as e:
-            print(f"       [!] Erro ao invocar avifenc: {e}")
+            print(f"       [!] Pillow não gerou {ext}: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -398,22 +429,29 @@ def encode_reference_files(pam_path: str, base_name: str, out_dir: str, depth: i
 # ---------------------------------------------------------------------------
 def main() -> int:
     parser = argparse.ArgumentParser(description="Gerador de corpus de imagens para o image-processor-arena.")
-    parser.add_argument("--width", type=int, default=512, help="Largura das imagens em pixels (padrão: 512)")
-    parser.add_argument("--height", type=int, default=512, help="Altura das imagens em pixels (padrão: 512)")
+    parser.add_argument("--width", type=int, default=None, help="Largura das imagens em pixels (padrão: 512; 2048 com --large)")
+    parser.add_argument("--height", type=int, default=None, help="Altura das imagens em pixels (padrão: 512; 2048 com --large)")
+    parser.add_argument(
+        "--large",
+        action="store_true",
+        help="Gera o corpus grande (2048x2048, 4,19 MP por classe) em harness/fixtures/corpus-large",
+    )
     parser.add_argument(
         "--out-dir",
         type=str,
         default=None,
-        help="Diretório de saída (padrão: harness/fixtures/corpus)",
+        help="Diretório de saída (padrão: harness/fixtures/corpus, ou corpus-large com --large)",
     )
     args = parser.parse_args()
 
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    out_dir = args.out_dir or os.path.join(base_dir, "harness", "fixtures", "corpus")
+    default_dir = "corpus-large" if args.large else "corpus"
+    out_dir = args.out_dir or os.path.join(base_dir, "harness", "fixtures", default_dir)
     os.makedirs(out_dir, exist_ok=True)
 
-    w = args.width
-    h = args.height
+    side = LARGE_SIDE if args.large else DEFAULT_SIDE
+    w = args.width or side
+    h = args.height or side
     print(f"[*] Gerando corpus de imagens ({w}x{h}) em: {out_dir}")
 
     generators = [

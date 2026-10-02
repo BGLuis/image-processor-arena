@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -16,6 +18,47 @@ import (
 	"github.com/image-processor-arena/go/internal/codec"
 	"github.com/image-processor-arena/go/internal/pam"
 )
+
+// The request limits are shared with the Rust server ([limits] in arena.toml) and can be
+// overridden through the same environment variables on both.
+const (
+	envMaxBodyBytes = "ARENA_MAX_BODY_BYTES"
+	envMaxPixels    = pam.EnvMaxPixels
+
+	defaultMaxBodyBytes int64 = 256 << 20
+	defaultMaxPixels          = pam.DefaultMaxPixels
+
+	maxHeaderBytes    = 64 << 10
+	readHeaderTimeout = 10 * time.Second
+	readTimeout       = 2 * time.Minute
+	writeTimeout      = 5 * time.Minute
+	idleTimeout       = 2 * time.Minute
+)
+
+type limits struct {
+	maxBodyBytes int64
+	maxPixels    int
+}
+
+// srvLimits is read by every request; main replaces it once from the environment before serving.
+var srvLimits = limits{maxBodyBytes: defaultMaxBodyBytes, maxPixels: defaultMaxPixels}
+
+func loadLimits(getenv func(string) string) (limits, error) {
+	l := limits{maxBodyBytes: defaultMaxBodyBytes, maxPixels: defaultMaxPixels}
+	if raw := getenv(envMaxBodyBytes); raw != "" {
+		v, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || v <= 0 {
+			return limits{}, fmt.Errorf("%s must be a positive integer, got %q", envMaxBodyBytes, raw)
+		}
+		l.maxBodyBytes = v
+	}
+	maxPixels, err := pam.MaxPixelsFromEnv(getenv)
+	if err != nil {
+		return limits{}, err
+	}
+	l.maxPixels = maxPixels
+	return l, nil
+}
 
 func main() {
 	defaultPort := "8080"
@@ -26,20 +69,33 @@ func main() {
 	portFlag := flag.String("port", defaultPort, "Port to listen on")
 	flag.Parse()
 
+	var err error
+	if srvLimits, err = loadLimits(os.Getenv); err != nil {
+		log.Fatalf("Invalid configuration: %v", err)
+	}
+
+	addr := ":" + *portFlag
+	log.Printf("[arena-server] Pure Go server listening on %s (PID %d, max body %d B, max %d px)",
+		addr, os.Getpid(), srvLimits.maxBodyBytes, srvLimits.maxPixels)
+
+	if err := newServer(addr).ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("Server error: %v", err)
+	}
+}
+
+func newServer(addr string) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", handleHealth)
 	mux.HandleFunc("/run", handleRun)
 
-	addr := ":" + *portFlag
-	log.Printf("[arena-server] Pure Go server listening on %s (PID %d)", addr, os.Getpid())
-
-	server := &http.Server{
-		Addr:    addr,
-		Handler: mux,
-	}
-
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("Server error: %v", err)
+	return &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		MaxHeaderBytes:    maxHeaderBytes,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
 	}
 }
 
@@ -53,36 +109,127 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(`{"status":"ok"}`))
 }
 
+// runRequest is a /run query already checked against the parameter contract, so that nothing
+// invalid reaches the decoder or the encoder.
+type runRequest struct {
+	op     string
+	from   string // source format for decode and transcode
+	params codec.Params
+}
+
+func parseRunRequest(qParams url.Values) (runRequest, error) {
+	req := runRequest{op: qParams.Get("op")}
+	format := qParams.Get("format")
+
+	switch req.op {
+	case "analyze":
+	case "encode":
+		if format == "" {
+			return req, errors.New("Missing 'format' query parameter")
+		}
+		params, err := codec.ParseParams(format, qParams.Get("mode"), qParams.Get("q"), qParams.Get("effort"))
+		if err != nil {
+			return req, err
+		}
+		req.params = params
+	case "decode":
+		if format == "" {
+			return req, errors.New("Missing 'format' query parameter")
+		}
+		from, err := codec.ParseFormat(format)
+		if err != nil {
+			return req, err
+		}
+		req.from = from
+	case "transcode":
+		to := qParams.Get("to")
+		if format == "" || to == "" {
+			return req, errors.New("Missing 'format' or 'to' query parameter")
+		}
+		from, err := codec.ParseFormat(format)
+		if err != nil {
+			return req, err
+		}
+		params, err := codec.ParseParams(to, qParams.Get("mode"), qParams.Get("q"), qParams.Get("effort"))
+		if err != nil {
+			return req, err
+		}
+		req.from, req.params = from, params
+	default:
+		return req, fmt.Errorf("Unsupported op: %q", req.op)
+	}
+	return req, nil
+}
+
+// readBody reads at most srvLimits.maxBodyBytes and answers 413 itself when the body is larger.
+func readBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
+	if r.ContentLength > srvLimits.maxBodyBytes {
+		tooLarge(w)
+		return nil, false
+	}
+
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, srvLimits.maxBodyBytes))
+	_ = r.Body.Close()
+	if err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			tooLarge(w)
+		} else {
+			http.Error(w, fmt.Sprintf("Failed to read request body: %v", err), http.StatusBadRequest)
+		}
+		return nil, false
+	}
+	if len(body) == 0 {
+		http.Error(w, "Empty request body", http.StatusBadRequest)
+		return nil, false
+	}
+	return body, true
+}
+
+func tooLarge(w http.ResponseWriter) {
+	http.Error(w, fmt.Sprintf("Request body exceeds the %d byte limit (%s)", srvLimits.maxBodyBytes, envMaxBodyBytes),
+		http.StatusRequestEntityTooLarge)
+}
+
+func decodePAM(w http.ResponseWriter, body []byte) (*pam.Image, bool) {
+	img, err := pam.DecodeLimit(bytes.NewReader(body), srvLimits.maxPixels)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to decode PAM body: %v", err), http.StatusBadRequest)
+		return nil, false
+	}
+	return img, true
+}
+
+// encodeStatus separates what the client asked for (an unsupported format/mode combination,
+// a parameter outside the contract) from a genuine encoder failure.
+func encodeStatus(err error) int {
+	if errors.Is(err, codec.ErrUnsupportedFormat) || errors.Is(err, codec.ErrInvalidParams) {
+		return http.StatusBadRequest
+	}
+	return http.StatusInternalServerError
+}
+
 func handleRun(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	qParams := r.URL.Query()
-	op := qParams.Get("op")
-	format := qParams.Get("format")
-	to := qParams.Get("to")
-	mode := qParams.Get("mode")
-
-	bodyBytes, err := io.ReadAll(r.Body)
+	req, err := parseRunRequest(r.URL.Query())
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to read request body: %v", err), http.StatusBadRequest)
-		return
-	}
-	_ = r.Body.Close()
-
-	if len(bodyBytes) == 0 {
-		http.Error(w, "Empty request body", http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	switch op {
+	body, ok := readBody(w, r)
+	if !ok {
+		return
+	}
+
+	switch req.op {
 	case "analyze":
-		// Read PAM image
-		pamImg, err := pam.Decode(bytes.NewReader(bodyBytes))
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to decode PAM body: %v", err), http.StatusBadRequest)
+		pamImg, ok := decodePAM(w, body)
+		if !ok {
 			return
 		}
 
@@ -102,45 +249,28 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(respJSON)
 
 	case "encode":
-		if format == "" {
-			http.Error(w, "Missing 'format' query parameter", http.StatusBadRequest)
-			return
-		}
-
-		encParams, err := codec.ParseParams(format, mode, qParams.Get("q"), qParams.Get("effort"))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		pamImg, err := pam.Decode(bytes.NewReader(bodyBytes))
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to decode PAM body: %v", err), http.StatusBadRequest)
+		pamImg, ok := decodePAM(w, body)
+		if !ok {
 			return
 		}
 
 		var encBuf bytes.Buffer
 
 		start := time.Now()
-		if err := codec.Encode(&encBuf, pamImg, encParams); err != nil {
-			http.Error(w, fmt.Sprintf("Encode error: %v", err), http.StatusInternalServerError)
+		if err := codec.Encode(&encBuf, pamImg, req.params); err != nil {
+			http.Error(w, fmt.Sprintf("Encode error: %v", err), encodeStatus(err))
 			return
 		}
 		encodeNs := time.Since(start).Nanoseconds()
 
 		w.Header().Set("X-Arena-Encode-Ns", strconv.FormatInt(encodeNs, 10))
-		w.Header().Set("Content-Type", mimeForFormat(format))
+		w.Header().Set("Content-Type", mimeForFormat(req.params.Format))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(encBuf.Bytes())
 
 	case "decode":
-		if format == "" {
-			http.Error(w, "Missing 'format' query parameter", http.StatusBadRequest)
-			return
-		}
-
 		start := time.Now()
-		pamImg, err := codec.Decode(bytes.NewReader(bodyBytes), format)
+		pamImg, err := codec.Decode(bytes.NewReader(body), req.from)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Decode error: %v", err), http.StatusBadRequest)
 			return
@@ -155,19 +285,8 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(pamBytes)
 
 	case "transcode":
-		if format == "" || to == "" {
-			http.Error(w, "Missing 'format' or 'to' query parameter", http.StatusBadRequest)
-			return
-		}
-
-		encParams, err := codec.ParseParams(to, mode, qParams.Get("q"), qParams.Get("effort"))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
 		startDec := time.Now()
-		pamImg, err := codec.Decode(bytes.NewReader(bodyBytes), format)
+		pamImg, err := codec.Decode(bytes.NewReader(body), req.from)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Decode error: %v", err), http.StatusBadRequest)
 			return
@@ -177,20 +296,17 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 		var encBuf bytes.Buffer
 
 		startEnc := time.Now()
-		if err := codec.Encode(&encBuf, pamImg, encParams); err != nil {
-			http.Error(w, fmt.Sprintf("Encode error: %v", err), http.StatusInternalServerError)
+		if err := codec.Encode(&encBuf, pamImg, req.params); err != nil {
+			http.Error(w, fmt.Sprintf("Encode error: %v", err), encodeStatus(err))
 			return
 		}
 		encodeNs := time.Since(startEnc).Nanoseconds()
 
 		w.Header().Set("X-Arena-Decode-Ns", strconv.FormatInt(decodeNs, 10))
 		w.Header().Set("X-Arena-Encode-Ns", strconv.FormatInt(encodeNs, 10))
-		w.Header().Set("Content-Type", mimeForFormat(to))
+		w.Header().Set("Content-Type", mimeForFormat(req.params.Format))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(encBuf.Bytes())
-
-	default:
-		http.Error(w, fmt.Sprintf("Unsupported op: %q", op), http.StatusBadRequest)
 	}
 }
 
