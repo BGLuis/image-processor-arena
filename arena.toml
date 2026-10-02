@@ -66,6 +66,8 @@ max_pixels = 40000000
 [benchmarks]
 server_go_port = 8080
 server_rust_port = 8081
+# Referência da máquina em que os resultados publicados foram coletados (16 CPUs lógicas). No Docker
+# o isolamento é configurável por ARENA_SERVER_CPUSET / ARENA_HARNESS_CPUSET (ver docker-compose.yml).
 cpuset_servers = "0-11"
 cpuset_harness = "12-15"
 memory_limit = "3g"

@@ -3,6 +3,16 @@ set -euo pipefail
 
 # scripts/check-purity-go.sh
 # Validador de pureza do ecossistema Go (CGO_ENABLED=0, sem CgoFiles, sem purego, sem wazero).
+#
+# Modos:
+#   (sem argumento)  A verificação da política do projeto; é a que o CI roda. Assembly Go (.s) é
+#                    permitido: não é CGO nem FFI.
+#   --portable       Auditoria opcional: com `-tags noasm`, nenhum pacote de terceiros deveria ter
+#                    arquivos .s. LIMITAÇÃO CONHECIDA: falha hoje, e isso é esperado. O
+#                    github.com/deepteams/webp (internal/dsp e internal/lossy) traz assembly amd64/arm64
+#                    que não respeita a tag `noasm`, então o modo lista esses pacotes e sai com 1. Ele
+#                    não é usado no CI; serve para medir o quanto falta para um build sem assembly
+#                    (por exemplo para GOARCH sem implementação). Não indica violação da política.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GO_DIR="${ROOT_DIR}/go"
@@ -63,6 +73,10 @@ done <<< "${DEPS_OUTPUT}"
 
 if [[ ${ERRORS} -gt 0 ]]; then
     echo "[-] Verificação de pureza Go FALHOU com ${ERRORS} violação(ões)."
+    if [[ "${PORTABLE_CHECK}" == true ]]; then
+        echo "[i] Em --portable isto é uma limitação conhecida (ver o cabeçalho do script): as dependências"
+        echo "    listadas acima trazem assembly Go e não respeitam -tags noasm. Não é violação da política."
+    fi
     exit 1
 fi
 
