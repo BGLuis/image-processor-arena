@@ -20,7 +20,7 @@ fn min_psnr(name: &str) -> f64 {
 }
 
 /// jxl-oxide 0.12.6 (mesmo com o guard de rust/vendor/jxl-modular) não decodifica JXL lossy com
-/// canal alpha em imagens de vários grupos (> 256 px) a partir de JXL effort 2, embora o libjxl e
+/// canal alpha em imagens de vários grupos (> 256 px) a partir de JXL effort 3 (effort ≥ 4 do contrato), embora o libjxl e
 /// o gen2brain/jxl decodifiquem o mesmo arquivo. O caso fica fora da checagem de PSNR abaixo e o
 /// teste `jxl_lossy_alpha_decode_defect_is_still_present` avisa quando o upstream corrigir.
 fn known_decoder_defect(format: ImageFormat, name: &str) -> bool {

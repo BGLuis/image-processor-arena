@@ -83,7 +83,6 @@ mod tests {
     use crate::codec::ImageFormat;
     use std::path::PathBuf;
 
-    const MAX_TESTED_EFFORT: u8 = 7;
     const MODULAR_GROUP_DIM: u32 = 256;
 
     fn load_corpus_image(name: &str) -> PamImage {
@@ -96,16 +95,24 @@ mod tests {
         PamImage::parse(&bytes).expect("falha ao parsear PAM do corpus")
     }
 
+    fn corpus() -> impl Iterator<Item = (&'static str, PamImage)> {
+        ["photo", "screenshot", "illustration", "alpha"]
+            .into_iter()
+            .map(|name| {
+                let pam = load_corpus_image(name);
+                assert!(
+                    pam.width > MODULAR_GROUP_DIM && pam.height > MODULAR_GROUP_DIM,
+                    "{name} deve ocupar mais de um grupo modular"
+                );
+                (name, pam)
+            })
+    }
+
+    /// Todos os `effort` do contrato (1..=10, que o contrato mapeia para JXL 1..=7).
     #[test]
     fn test_lossless_roundtrip_is_exact_on_multi_group_images() {
-        for name in ["photo", "screenshot", "illustration", "alpha"] {
-            let pam = load_corpus_image(name);
-            assert!(
-                pam.width > MODULAR_GROUP_DIM && pam.height > MODULAR_GROUP_DIM,
-                "{name} deve ocupar mais de um grupo modular"
-            );
-
-            for effort in 1..=MAX_TESTED_EFFORT {
+        for (name, pam) in corpus() {
+            for effort in contract::MIN_EFFORT..=contract::MAX_EFFORT {
                 let params = EncodeParams {
                     format: ImageFormat::Jxl,
                     mode: CodecMode::Lossless,
@@ -123,5 +130,44 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Maior `effort` do jxl-encoder 0.3.1 que escreve streams válidos. Medido no corpus: o 8 decodifica
+    /// bit a bit no jxl-oxide (com o guard do vendor) e no libjxl; os efforts 9 e 10 escrevem streams que
+    /// o próprio libjxl recusa ("Generic Error" em photo, screenshot e illustration), e na imagem alpha
+    /// o encode não termina em 180 s. O contrato limita o JXL a 7, abaixo disso.
+    const LAST_VALID_ENCODER_EFFORT: u8 = 8;
+
+    #[test]
+    fn test_lossless_roundtrip_is_exact_at_the_highest_valid_encoder_effort() {
+        for (name, pam) in corpus() {
+            let layout = if pam.depth == 4 {
+                jxl_encoder::PixelLayout::Rgba8
+            } else {
+                jxl_encoder::PixelLayout::Rgb8
+            };
+            let encoded = jxl_encoder::LosslessConfig::new()
+                .with_effort(LAST_VALID_ENCODER_EFFORT)
+                .encode(&pam.data, pam.width, pam.height, layout)
+                .unwrap_or_else(|e| panic!("encode falhou em {name}: {:?}", e.decompose().0));
+            let decoded =
+                decode(&encoded).unwrap_or_else(|e| panic!("decode falhou em {name}: {e}"));
+
+            assert_eq!(decoded.data, pam.data, "pixels divergem em {name}");
+        }
+    }
+
+    /// Guarda do teto do contrato: subir o `effort` máximo do JXL para 9 ou mais exporia os usuários aos
+    /// streams inválidos descritos acima.
+    #[test]
+    fn test_contract_never_reaches_the_broken_encoder_efforts() {
+        let highest = (contract::MIN_EFFORT..=contract::MAX_EFFORT)
+            .map(contract::jxl_effort)
+            .max()
+            .unwrap();
+        assert!(
+            highest <= LAST_VALID_ENCODER_EFFORT,
+            "o contrato chega ao effort {highest} do jxl-encoder; os efforts 9 e 10 escrevem streams inválidos"
+        );
     }
 }
