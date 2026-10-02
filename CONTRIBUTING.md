@@ -20,6 +20,11 @@ Qualquer contribuição **deve** respeitar a política de pureza:
 
 ---
 
+### 📜 Licença das contribuições
+O projeto é **AGPL-3.0-or-later** (arquivo [`LICENSE`](LICENSE)). Ao enviar uma contribuição, você concorda que ela seja licenciada sob os mesmos termos. Uma nova dependência com licença copyleft ou desconhecida precisa ser decidida em `rust/deny.toml` (Rust) e documentada na seção "Licença" do README; o CI roda `cargo deny check licenses`.
+
+---
+
 ### 🚀 Fluxo de Trabalho de Desenvolvimento
 
 1. **Faça um Fork e Clone**:
@@ -49,6 +54,11 @@ Qualquer contribuição **deve** respeitar a política de pureza:
      cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings
      cargo test --manifest-path rust/Cargo.toml
      ```
+   - **Harness** (`pip install -r harness/requirements.txt`):
+     ```bash
+     python3 -m unittest discover -s harness/tests
+     ```
+   - O toolchain Rust é fixado em `rust-toolchain.toml`; ao atualizá-lo, mude também `docker/rust.Dockerfile` e o `ci.yml` e rode `./scripts/check-toolchain-sync.sh`.
 
 4. **Validação Cruzada (Cross-Validation)**:
    Se alterar a lógica de encoders, decoders ou métricas em `docs/analyze-spec.md`, garanta que os resultados batem com o gabarito matemático em Python:
@@ -84,6 +94,11 @@ Every single contribution **must** adhere to our strict purity rule:
 
 ---
 
+### 📜 License of contributions
+The project is **AGPL-3.0-or-later** ([`LICENSE`](LICENSE)). By submitting a contribution you agree that it is licensed under the same terms. A new dependency with a copyleft or unknown license has to be decided in `rust/deny.toml` (Rust) and documented in the README's "License" section; CI runs `cargo deny check licenses`.
+
+---
+
 ### 🚀 Development Workflow
 
 1. **Fork and Clone**:
@@ -113,6 +128,11 @@ Every single contribution **must** adhere to our strict purity rule:
      cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings
      cargo test --manifest-path rust/Cargo.toml
      ```
+   - **Harness** (`pip install -r harness/requirements.txt`):
+     ```bash
+     python3 -m unittest discover -s harness/tests
+     ```
+   - The Rust toolchain is pinned in `rust-toolchain.toml`; when you bump it, also change `docker/rust.Dockerfile` and `ci.yml` and run `./scripts/check-toolchain-sync.sh`.
 
 4. **Cross-Validation**:
    If modifying encoders, decoders, or analysis metrics specified in [`docs/analyze-spec.md`](docs/analyze-spec.md), verify parity against the Python reference:
