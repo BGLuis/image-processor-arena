@@ -131,6 +131,14 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      - name: Upload Go server binary artifact
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
+        with:
+          name: go-arena-server
+          path: go/bin/arena-server
+          if-no-files-found: error
+          retention-days: 1
+
   # ---------------------------------------------------------------------------
   # 3. Rust CI: Rustfmt, Clippy, Testes Unitários e Compilação Release
   # ---------------------------------------------------------------------------
@@ -177,6 +185,14 @@ jobs:
         with:
           name: rust-arena-batch
           path: rust/target/release/arena-batch
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload Rust server binary artifact
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
+        with:
+          name: rust-arena-server
+          path: rust/target/release/arena-server
           if-no-files-found: error
           retention-days: 1
 
@@ -292,3 +308,91 @@ jobs:
       - name: Run harness unit tests
         run: |
           python3 -W error::ResourceWarning -m unittest discover -s harness/tests -v
+
+  # ---------------------------------------------------------------------------
+  # 7. Arena Benchmark: Execução Automatizada da Bateria Oficial de Benchmark
+  # Sobe servidores Go e Rust, executa a suíte HTTP e publica o pódio no resumo do CI
+  # ---------------------------------------------------------------------------
+  arena-benchmark:
+    name: "Arena Benchmark & Podium"
+    needs: [go-ci, rust-ci]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Setup Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38  # v5.4.0
+        with:
+          python-version: '3.12'
+
+      - name: Install reference decoders (Pillow + libjxl plugin)
+        run: |
+          python3 -m pip install -r harness/requirements.txt
+
+      - name: Download Go Server binary artifact
+        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806  # v4.1.9
+        with:
+          name: go-arena-server
+          path: go/bin
+
+      - name: Download Rust Server binary artifact
+        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806  # v4.1.9
+        with:
+          name: rust-arena-server
+          path: rust/target/release
+
+      - name: Set binary permissions
+        run: |
+          chmod +x go/bin/arena-server
+          chmod +x rust/target/release/arena-server
+
+      - name: Start Go and Rust servers in background
+        run: |
+          PORT=8080 go/bin/arena-server &
+          PORT=8081 rust/target/release/arena-server &
+          echo "[*] Aguardando inicialização dos servidores..."
+          for port in 8080 8081; do
+            online=false
+            for i in $(seq 1 30); do
+              if curl -s -f "http://localhost:${port}/health" > /dev/null; then
+                echo "[+] Servidor na porta ${port} está online."
+                online=true
+                break
+              fi
+              sleep 0.5
+            done
+            if [ "$online" != "true" ]; then
+              echo "[-] ERRO: Servidor na porta ${port} não respondeu ao healthcheck."
+              exit 1
+            fi
+          done
+
+      - name: Run HTTP Arena Benchmark Suite
+        run: |
+          mkdir -p results/ci
+          python3 harness/benchmark_arena.py \
+            --mode http \
+            --go-url http://localhost:8080/run \
+            --rust-url http://localhost:8081/run \
+            --iterations 5 \
+            --warmup 1 \
+            --output-dir results/ci
+
+      - name: Publish Podium to Job Summary
+        if: always()
+        run: |
+          if [ -f results/ci/PODIUM.md ]; then
+            echo "## 🏆 Pódio da Arena (Execução no CI)" >> $GITHUB_STEP_SUMMARY
+            cat results/ci/PODIUM.md >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload Benchmark Results Artifacts
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
+        with:
+          name: arena-benchmark-ci-results
+          path: results/ci/
+          retention-days: 14
