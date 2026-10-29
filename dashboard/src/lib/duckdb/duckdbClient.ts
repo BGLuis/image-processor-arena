@@ -34,19 +34,34 @@ export async function getDuckDB(): Promise<{ db: AsyncDuckDB; conn: AsyncDuckDBC
       const conn = await db.connect();
 
       // Carregar os dados de benchmark_results.json
-      const response = await fetch('./data/benchmark_results.json');
-      if (!response.ok) {
-        throw new Error(`Falha ao buscar dados: ${response.status} ${response.statusText}`);
+      try {
+        const responseBench = await fetch('./data/benchmark_results.json');
+        if (responseBench.ok) {
+          const benchData = await responseBench.text();
+          await db.registerFileText('benchmark_results.json', benchData);
+          await conn.query(`
+            CREATE OR REPLACE TABLE benchmark_results AS 
+            SELECT * FROM read_json_auto('benchmark_results.json');
+          `);
+        }
+      } catch (err) {
+        console.warn('Falha ao carregar benchmark_results.json no DuckDB:', err);
       }
-      const jsonData = await response.text();
-      
-      await db.registerFileText('benchmark_results.json', jsonData);
-      
-      // Criar a tabela no DuckDB
-      await conn.query(`
-        CREATE OR REPLACE TABLE benchmark_results AS 
-        SELECT * FROM read_json_auto('benchmark_results.json');
-      `);
+
+      // Carregar os dados de results.json (formato longo com 18 implementações)
+      try {
+        const responseResults = await fetch('./data/results.json');
+        if (responseResults.ok) {
+          const resultsData = await responseResults.text();
+          await db.registerFileText('results.json', resultsData);
+          await conn.query(`
+            CREATE OR REPLACE TABLE results AS 
+            SELECT * FROM read_json_auto('results.json');
+          `);
+        }
+      } catch (err) {
+        console.warn('Falha ao carregar results.json no DuckDB:', err);
+      }
 
       dbInstance = db;
       connInstance = conn;

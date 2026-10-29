@@ -2,56 +2,56 @@
 
 import React from 'react';
 import dynamic from 'next/dynamic';
-import Header from '../components/Header';
 import { DataProvider } from '../context/DataContext';
+import TopBar from '../components/TopBar';
+import Footer from '../components/Footer';
 
-// Importação dinâmica para componentes com DuckDB e Recharts
-const KpiCards = dynamic(() => import('../components/KpiCards'), { ssr: false });
-const FilterBar = dynamic(() => import('../components/FilterBar'), { ssr: false });
-const ChartsSection = dynamic(() => import('../components/ChartsSection'), { ssr: false });
-const EqualQualitySection = dynamic(() => import('../components/EqualQualitySection'), { ssr: false });
-const ResultsTable = dynamic(() => import('../components/ResultsTable'), { ssr: false });
-const SqlConsole = dynamic(() => import('../components/SqlConsole'), { ssr: false });
+// Componentes com estado do navegador e DuckDB-Wasm
+const FilterToolbar = dynamic(() => import('../components/FilterToolbar'), { ssr: false });
+const PodiumSection = dynamic(() => import('../components/PodiumSection'), { ssr: false });
+const BestPerLanguage = dynamic(() => import('../components/BestPerLanguage'), { ssr: false });
+const LeaderboardTable = dynamic(() => import('../components/LeaderboardTable'), { ssr: false });
+const HeatmapSection = dynamic(() => import('../components/HeatmapSection'), { ssr: false });
+const DuelSection = dynamic(() => import('../components/DuelSection'), { ssr: false });
+const SqlConsoleSection = dynamic(() => import('../components/SqlConsoleSection'), { ssr: false });
 
 export default function Home() {
   return (
     <DataProvider>
-      <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex flex-col">
-        {/* Header Superior */}
-        <Header />
+      <div className="min-h-screen bg-[#0a0c0f] text-[#eceff3] flex flex-col selection:bg-[#2ec4e6]/30 selection:text-[#eceff3]">
+        
+        {/* Barra Superior */}
+        <TopBar />
 
         {/* Conteúdo Principal */}
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          {/* Métricas e KPIs do Pódio */}
-          <KpiCards />
+        <main className="flex-1 max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          
+          {/* Barra de Filtros Sticky */}
+          <FilterToolbar />
 
-          {/* Barra de Filtros Reativos e SQL Preview */}
-          <FilterBar />
+          {/* Seção 1: Pódio */}
+          <PodiumSection />
 
-          {/* Gráficos Interativos */}
-          <ChartsSection />
+          {/* Seção 2: Melhor por Linguagem */}
+          <BestPerLanguage />
 
-          {/* Seção Especial: Equal PSNR */}
-          <EqualQualitySection />
+          {/* Seção 3: Leaderboard / Ranking Interativo */}
+          <LeaderboardTable />
 
-          {/* Tabela Analítica Completa com Ordenação */}
-          <ResultsTable />
+          {/* Seção 4: Heatmap Tarefa × Implementação */}
+          <HeatmapSection />
 
-          {/* Console SQL Interativo DuckDB-Wasm */}
-          <SqlConsole />
+          {/* Seção 5: Duelo Par-a-Par com PSNR Equivalente */}
+          <DuelSection />
+
+          {/* Seção 6: Console SQL Interativo */}
+          <SqlConsoleSection />
+
         </main>
 
         {/* Rodapé */}
-        <footer className="border-t border-slate-900 py-6 mt-12 bg-slate-950/60 text-center text-xs text-slate-500">
-          <div className="max-w-7xl mx-auto px-4">
-            <p>
-              Image Processor Arena · Pureza Absoluta (0% CGO / 0% FFI) · Licenciado sob AGPL-3.0-or-later
-            </p>
-            <p className="mt-1 font-mono text-[11px] text-slate-600">
-              Motor analítico in-browser alimentado por DuckDB-Wasm & Next.js
-            </p>
-          </div>
-        </footer>
+        <Footer />
+
       </div>
     </DataProvider>
   );

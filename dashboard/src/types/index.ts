@@ -1,3 +1,51 @@
+export interface LongBenchmarkResult {
+  task_id: number;
+  task: string;
+  op: 'analyze' | 'encode' | 'decode' | 'transcode' | string;
+  format: string;
+  mode: 'lossy' | 'lossless' | string;
+  image: string;
+  mp: number;
+  language: 'rust' | 'go' | 'zig' | 'swift' | 'csharp' | 'java' | string;
+  tier: 'portable' | 'accelerated' | 'hybrid' | string;
+  toolchain: string;
+  lib: string;
+  impl_id: string;
+  codec_median_ms: number;
+  p25: number;
+  p75: number;
+  bytes: number;
+  psnr_db: number | null;
+  rel_time: number;
+}
+
+export interface ImplementationSummary {
+  impl_id: string;
+  language: string;
+  tier: string;
+  toolchain: string;
+  lib: string;
+  rank: number;
+  score: number;
+  wins: number;
+  podiums: number;
+  coverage: number;
+  total_tasks: number;
+}
+
+export interface FilterState {
+  search: string;
+  language: string;
+  tier: string;
+  toolchain: string;
+  lib: string;
+  op: string;
+  format: string;
+  mode: string;
+  image: string;
+  groupByLanguage: boolean;
+}
+
 export interface BenchmarkTask {
   id: number;
   task: string;
@@ -98,15 +146,4 @@ export interface MetadataInfo {
   };
   collected_at: string;
   mode: string;
-  primary_metric: string;
-  notes: string[];
-}
-
-export interface FilterState {
-  op: string;
-  format: string;
-  mode: string;
-  image: string;
-  winner: string;
-  search: string;
 }
