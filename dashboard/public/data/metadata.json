@@ -1,0 +1,59 @@
+{
+  "summary": {
+    "total_tasks": 34,
+    "rust_wins": 26,
+    "go_wins": 7,
+    "ties": 1,
+    "rust_win_percentage": 76.5,
+    "go_win_percentage": 20.6,
+    "ties_percentage": 2.9,
+    "global_geomean": 2.67
+  },
+  "filters_options": {
+    "formats": [
+      "avif",
+      "jpeg",
+      "jxl",
+      "pam",
+      "png",
+      "webp"
+    ],
+    "ops": [
+      "analyze",
+      "decode",
+      "encode",
+      "transcode"
+    ],
+    "modes": [
+      "lossless",
+      "lossy"
+    ],
+    "images": [
+      "alpha.pam",
+      "illustration.pam",
+      "photo.avif",
+      "photo.jpg",
+      "photo.jxl",
+      "photo.pam",
+      "photo.png",
+      "photo.webp",
+      "screenshot.pam"
+    ]
+  },
+  "environment": {
+    "platform": "Linux-6.18.44-fc-v51-x86_64-with-glibc2.39",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpu_count": 4,
+    "python": "3.11.15",
+    "reference_decoder": "Pillow 12.3.0 + pillow-jxl-plugin"
+  },
+  "collected_at": "2026-10-02 09:57:36",
+  "mode": "http",
+  "primary_metric": "codec_ms",
+  "notes": [
+    "Métrica primária: tempo de codec reportado pelo servidor nos headers X-Arena-*-Ns (transcode = decode + encode; analyze = só a análise nos dois servidores). A coluna de parede do cliente inclui rede, PAM e serialização. Requisições sequenciais em conexão persistente.",
+    "Regra de empate (a mesma no console, no Markdown e no JSON): há empate estatístico quando os intervalos p25-p75 das duas medianas se sobrepõem; só vale como vitória uma diferença fora deles.",
+    "Razão geométrica = média geométrica de (tempo do Go ÷ tempo do Rust) sobre as tarefas; acima de 1 o Rust é mais rápido, abaixo de 1 o Go. Ela pondera a magnitude, que a contagem de vitórias ignora.",
+    "Cada saída é decodificada por um decoder de referência (Pillow/libjxl/libavif) antes de o tempo ser aceito; lossless exige igualdade exata e lossy um PSNR mínimo por classe de imagem. PSNR RGB sobre os pixels opacos do original. O tempo só é comparável junto do tamanho e da qualidade."
+  ]
+}

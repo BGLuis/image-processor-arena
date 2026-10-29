@@ -1,5 +1,7 @@
 # 🏆 Pódio da Arena: Go Puro × Rust Puro
 
+> 💡 **Dashboard Interativo Disponível**: Visualize estes dados com gráficos dinâmicos, filtros em tempo real e um banco de dados analítico DuckDB-Wasm no [Dashboard Next.js](../dashboard/) executando `cd dashboard && npm run dev`.
+
 **Modo de Execução**: `HTTP`  
 **Métrica primária**: codec (servidor, X-Arena-*-Ns)  
 **Iterações por teste**: 10 medidas (+ 3 warmup); tempos como mediana [p25-p75]  
