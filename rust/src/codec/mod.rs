@@ -87,6 +87,7 @@ pub struct EncodeParams {
     pub mode: CodecMode,
     pub quality: u8,
     pub effort: u8,
+    pub implementation: Option<String>,
 }
 
 impl Default for EncodeParams {
@@ -96,6 +97,7 @@ impl Default for EncodeParams {
             mode: params::DEFAULT_MODE,
             quality: params::DEFAULT_Q,
             effort: params::DEFAULT_EFFORT,
+            implementation: None,
         }
     }
 }
@@ -184,6 +186,18 @@ pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecErr
 
 /// Decodifica um arquivo compactado para imagem PAM
 pub fn decode(data: &[u8], format: ImageFormat) -> Result<PamImage, CodecError> {
+    decode_with_impl(data, format, None)
+}
+
+/// Decodifica um arquivo compactado para imagem PAM com suporte a implementação
+pub fn decode_with_impl(
+    data: &[u8],
+    format: ImageFormat,
+    implementation: Option<&str>,
+) -> Result<PamImage, CodecError> {
+    if let Some(imp) = implementation.filter(|s| !s.is_empty()) {
+        params::validate_decode_impl(format, imp)?;
+    }
     match format {
         ImageFormat::Png => png::decode(data),
         ImageFormat::Jpeg => jpeg::decode(data),
@@ -199,8 +213,18 @@ pub fn transcode(
     from_format: ImageFormat,
     params: &EncodeParams,
 ) -> Result<(Vec<u8>, u128, u128), CodecError> {
+    transcode_with_impl(data, from_format, None, params)
+}
+
+/// Transcodifica entre dois formatos com implementações explícitas de decode e encode
+pub fn transcode_with_impl(
+    data: &[u8],
+    from_format: ImageFormat,
+    from_impl: Option<&str>,
+    params: &EncodeParams,
+) -> Result<(Vec<u8>, u128, u128), CodecError> {
     let t0 = Instant::now();
-    let pam = decode(data, from_format)?;
+    let pam = decode_with_impl(data, from_format, from_impl)?;
     let decode_ns = t0.elapsed().as_nanos();
 
     let t1 = Instant::now();

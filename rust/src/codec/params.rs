@@ -106,6 +106,46 @@ fn check_range(name: &str, value: u8, min: u8, max: u8) -> Result<(), CodecError
     }
 }
 
+pub fn validate_encode_impl(format: ImageFormat, implementation: &str) -> Result<(), CodecError> {
+    let imp = implementation.to_ascii_lowercase();
+    if imp == "default" {
+        return Ok(());
+    }
+    let valid = match format {
+        ImageFormat::Png => matches!(imp.as_str(), "png" | "stdlib"),
+        ImageFormat::Jpeg => matches!(imp.as_str(), "jpeg-encoder" | "stdlib"),
+        ImageFormat::Webp => matches!(imp.as_str(), "zenwebp" | "image-webp" | "image_webp" | "gowebp"),
+        ImageFormat::Avif => matches!(imp.as_str(), "ravif" | "zenravif"),
+        ImageFormat::Jxl => matches!(imp.as_str(), "jxl-encoder" | "gen2brain" | "jxl"),
+    };
+    if !valid {
+        return Err(CodecError::InvalidParam(format!(
+            "Implementação '{implementation}' inválida para codificação de {format:?}"
+        )));
+    }
+    Ok(())
+}
+
+pub fn validate_decode_impl(format: ImageFormat, implementation: &str) -> Result<(), CodecError> {
+    let imp = implementation.to_ascii_lowercase();
+    if imp == "default" {
+        return Ok(());
+    }
+    let valid = match format {
+        ImageFormat::Png => matches!(imp.as_str(), "png" | "stdlib"),
+        ImageFormat::Jpeg => matches!(imp.as_str(), "zune-jpeg" | "zune" | "stdlib"),
+        ImageFormat::Webp => matches!(imp.as_str(), "image-webp" | "image_webp" | "imagewebp" | "zenwebp"),
+        ImageFormat::Avif => matches!(imp.as_str(), "zenavif" | "rav1d"),
+        ImageFormat::Jxl => matches!(imp.as_str(), "jxl-oxide" | "gen2brain" | "jxl"),
+    };
+    if !valid {
+        return Err(CodecError::InvalidParam(format!(
+            "Implementação '{implementation}' inválida para decodificação de {format:?}"
+        )));
+    }
+    Ok(())
+}
+
 impl EncodeParams {
     /// Monta os parâmetros a partir dos valores textuais de uma requisição. Valor ausente ou
     /// vazio seleciona o default; valor fora do contrato é rejeitado, nunca truncado.
@@ -115,21 +155,46 @@ impl EncodeParams {
         q: Option<&str>,
         effort: Option<&str>,
     ) -> Result<Self, CodecError> {
+        Self::parse_with_impl(format, mode, q, effort, None)
+    }
+
+    pub fn parse_with_impl(
+        format: &str,
+        mode: Option<&str>,
+        q: Option<&str>,
+        effort: Option<&str>,
+        implementation: Option<&str>,
+    ) -> Result<Self, CodecError> {
+        let fmt = ImageFormat::from_str(format)?;
         let mode = match mode.filter(|s| !s.is_empty()) {
             Some(m) => CodecMode::from_str(m)?,
             None => DEFAULT_MODE,
         };
+        let implementation = implementation
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_ascii_lowercase());
+
+        if let Some(ref imp) = implementation {
+            validate_encode_impl(fmt, imp)?;
+        }
+
         Ok(Self {
-            format: ImageFormat::from_str(format)?,
+            format: fmt,
             mode,
             quality: parse_bounded("q", q, DEFAULT_Q, MIN_Q, MAX_Q)?,
             effort: parse_bounded("effort", effort, DEFAULT_EFFORT, MIN_EFFORT, MAX_EFFORT)?,
+            implementation,
         })
     }
 
     pub fn validate(&self) -> Result<(), CodecError> {
         check_range("q", self.quality, MIN_Q, MAX_Q)?;
-        check_range("effort", self.effort, MIN_EFFORT, MAX_EFFORT)
+        check_range("effort", self.effort, MIN_EFFORT, MAX_EFFORT)?;
+        if let Some(ref imp) = self.implementation {
+            validate_encode_impl(self.format, imp)?;
+        }
+        Ok(())
     }
 }
 

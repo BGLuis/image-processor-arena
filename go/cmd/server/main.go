@@ -112,13 +112,20 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 // runRequest is a /run query already checked against the parameter contract, so that nothing
 // invalid reaches the decoder or the encoder.
 type runRequest struct {
-	op     string
-	from   string // source format for decode and transcode
-	params codec.Params
+	op       string
+	from     string // source format for decode and transcode
+	fromImpl string // source implementation for decode and transcode
+	params   codec.Params
 }
 
 func parseRunRequest(qParams url.Values) (runRequest, error) {
-	req := runRequest{op: qParams.Get("op")}
+	req := runRequest{
+		op:       qParams.Get("op"),
+		fromImpl: qParams.Get("from_impl"),
+	}
+	if req.fromImpl == "" {
+		req.fromImpl = qParams.Get("impl")
+	}
 	format := qParams.Get("format")
 
 	switch req.op {
@@ -127,7 +134,11 @@ func parseRunRequest(qParams url.Values) (runRequest, error) {
 		if format == "" {
 			return req, errors.New("Missing 'format' query parameter")
 		}
-		params, err := codec.ParseParams(format, qParams.Get("mode"), qParams.Get("q"), qParams.Get("effort"))
+		impl := qParams.Get("to_impl")
+		if impl == "" {
+			impl = qParams.Get("impl")
+		}
+		params, err := codec.ParseParams(format, qParams.Get("mode"), qParams.Get("q"), qParams.Get("effort"), impl)
 		if err != nil {
 			return req, err
 		}
@@ -140,6 +151,11 @@ func parseRunRequest(qParams url.Values) (runRequest, error) {
 		if err != nil {
 			return req, err
 		}
+		if req.fromImpl != "" {
+			if err := codec.ValidateDecoderImpl(from, req.fromImpl); err != nil {
+				return req, err
+			}
+		}
 		req.from = from
 	case "transcode":
 		to := qParams.Get("to")
@@ -150,7 +166,16 @@ func parseRunRequest(qParams url.Values) (runRequest, error) {
 		if err != nil {
 			return req, err
 		}
-		params, err := codec.ParseParams(to, qParams.Get("mode"), qParams.Get("q"), qParams.Get("effort"))
+		if req.fromImpl != "" {
+			if err := codec.ValidateDecoderImpl(from, req.fromImpl); err != nil {
+				return req, err
+			}
+		}
+		toImpl := qParams.Get("to_impl")
+		if toImpl == "" {
+			toImpl = qParams.Get("impl")
+		}
+		params, err := codec.ParseParams(to, qParams.Get("mode"), qParams.Get("q"), qParams.Get("effort"), toImpl)
 		if err != nil {
 			return req, err
 		}
@@ -270,7 +295,7 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 
 	case "decode":
 		start := time.Now()
-		pamImg, err := codec.Decode(bytes.NewReader(body), req.from)
+		pamImg, err := codec.Decode(bytes.NewReader(body), req.from, req.fromImpl)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Decode error: %v", err), http.StatusBadRequest)
 			return
@@ -286,7 +311,7 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 
 	case "transcode":
 		startDec := time.Now()
-		pamImg, err := codec.Decode(bytes.NewReader(body), req.from)
+		pamImg, err := codec.Decode(bytes.NewReader(body), req.from, req.fromImpl)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Decode error: %v", err), http.StatusBadRequest)
 			return

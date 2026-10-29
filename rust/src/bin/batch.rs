@@ -35,6 +35,15 @@ struct Args {
     #[arg(long)]
     effort: Option<String>,
 
+    #[arg(long = "impl")]
+    implementation: Option<String>,
+
+    #[arg(long)]
+    from_impl: Option<String>,
+
+    #[arg(long)]
+    to_impl: Option<String>,
+
     #[arg(long)]
     input: String,
 
@@ -116,11 +125,16 @@ fn main() {
             let format_str = args
                 .format
                 .expect("Argumento '--format' obrigatório para op=encode");
-            let params = EncodeParams::parse(
+            let imp = args
+                .to_impl
+                .as_deref()
+                .or(args.implementation.as_deref());
+            let params = EncodeParams::parse_with_impl(
                 &format_str,
                 args.mode.as_deref(),
                 args.q.as_deref(),
                 args.effort.as_deref(),
+                imp,
             )
             .unwrap_or_else(|e| {
                 eprintln!("[-] {e}");
@@ -157,8 +171,12 @@ fn main() {
                 eprintln!("[-] {e}");
                 process::exit(1);
             });
+            let imp = args
+                .from_impl
+                .as_deref()
+                .or(args.implementation.as_deref());
 
-            let pam = match codec::decode(&input_bytes, format) {
+            let pam = match codec::decode_with_impl(&input_bytes, format, imp) {
                 Ok(p) => p,
                 Err(e) => {
                     eprintln!("[-] Erro decode: {e}");
@@ -185,11 +203,20 @@ fn main() {
                 eprintln!("[-] {e}");
                 process::exit(1);
             });
-            let params = EncodeParams::parse(
+            let from_impl = args
+                .from_impl
+                .as_deref()
+                .or(args.implementation.as_deref());
+            let to_impl = args
+                .to_impl
+                .as_deref()
+                .or(args.implementation.as_deref());
+            let params = EncodeParams::parse_with_impl(
                 &to_str,
                 args.mode.as_deref(),
                 args.q.as_deref(),
                 args.effort.as_deref(),
+                to_impl,
             )
             .unwrap_or_else(|e| {
                 eprintln!("[-] {e}");
@@ -197,7 +224,7 @@ fn main() {
             });
 
             let (out_bytes, _dec_ns, _enc_ns) =
-                match codec::transcode(&input_bytes, from_format, &params) {
+                match codec::transcode_with_impl(&input_bytes, from_format, from_impl, &params) {
                     Ok(res) => res,
                     Err(e) => {
                         eprintln!("[-] Erro transcode: {e}");

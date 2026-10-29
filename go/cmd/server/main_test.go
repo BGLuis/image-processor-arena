@@ -359,3 +359,50 @@ func TestRunEmptyParamsSelectDefaults(t *testing.T) {
 		t.Errorf("empty params must equal omitted params, got status %d", empty.Code)
 	}
 }
+
+func TestRunDecodeWithImpl(t *testing.T) {
+	pamData := loadSamplePAM(t)
+	encResp := postRun(t, "op=encode&format=webp", pamData)
+	if encResp.Code != http.StatusOK {
+		t.Fatalf("failed to encode sample webp: %d", encResp.Code)
+	}
+	webpData := encResp.Body.Bytes()
+
+	decResp := postRun(t, "op=decode&format=webp&impl=ximage", webpData)
+	if decResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 for impl=ximage, got %d: %s", decResp.Code, decResp.Body.String())
+	}
+	if ct := decResp.Header().Get("Content-Type"); ct != "image/x-netpbm-pam" {
+		t.Errorf("expected Content-Type image/x-netpbm-pam, got %s", ct)
+	}
+}
+
+func TestRunTranscodeWithImpl(t *testing.T) {
+	pamData := loadSamplePAM(t)
+	encResp := postRun(t, "op=encode&format=png", pamData)
+	if encResp.Code != http.StatusOK {
+		t.Fatalf("failed to encode sample png: %d", encResp.Code)
+	}
+	pngData := encResp.Body.Bytes()
+
+	tcResp := postRun(t, "op=transcode&format=png&to=webp&from_impl=stdlib&to_impl=gowebp", pngData)
+	if tcResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 for transcode with from_impl and to_impl, got %d: %s", tcResp.Code, tcResp.Body.String())
+	}
+	if ct := tcResp.Header().Get("Content-Type"); ct != "image/webp" {
+		t.Errorf("expected Content-Type image/webp, got %s", ct)
+	}
+}
+
+func TestRunRejectsUnknownImpl(t *testing.T) {
+	pamData := loadSamplePAM(t)
+	r1 := postRun(t, "op=decode&format=webp&impl=nonexistent", pamData)
+	if r1.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for unknown decode impl, got %d", r1.Code)
+	}
+	r2 := postRun(t, "op=encode&format=webp&impl=nonexistent", pamData)
+	if r2.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for unknown encode impl, got %d", r2.Code)
+	}
+}
+
