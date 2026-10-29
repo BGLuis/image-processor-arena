@@ -1,0 +1,55 @@
+name: Purity guard
+
+on:
+  workflow_call:
+
+permissions: {}
+
+env:
+  PYTHON_VERSION: '3.12'
+  CARGO_DENY_VERSION: '0.20.2'
+
+jobs:
+  purity-guard:
+    name: "0% CGO / FFI Purity Guard"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read  # checkout
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: 'go/go.mod'
+          cache-dependency-path: 'go/go.sum'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de  # master
+        with:
+          toolchain: 1.97.0
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install cargo-deny
+        run: |
+          release="cargo-deny-${CARGO_DENY_VERSION}-x86_64-unknown-linux-musl"
+          curl -sSL "https://github.com/EmbarkStudios/cargo-deny/releases/download/${CARGO_DENY_VERSION}/${release}.tar.gz" | tar -xz -C /tmp
+          sudo mv "/tmp/${release}/cargo-deny" /usr/local/bin/cargo-deny
+          cargo-deny --version
+
+      - name: Run Go ecosystem purity audit
+        run: ./scripts/check-purity-go.sh
+
+      - name: Run Rust ecosystem purity audit & cargo-deny bans
+        run: ./scripts/check-purity-rust.sh
+
+      - name: Verify the Rust toolchain is the same everywhere
+        run: ./scripts/check-toolchain-sync.sh

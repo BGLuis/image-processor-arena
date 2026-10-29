@@ -1,0 +1,18 @@
+{
+  "shared": [
+    "scripts/",
+    "arena.toml",
+    "rust-toolchain.toml",
+    "harness/",
+    ".github/workflows/",
+    ".github/actions/",
+    ".github/ci-variants.json"
+  ],
+  "harness": ["harness/"],
+  "docker": ["docker/", "docker-compose.yml"],
+  "arena": { "go": "go", "rust": "rust" },
+  "variants": [
+    { "id": "go", "lang": "go", "path": "go", "bin_dir": "go/bin" },
+    { "id": "rust", "lang": "rust", "path": "rust", "bin_dir": "rust/target/release" }
+  ]
+}

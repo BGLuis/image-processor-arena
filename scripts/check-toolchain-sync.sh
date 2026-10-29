@@ -12,7 +12,7 @@ echo "=== Verificação do toolchain Rust (image-processor-arena) ==="
 
 toolchain="$(sed -n 's/^channel *= *"\(.*\)".*/\1/p' rust-toolchain.toml)"
 docker_versions="$(sed -n 's/^FROM rust:\([0-9][0-9.]*\)-bookworm.*/\1/p' docker/rust.Dockerfile | sort -u)"
-ci_versions="$(grep -E '^\s+toolchain: *[0-9]' .github/workflows/ci.yml | sed 's/.*toolchain: *//; s/[^0-9.].*//' | sort -u)"
+ci_versions="$(grep -hE '^\s+toolchain: *[0-9]' .github/workflows/*.yml | sed 's/.*toolchain: *//; s/[^0-9.].*//' | sort -u)"
 
 errors=0
 if [[ -z "${toolchain}" ]]; then
@@ -21,7 +21,7 @@ if [[ -z "${toolchain}" ]]; then
 fi
 echo "[*] rust-toolchain.toml : ${toolchain}"
 echo "[*] docker/rust.Dockerfile: ${docker_versions:-<nenhuma tag fixa>}"
-echo "[*] .github/workflows/ci.yml: ${ci_versions:-<nenhuma versão fixa>}"
+echo "[*] .github/workflows/*.yml: ${ci_versions:-<nenhuma versão fixa>}"
 
 if [[ "${docker_versions}" != "${toolchain}" ]]; then
     echo "[-] docker/rust.Dockerfile deve usar FROM rust:${toolchain}-bookworm."

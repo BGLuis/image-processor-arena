@@ -1,398 +1,162 @@
 name: CI
 
+# Orquestrador: decide o que mudou (scripts/ci-plan.sh + .github/ci-variants.json) e chama um workflow
+# reutilizável por linguagem (_go, _rust, ...). Nova variante = uma entrada no registro.
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - 'README.md'
-      - 'README.en.md'
-      - 'results/**'
-      - 'docs/**'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - 'README.md'
-      - 'README.en.md'
-      - 'results/**'
-      - 'docs/**'
+  schedule:
+    - cron: '17 5 * * *'
   workflow_dispatch:
 
 permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # 1. Purity Guard: Verificação Imediata de Pureza (0% CGO / 0% FFI)
-  # Executa scripts estritos que barram qualquer inclusão de código nativo C.
-  # ---------------------------------------------------------------------------
+  plan:
+    name: "Plan"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read       # checkout e compare API
+      pull-requests: read  # lista os arquivos do PR
+    outputs:
+      go: ${{ steps.plan.outputs.go }}
+      has_go: ${{ steps.plan.outputs.has_go }}
+      rust: ${{ steps.plan.outputs.rust }}
+      has_rust: ${{ steps.plan.outputs.has_rust }}
+      arena: ${{ steps.plan.outputs.arena }}
+      docker: ${{ steps.plan.outputs.docker }}
+      purity: ${{ steps.plan.outputs.purity }}
+      harness: ${{ steps.plan.outputs.harness }}
+      arena_go: ${{ steps.registry.outputs.arena_go }}
+      arena_rust: ${{ steps.registry.outputs.arena_rust }}
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            .github/ci-variants.json
+            scripts/ci-plan.sh
+
+      - name: Plan pipelines from changed files
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          case "${EVENT_NAME}" in
+            pull_request)
+              gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" --jq '.[].filename' > changed.txt ;;
+            push)
+              if [[ "${BEFORE_SHA}" =~ ^0+$ ]]; then
+                export CI_FORCE_ALL=true
+                : > changed.txt
+              else
+                gh api "repos/${REPO}/compare/${BEFORE_SHA}...${HEAD_SHA}" --jq '.files[].filename' > changed.txt
+              fi ;;
+            *)
+              export CI_FORCE_ALL=true
+              : > changed.txt ;;
+          esac
+          cat changed.txt
+          ./scripts/ci-plan.sh < changed.txt
+
+      - name: Read arena variants
+        id: registry
+        run: |
+          jq -r '. as $r | "arena_go=" + ([$r.variants[] | select(.id == $r.arena.go)][0] | tojson), "arena_rust=" + ([$r.variants[] | select(.id == $r.arena.rust)][0] | tojson)' \
+            .github/ci-variants.json >> "${GITHUB_OUTPUT}"
+
   purity-guard:
-    name: "0% CGO / FFI Purity Guard"
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    name: "Purity"
+    needs: plan
+    if: needs.plan.outputs.purity == 'true'
     permissions:
       contents: read
-    steps:
-      - name: Checkout source code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+    uses: ./.github/workflows/_purity.yml
 
-      - name: Setup Go
-        uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34  # v5.3.0
-        with:
-          go-version-file: 'go/go.mod'
-          cache-dependency-path: 'go/go.sum'
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de  # master
-        with:
-          toolchain: 1.97.0
-
-      - name: Setup Python
-        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38  # v5.4.0
-        with:
-          python-version: '3.12'
-
-      - name: Install cargo-deny
-        run: |
-          curl -sSL "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz" | tar -xz -C /tmp
-          sudo mv /tmp/cargo-deny-0.20.2-x86_64-unknown-linux-musl/cargo-deny /usr/local/bin/cargo-deny
-          cargo-deny --version
-
-      - name: Run Go ecosystem purity audit
-        run: |
-          chmod +x ./scripts/check-purity-go.sh
-          ./scripts/check-purity-go.sh
-
-      - name: Run Rust ecosystem purity audit & cargo-deny bans
-        run: |
-          chmod +x ./scripts/check-purity-rust.sh
-          ./scripts/check-purity-rust.sh
-
-      - name: Verify the Rust toolchain is the same everywhere
-        run: |
-          chmod +x ./scripts/check-toolchain-sync.sh
-          ./scripts/check-toolchain-sync.sh
-
-  # ---------------------------------------------------------------------------
-  # 2. Go CI: Formatação, Vet, Testes Unitários e Compilação dos Binários
-  # ---------------------------------------------------------------------------
-  go-ci:
-    name: "Go Engine (Pure, CGO=0)"
-    needs: purity-guard
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
+  go:
+    name: "Go ${{ matrix.id }}"
+    needs: plan
+    if: needs.plan.outputs.has_go == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.go) }}
     permissions:
       contents: read
-    steps:
-      - name: Checkout source code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+    uses: ./.github/workflows/_go.yml
+    with:
+      id: ${{ matrix.id }}
+      path: ${{ matrix.path }}
+      bin_dir: ${{ matrix.bin_dir }}
 
-      - name: Setup Go
-        uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34  # v5.3.0
-        with:
-          go-version-file: 'go/go.mod'
-          cache-dependency-path: 'go/go.sum'
-
-      - name: Verify gofmt formatting
-        run: |
-          cd go
-          UNFORMATTED=$(gofmt -l .)
-          if [ -n "$UNFORMATTED" ]; then
-            echo "[-] Arquivos Go fora dos padrões de formatação (gofmt):"
-            echo "$UNFORMATTED"
-            exit 1
-          fi
-          echo "[+] Todos os arquivos Go estão devidamente formatados!"
-
-      - name: Run go vet
-        run: |
-          cd go
-          CGO_ENABLED=0 go vet ./...
-
-      - name: Run Go unit tests
-        run: |
-          cd go
-          CGO_ENABLED=0 go test -v ./...
-
-      - name: Compile Go static binaries
-        run: |
-          cd go
-          mkdir -p bin
-          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/arena-server ./cmd/server
-          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/arena-batch ./cmd/batch
-
-      - name: Upload Go batch binary artifact
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
-        with:
-          name: go-arena-batch
-          path: go/bin/arena-batch
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Upload Go server binary artifact
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
-        with:
-          name: go-arena-server
-          path: go/bin/arena-server
-          if-no-files-found: error
-          retention-days: 1
-
-  # ---------------------------------------------------------------------------
-  # 3. Rust CI: Rustfmt, Clippy, Testes Unitários e Compilação Release
-  # ---------------------------------------------------------------------------
-  rust-ci:
-    name: "Rust Engine (Pure)"
-    needs: purity-guard
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
+  rust:
+    name: "Rust ${{ matrix.id }}"
+    needs: plan
+    if: needs.plan.outputs.has_rust == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.rust) }}
     permissions:
       contents: read
-    steps:
-      - name: Checkout source code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+    uses: ./.github/workflows/_rust.yml
+    with:
+      id: ${{ matrix.id }}
+      path: ${{ matrix.path }}
+      bin_dir: ${{ matrix.bin_dir }}
 
-      - name: Setup Rust Toolchain
-        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de  # master
-        with:
-          toolchain: 1.97.0
-          components: rustfmt, clippy
+  docker:
+    name: "Docker"
+    needs: plan
+    if: needs.plan.outputs.docker == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_docker.yml
 
-      - name: Cache Cargo Dependencies and Targets
-        uses: Swatinem/rust-cache@5cb072d7354962be830356aa6b146f7612846014  # v2.7.5
-        with:
-          workspaces: rust -> target
+  harness:
+    name: "Harness"
+    needs: plan
+    if: needs.plan.outputs.harness == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_harness.yml
 
-      - name: Verify rustfmt formatting
-        run: |
-          cargo fmt --manifest-path rust/Cargo.toml --all -- --check
+  arena:
+    name: "Arena"
+    needs: [plan, go, rust]
+    if: needs.plan.outputs.arena == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_arena.yml
+    with:
+      go_id: ${{ fromJSON(needs.plan.outputs.arena_go).id }}
+      go_bin_dir: ${{ fromJSON(needs.plan.outputs.arena_go).bin_dir }}
+      rust_id: ${{ fromJSON(needs.plan.outputs.arena_rust).id }}
+      rust_bin_dir: ${{ fromJSON(needs.plan.outputs.arena_rust).bin_dir }}
 
-      - name: Run clippy checks (-D warnings)
-        run: |
-          cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings
-
-      - name: Run Rust unit tests
-        run: |
-          cargo test --manifest-path rust/Cargo.toml
-
-      - name: Compile Rust release binaries
-        run: |
-          cargo build --release --manifest-path rust/Cargo.toml --bin arena-server --bin arena-batch
-
-      - name: Upload Rust batch binary artifact
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
-        with:
-          name: rust-arena-batch
-          path: rust/target/release/arena-batch
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Upload Rust server binary artifact
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
-        with:
-          name: rust-arena-server
-          path: rust/target/release/arena-server
-          if-no-files-found: error
-          retention-days: 1
-
-  # ---------------------------------------------------------------------------
-  # 4. Cross Validation: Validação Cruzada Formal Bit-a-Bit
-  # Executa harness de conformidade contra o gabarito das 16 métricas de imagem
-  # ---------------------------------------------------------------------------
-  cross-validation:
-    name: "Mathematical Cross-Validation"
-    needs: [go-ci, rust-ci]
+  # Único check obrigatório: jobs ignorados pelo plano contam como sucesso.
+  ci-ok:
+    name: "CI OK"
+    if: always()
+    needs: [plan, purity-guard, go, rust, docker, harness, arena]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    permissions:
-      contents: read
+    permissions: {}
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-
-      - name: Setup Python
-        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38  # v5.4.0
-        with:
-          python-version: '3.12'
-
-      - name: Download Go batch artifact
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806  # v4.1.9
-        with:
-          name: go-arena-batch
-          path: go/bin
-
-      - name: Download Rust batch artifact
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806  # v4.1.9
-        with:
-          name: rust-arena-batch
-          path: rust/target/release
-
-      - name: Set binary permissions
+      - name: Fail if any job failed or was cancelled
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
-          chmod +x go/bin/arena-batch
-          chmod +x rust/target/release/arena-batch
-
-      - name: Verify Python self-oracle ground truth
-        run: |
-          python3 harness/verify_cross.py --mode self
-
-      - name: Run cross-validation against Go and Rust engines
-        run: |
-          python3 harness/verify_cross.py --mode batch --target all
-
-  # ---------------------------------------------------------------------------
-  # 5. Docker Validation: Validação de Builds Herméticos Multi-Stage
-  # ---------------------------------------------------------------------------
-  docker-validation:
-    name: "Docker Compose & Containers Build"
-    needs: purity-guard
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout source code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2  # v3.10.0
-
-      - name: Validate docker-compose configuration
-        run: |
-          docker compose config --quiet
-
-      - name: Build Docker dev profile images
-        run: |
-          docker compose --profile dev build
-
-      - name: Build Docker bench profile images
-        run: |
-          docker compose --profile bench build
-          docker compose --profile bench-isolated build
-
-      # Os estágios `test` rodam a suíte completa e a verificação de pureza dentro de cada imagem
-      # (issue #12: o build Docker do Rust nunca tinha sido exercitado no CI).
-      - name: Run the Rust test stage in Docker
-        run: |
-          docker build -f docker/rust.Dockerfile --target test .
-
-      - name: Run the Go test stage in Docker
-        run: |
-          docker build -f docker/go.Dockerfile --target test .
-
-  # ---------------------------------------------------------------------------
-  # 6. Harness: testes unitários do benchmark (regra de empate, razão geométrica, busca do q
-  # equivalente, parser do oha e a recusa de saídas inválidas contra o decoder de referência)
-  # ---------------------------------------------------------------------------
-  harness-tests:
-    name: "Benchmark Harness Tests"
-    needs: purity-guard
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout source code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-
-      - name: Setup Python
-        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38  # v5.4.0
-        with:
-          python-version: '3.12'
-
-      - name: Install reference decoders (Pillow + libjxl plugin)
-        run: |
-          python3 -m pip install -r harness/requirements.txt
-
-      - name: Run harness unit tests
-        run: |
-          python3 -W error::ResourceWarning -m unittest discover -s harness/tests -v
-
-  # ---------------------------------------------------------------------------
-  # 7. Arena Benchmark: Execução Automatizada da Bateria Oficial de Benchmark
-  # Sobe servidores Go e Rust, executa a suíte HTTP e publica o pódio no resumo do CI
-  # ---------------------------------------------------------------------------
-  arena-benchmark:
-    name: "Arena Benchmark & Podium"
-    needs: [go-ci, rust-ci]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout source code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-
-      - name: Setup Python
-        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38  # v5.4.0
-        with:
-          python-version: '3.12'
-
-      - name: Install reference decoders (Pillow + libjxl plugin)
-        run: |
-          python3 -m pip install -r harness/requirements.txt
-
-      - name: Download Go Server binary artifact
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806  # v4.1.9
-        with:
-          name: go-arena-server
-          path: go/bin
-
-      - name: Download Rust Server binary artifact
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806  # v4.1.9
-        with:
-          name: rust-arena-server
-          path: rust/target/release
-
-      - name: Set binary permissions
-        run: |
-          chmod +x go/bin/arena-server
-          chmod +x rust/target/release/arena-server
-
-      - name: Start Go and Rust servers in background
-        run: |
-          PORT=8080 go/bin/arena-server &
-          PORT=8081 rust/target/release/arena-server &
-          echo "[*] Aguardando inicialização dos servidores..."
-          for port in 8080 8081; do
-            online=false
-            for i in $(seq 1 30); do
-              if curl -s -f "http://localhost:${port}/health" > /dev/null; then
-                echo "[+] Servidor na porta ${port} está online."
-                online=true
-                break
-              fi
-              sleep 0.5
-            done
-            if [ "$online" != "true" ]; then
-              echo "[-] ERRO: Servidor na porta ${port} não respondeu ao healthcheck."
-              exit 1
-            fi
-          done
-
-      - name: Run HTTP Arena Benchmark Suite
-        run: |
-          mkdir -p results/ci
-          python3 harness/benchmark_arena.py \
-            --mode http \
-            --go-url http://localhost:8080/run \
-            --rust-url http://localhost:8081/run \
-            --iterations 5 \
-            --warmup 1 \
-            --output-dir results/ci
-
-      - name: Publish Podium to Job Summary
-        if: always()
-        run: |
-          if [ -f results/ci/PODIUM.md ]; then
-            echo "## 🏆 Pódio da Arena (Execução no CI)" >> $GITHUB_STEP_SUMMARY
-            cat results/ci/PODIUM.md >> $GITHUB_STEP_SUMMARY
-          fi
-
-      - name: Upload Benchmark Results Artifacts
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
-        with:
-          name: arena-benchmark-ci-results
-          path: results/ci/
-          retention-days: 14
+          echo "results: ${RESULTS}"
+          case "${RESULTS}" in *failure*|*cancelled*) exit 1;; esac

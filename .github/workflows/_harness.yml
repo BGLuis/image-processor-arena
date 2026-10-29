@@ -1,0 +1,35 @@
+name: Harness tests
+
+on:
+  workflow_call:
+
+permissions: {}
+
+env:
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  harness-tests:
+    name: "Benchmark Harness Tests"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read  # checkout
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: harness/requirements.txt
+
+      - name: Install reference decoders (Pillow + libjxl plugin)
+        run: python3 -m pip install -r harness/requirements.txt
+
+      - name: Run harness unit tests
+        run: python3 -W error::ResourceWarning -m unittest discover -s harness/tests -v
