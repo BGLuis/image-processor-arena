@@ -92,3 +92,15 @@ func TestFilter(t *testing.T) {
 		})
 	}
 }
+
+func TestSeamCarve(t *testing.T) {
+	src := makeTestPAM(400, 300, 3)
+	dst, err := ops.SeamCarve(src, 350, 300)
+	if err != nil {
+		t.Fatalf("SeamCarve failed: %v", err)
+	}
+	if dst.Width != 350 || dst.Height != 300 {
+		t.Errorf("expected 350x300, got %dx%d", dst.Width, dst.Height)
+	}
+}
+

@@ -198,8 +198,13 @@ fn plan(params: &RunQuery, max_pixels: usize) -> Result<Plan, HttpError> {
             })
         }
 
+        "seam_carving" => Err((
+            StatusCode::NOT_IMPLEMENTED,
+            "Operação 'seam_carving' não implementada em Rust puro (equivalente puro não disponível no ecossistema)".to_string(),
+        )),
+
         _ => Err(client_error(format!(
-            "Operação desconhecida: '{op}'. Esperado: analyze, encode, decode, transcode, resize, filter"
+            "Operação desconhecida: '{op}'. Esperado: analyze, encode, decode, transcode, resize, filter, seam_carving"
         ))),
     }
 }

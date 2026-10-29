@@ -381,5 +381,46 @@ class ResizeValidationTests(unittest.TestCase):
             quality.validate_resize(img, degraded, 50, 50, "lanczos3", min_psnr=30.0)
 
 
+class SeamCarvingTests(unittest.TestCase):
+    def test_seam_carving_validation_accepts_expected_dims(self):
+        b = bench.ArenaBenchmark(validate=False, equal_quality=False)
+        b.validate = True
+        # Create a valid 350x300 PAM
+        header = b"P7\nWIDTH 350\nHEIGHT 300\nDEPTH 3\nMAXVAL 255\nTUPLTYPE RGB\nENDHDR\n"
+        pam_data = header + (b"\x00" * (350 * 300 * 3))
+        task = bench.Task("Seam Carving", "seam_carving", "pam", "lossless", "/fake", target_w=350, target_h=300)
+        res = b.validate_output(task, pam_data)
+        self.assertTrue(res["validated"])
+
+    def test_seam_carving_validation_rejects_wrong_dims(self):
+        b = bench.ArenaBenchmark(validate=False, equal_quality=False)
+        b.validate = True
+        header = b"P7\nWIDTH 400\nHEIGHT 300\nDEPTH 3\nMAXVAL 255\nTUPLTYPE RGB\nENDHDR\n"
+        pam_data = header + (b"\x00" * (400 * 300 * 3))
+        task = bench.Task("Seam Carving", "seam_carving", "pam", "lossless", "/fake", target_w=350, target_h=300)
+        with self.assertRaises(quality.ValidationError):
+            b.validate_output(task, pam_data)
+
+
+class ScorecardStatusTests(unittest.TestCase):
+    def test_operations_status_in_reports(self):
+        b = bench.ArenaBenchmark(validate=False, equal_quality=False)
+        self.assertTrue(b.engine_supports_op("go", "seam_carving"))
+        self.assertFalse(b.engine_supports_op("rust", "seam_carving"))
+        with tempfile.TemporaryDirectory() as d:
+            b.export_reports(d)
+            with open(os.path.join(d, "benchmark_results.json")) as f:
+                report = json.load(f)
+            self.assertIn("scorecard", report)
+            self.assertEqual(report["scorecard"]["seam_carving"]["go"], "supported")
+            self.assertEqual(report["scorecard"]["seam_carving"]["rust"], "unsupported")
+
+            with open(os.path.join(d, "PODIUM.md")) as f:
+                md = f.read()
+            self.assertIn("Matriz de Suporte por Operação", md)
+            self.assertIn("seam_carving", md)
+
+
 if __name__ == "__main__":
     unittest.main()
+

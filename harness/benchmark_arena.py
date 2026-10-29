@@ -51,6 +51,9 @@ CODEC_TIME_HEADERS = {
     "encode": ("X-Arena-Encode-Ns",),
     "decode": ("X-Arena-Decode-Ns",),
     "transcode": ("X-Arena-Decode-Ns", "X-Arena-Encode-Ns"),
+    "resize": ("X-Arena-Process-Ns",),
+    "filter": ("X-Arena-Process-Ns",),
+    "seam_carving": ("X-Arena-Process-Ns",),
 }
 # Tolerância do modo load: sem repetições por tarefa não há p25-p75, então duas vazões a menos de
 # 5% uma da outra contam como empate.
@@ -217,6 +220,11 @@ class Task:
     mode: str
     input_file: str
     to_format: Optional[str] = None
+    target_w: Optional[int] = None
+    target_h: Optional[int] = None
+    filter_name: Optional[str] = None
+    sigma: Optional[float] = None
+    impl: Optional[str] = None
 
     @property
     def target_format(self) -> str:
@@ -304,6 +312,7 @@ class ArenaBenchmark:
         self.validate = validate
         self.equal_quality_enabled = equal_quality
         self.tmp_dir = tmp_dir
+        self.arena = load_arena_toml()
         self.results: List[Dict[str, Any]] = []
         self.equal_quality: List[Dict[str, Any]] = []
         self.failures: List[Dict[str, Any]] = []
@@ -311,8 +320,16 @@ class ArenaBenchmark:
         self.load_meta: Dict[str, Any] = {}
         self.startup_ms: Dict[str, Dict[str, float]] = {}
         self._reference_images: Dict[str, Any] = {}
-        if validate:
+        if validate and "seam_carving" not in self.corpus_dir:
             quality.require_reference("png", "jpeg", "webp", "avif", "jxl")
+
+    def engine_supports_op(self, engine_key: str, op: str) -> bool:
+        if op in ("analyze", "encode", "decode", "transcode"):
+            return True
+        ops_table = self.arena.get("operations", {}).get(engine_key, {})
+        if op in ops_table:
+            return len(ops_table[op]) > 0
+        return False
 
     # ------------------------------------------------------------------ medição
 
@@ -351,6 +368,33 @@ class ArenaBenchmark:
             self.startup_ms[engine.key] = summarize(samples)
 
     def request_args(self, task: Task, q: int, effort: int) -> Tuple[List[str], Dict[str, str]]:
+        if task.op == "seam_carving":
+            w = task.target_w or 350
+            h = task.target_h or 300
+            batch_args = ["--op", "seam_carving", "--w", str(w), "--h", str(h), "--input", task.input_file]
+            query = {"op": "seam_carving", "w": str(w), "h": str(h)}
+            return batch_args, query
+        if task.op == "resize":
+            w = task.target_w or 256
+            h = task.target_h or 256
+            f = task.filter_name or "lanczos3"
+            batch_args = ["--op", "resize", "--w", str(w), "--h", str(h), "--filter", f, "--input", task.input_file]
+            query = {"op": "resize", "w": str(w), "h": str(h), "filter": f}
+            if task.impl:
+                batch_args.extend(["--impl", task.impl])
+                query["impl"] = task.impl
+            return batch_args, query
+        if task.op == "filter":
+            f = task.filter_name or "blur"
+            batch_args = ["--op", "filter", "--filter", f, "--input", task.input_file]
+            query = {"op": "filter", "filter": f}
+            if task.sigma is not None:
+                batch_args.extend(["--sigma", str(task.sigma)])
+                query["sigma"] = str(task.sigma)
+            if task.impl:
+                batch_args.extend(["--impl", task.impl])
+                query["impl"] = task.impl
+            return batch_args, query
         batch_args = [
             "--op", task.op, "--format", task.fmt, "--mode", task.mode,
             "--q", str(q), "--effort", str(effort), "--input", task.input_file,
@@ -465,6 +509,19 @@ class ArenaBenchmark:
                 )
             return {"validated": True, "exact": None, "psnr_db": None}
 
+        if task.op == "seam_carving":
+            try:
+                pam_img = quality.parse_pam(output)
+            except Exception as exc:
+                raise quality.ValidationError(f"seam_carving não devolveu PAM válido: {exc}") from exc
+            expected_w = task.target_w or 350
+            expected_h = task.target_h or 300
+            if (pam_img.width, pam_img.height) != (expected_w, expected_h):
+                raise quality.ValidationError(
+                    f"seam_carving produziu {pam_img.width}x{pam_img.height}, esperado {expected_w}x{expected_h}"
+                )
+            return {"validated": True, "exact": None, "psnr_db": None}
+
         original = self.reference_image(task.input_file)
         floor = quality.min_psnr_for(task.input_file)
         if task.op == "encode":
@@ -492,7 +549,9 @@ class ArenaBenchmark:
         if not self.params["effort_min"] <= effort <= self.params["effort_max"]:
             raise ValueError(f"effort={effort} fora do contrato [{self.params['effort_min']}, {self.params['effort_max']}]")
 
-        out_ext = {"decode": "pam", "analyze": "json"}.get(task.op, task.target_format)
+        out_ext = {"decode": "pam", "analyze": "json", "seam_carving": "pam", "resize": "pam", "filter": "pam"}.get(
+            task.op, task.target_format
+        )
 
         body = None
         if self.mode == "http":
@@ -502,9 +561,21 @@ class ArenaBenchmark:
         measured: Dict[str, Dict[str, Any]] = {}
         with self.workdir() as workdir:
             for engine in self.engines:
+                if not self.engine_supports_op(engine.key, task.op):
+                    measured[engine.key] = {
+                        "supported": False,
+                        "status": "unsupported",
+                        "wall_ms": {"median": 0.0, "p25": 0.0, "p75": 0.0, "min": 0.0, "max": 0.0, "n": 0},
+                        "codec_ms": {"median": 0.0, "p25": 0.0, "p75": 0.0, "min": 0.0, "max": 0.0, "n": 0},
+                        "net_of_startup_ms": {"median": 0.0, "p25": 0.0, "p75": 0.0, "min": 0.0, "max": 0.0, "n": 0},
+                        "out_bytes": 0,
+                        "quality": {"validated": False, "exact": None, "psnr_db": None, "unsupported": True},
+                    }
+                    continue
                 output_path = os.path.join(workdir, f"{engine.key}.{out_ext}")
                 try:
                     stats, output = self.measure_engine(engine, task, qs[engine.key], effort, body, output_path)
+                    stats["supported"] = True
                     stats["quality"] = self.validate_output(task, output)
                 except quality.ValidationError as exc:
                     raise TaskFailure(engine.key, f"saída recusada: {exc}") from exc
@@ -515,14 +586,27 @@ class ArenaBenchmark:
         if task.op == "analyze":
             measured["go"]["out_bytes"] = measured["rust"]["out_bytes"] = 0
 
-        go_primary = measured["go"][self.metric]
-        rust_primary = measured["rust"][self.metric]
-        winner, speedup = decide_winner(go_primary, rust_primary)
+        go_supported = measured["go"].get("supported", True)
+        rust_supported = measured["rust"].get("supported", True)
+        if go_supported and not rust_supported:
+            winner, speedup = "Go", 1.0
+        elif rust_supported and not go_supported:
+            winner, speedup = "Rust", 1.0
+        elif not go_supported and not rust_supported:
+            winner, speedup = "Nenhum", 0.0
+        else:
+            go_primary = measured["go"][self.metric]
+            rust_primary = measured["rust"][self.metric]
+            winner, speedup = decide_winner(go_primary, rust_primary)
 
-        for engine_result, primary in ((measured["go"], go_primary), (measured["rust"], rust_primary)):
-            engine_result["throughput_mp_s"] = (
-                mp / (primary["median"] / 1000.0) if self.mode == "http" and primary["median"] > 0 else None
-            )
+        for engine_result in (measured["go"], measured["rust"]):
+            if engine_result.get("supported", True):
+                primary = engine_result[self.metric]
+                engine_result["throughput_mp_s"] = (
+                    mp / (primary["median"] / 1000.0) if self.mode == "http" and primary["median"] > 0 else None
+                )
+            else:
+                engine_result["throughput_mp_s"] = None
 
         return {
             "task": task.name,
@@ -553,6 +637,26 @@ class ArenaBenchmark:
         return width, height
 
     def build_tasks(self) -> List[Task]:
+        if "seam_carving" in self.corpus_dir:
+            tasks: List[Task] = []
+            for name in ["photo", "screenshot", "illustration"]:
+                pam_file = self.corpus(f"{name}.pam")
+                if os.path.exists(pam_file):
+                    w, h, _ = read_pam_dims(pam_file)
+                    target_w = max(1, w - 50) if w > 50 else w
+                    tasks.append(
+                        Task(
+                            f"Seam Carving [{name}.pam]",
+                            "seam_carving",
+                            "pam",
+                            "lossless",
+                            pam_file,
+                            target_w=target_w,
+                            target_h=h,
+                        )
+                    )
+            return tasks
+
         names = ["photo", "screenshot", "illustration", "alpha"]
         pams = [self.corpus(f"{n}.pam") for n in names]
         base = lambda p: os.path.basename(p)  # noqa: E731
@@ -725,12 +829,14 @@ class ArenaBenchmark:
         ]
 
     def quality_cell(self, engine_result: Dict[str, Any]) -> str:
+        if not engine_result.get("supported", True):
+            return "não suportado"
         q = engine_result["quality"]
-        if not q["validated"]:
+        if not q.get("validated", False):
             return "n/v"
-        if q["exact"]:
+        if q.get("exact"):
             return "exato"
-        return "-" if q["psnr_db"] is None else f"{q['psnr_db']:.2f} dB"
+        return "-" if q.get("psnr_db") is None else f"{q['psnr_db']:.2f} dB"
 
     def print_podium(self) -> None:
         if not self.results and not self.failures:
@@ -770,7 +876,9 @@ class ArenaBenchmark:
                   f"{'PSNR Go':9s} | {'PSNR Rust':9s} | {'Vencedor':8s} | {'Vantagem':8s}")
             print("-" * 140)
             for r in self.results:
-                print(f"{r['task']:34s} | {format_stats(r['go'][r['metric']]):22s} | {format_stats(r['rust'][r['metric']]):22s} | "
+                go_time = format_stats(r['go'][r['metric']]) if r['go'].get('supported', True) else "não suportado"
+                rust_time = format_stats(r['rust'][r['metric']]) if r['rust'].get('supported', True) else "não suportado"
+                print(f"{r['task']:34s} | {go_time:22s} | {rust_time:22s} | "
                       f"{r['go']['out_bytes']:9d} | {r['rust']['out_bytes']:9d} | {format_ratio(r['bytes_ratio']):7s} | "
                       f"{self.quality_cell(r['go']):9s} | {self.quality_cell(r['rust']):9s} | {r['winner']:8s} | {r['speedup']:.2f}x")
             print("=" * 140)
@@ -812,6 +920,16 @@ class ArenaBenchmark:
             "environment": environment(),
             "notes": self.notes(),
         }
+        scorecard = {}
+        routes = self.arena.get("ops", {}).get(
+            "routes", ["analyze", "encode", "decode", "transcode", "resize", "filter", "seam_carving"]
+        )
+        for op in routes:
+            scorecard[op] = {
+                "go": "supported" if self.engine_supports_op("go", op) else "unsupported",
+                "rust": "supported" if self.engine_supports_op("rust", op) else "unsupported",
+            }
+
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(
                 {
@@ -820,6 +938,7 @@ class ArenaBenchmark:
                     "results": self.results,
                     "equal_quality": self.equal_quality,
                     "failures": self.failures,
+                    "scorecard": scorecard,
                 },
                 f,
                 indent=2,
@@ -841,6 +960,15 @@ class ArenaBenchmark:
         md.append("## Notas de Medição\n")
         for note in self.notes():
             md.append(f"- {note}")
+        md.append("")
+
+        md.append("## 📋 Matriz de Suporte por Operação\n")
+        md.append("| Operação | Suporte em Go | Suporte em Rust |")
+        md.append("|---|---|---|")
+        for op, st in scorecard.items():
+            go_st = "✅ Suportado" if st["go"] == "supported" else "❌ Não suportado"
+            rust_st = "✅ Suportado" if st["rust"] == "supported" else "❌ Não suportado"
+            md.append(f"| {op} | {go_st} | {rust_st} |")
         md.append("")
 
         if self.failures:
@@ -886,10 +1014,16 @@ class ArenaBenchmark:
             md.append("| Tarefa / Operação | Go codec (ms) | Go MP/s | Rust codec (ms) | Rust MP/s | Go parede cliente (ms) | Rust parede cliente (ms) | Go (bytes) | Rust (bytes) | Go/Rust | PSNR Go | PSNR Rust | 🥇 Vencedor (codec) | Vantagem |")
             md.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
             for r in self.results:
+                go_codec = format_stats(r['go']['codec_ms']) if r['go'].get('supported', True) else "não suportado"
+                go_mp = f"{r['go']['throughput_mp_s']:.2f}" if r['go']['throughput_mp_s'] is not None else "-"
+                rust_codec = format_stats(r['rust']['codec_ms']) if r['rust'].get('supported', True) else "não suportado"
+                rust_mp = f"{r['rust']['throughput_mp_s']:.2f}" if r['rust']['throughput_mp_s'] is not None else "-"
+                go_wall = f"{r['go']['wall_ms']['median']:.2f}" if r['go'].get('supported', True) else "-"
+                rust_wall = f"{r['rust']['wall_ms']['median']:.2f}" if r['rust'].get('supported', True) else "-"
                 md.append(
-                    f"| {r['task']} | {format_stats(r['go']['codec_ms'])} | {r['go']['throughput_mp_s']:.2f} "
-                    f"| {format_stats(r['rust']['codec_ms'])} | {r['rust']['throughput_mp_s']:.2f} "
-                    f"| {r['go']['wall_ms']['median']:.2f} | {r['rust']['wall_ms']['median']:.2f} "
+                    f"| {r['task']} | {go_codec} | {go_mp} "
+                    f"| {rust_codec} | {rust_mp} "
+                    f"| {go_wall} | {rust_wall} "
                     f"| {r['go']['out_bytes']} | {r['rust']['out_bytes']} | {format_ratio(r['bytes_ratio'])} "
                     f"| {self.quality_cell(r['go'])} | {self.quality_cell(r['rust'])} "
                     f"| {r['winner']} | **{r['speedup']:.2f}x** |"
@@ -898,9 +1032,13 @@ class ArenaBenchmark:
             md.append("| Tarefa / Operação | Go processo completo (ms) | Rust processo completo (ms) | Go líquido de startup (ms) | Rust líquido de startup (ms) | Go (bytes) | Rust (bytes) | Go/Rust | PSNR Go | PSNR Rust | 🥇 Vencedor (processo completo) | Vantagem |")
             md.append("|---|---|---|---|---|---|---|---|---|---|---|---|")
             for r in self.results:
+                go_wall = format_stats(r['go']['wall_ms']) if r['go'].get('supported', True) else "não suportado"
+                rust_wall = format_stats(r['rust']['wall_ms']) if r['rust'].get('supported', True) else "não suportado"
+                go_net = format_stats(r['go']['net_of_startup_ms']) if r['go'].get('supported', True) else "-"
+                rust_net = format_stats(r['rust']['net_of_startup_ms']) if r['rust'].get('supported', True) else "-"
                 md.append(
-                    f"| {r['task']} | {format_stats(r['go']['wall_ms'])} | {format_stats(r['rust']['wall_ms'])} "
-                    f"| {format_stats(r['go']['net_of_startup_ms'])} | {format_stats(r['rust']['net_of_startup_ms'])} "
+                    f"| {r['task']} | {go_wall} | {rust_wall} "
+                    f"| {go_net} | {rust_net} "
                     f"| {r['go']['out_bytes']} | {r['rust']['out_bytes']} | {format_ratio(r['bytes_ratio'])} "
                     f"| {self.quality_cell(r['go'])} | {self.quality_cell(r['rust'])} "
                     f"| {r['winner']} | **{r['speedup']:.2f}x** |"
