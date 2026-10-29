@@ -307,9 +307,14 @@ fn main() {
             }
         }
 
+        "seam_carving" => {
+            eprintln!("[-] Operação 'seam_carving' não implementada em Rust puro (equivalente puro não disponível no ecossistema)");
+            process::exit(1);
+        }
+
         _ => {
             eprintln!(
-                "[-] Operação desconhecida: '{op}'. Esperado: analyze, encode, decode, transcode, resize, filter"
+                "[-] Operação desconhecida: '{op}'. Esperado: analyze, encode, decode, transcode, resize, filter, seam_carving"
             );
             process::exit(1);
         }

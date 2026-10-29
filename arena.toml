@@ -27,13 +27,15 @@ jxl_decode = "jxl-oxide 0.12.6"
 [operations.go]
 resize = ["golang.org/x/image/draw", "github.com/disintegration/imaging"]
 filter = ["github.com/disintegration/imaging"]
+seam_carving = ["github.com/esimov/caire"]
 
 [operations.rust]
 resize = ["fast_image_resize", "image"]
 filter = ["imageproc"]
+seam_carving = []
 
 [ops]
-routes = ["analyze", "encode", "decode", "transcode", "resize", "filter"]
+routes = ["analyze", "encode", "decode", "transcode", "resize", "filter", "seam_carving"]
 resize_filters = ["lanczos3", "catmullrom", "bilinear", "nearest"]
 resize_default_filter = "lanczos3"
 filter_types = ["blur", "sharpen", "grayscale", "invert", "edge"]

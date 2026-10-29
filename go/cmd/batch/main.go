@@ -225,6 +225,27 @@ func main() {
 		}
 		writeOutput(*outputFlag, pam.EncodeBytes(dstPam))
 
+	case "seam_carving":
+		if *wFlag <= 0 || *hFlag <= 0 {
+			fmt.Fprintln(os.Stderr, "Error: --w and --h must be positive integers")
+			os.Exit(1)
+		}
+		if int64(*wFlag)*int64(*hFlag) > int64(maxPixels) || *wFlag > maxPixels || *hFlag > maxPixels {
+			fmt.Fprintf(os.Stderr, "Error: dimensions %dx%d exceed maximum allowed pixels (%d)\n", *wFlag, *hFlag, maxPixels)
+			os.Exit(1)
+		}
+		pamImg, err := pam.DecodeLimit(bytes.NewReader(inputData), maxPixels)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error decoding PAM: %v\n", err)
+			os.Exit(1)
+		}
+		dstPam, err := ops.SeamCarve(pamImg, *wFlag, *hFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error seam carving: %v\n", err)
+			os.Exit(1)
+		}
+		writeOutput(*outputFlag, pam.EncodeBytes(dstPam))
+
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown op: %q\n", *opFlag)
 		os.Exit(1)

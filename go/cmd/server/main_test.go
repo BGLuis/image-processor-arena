@@ -449,4 +449,23 @@ func TestRunFilter(t *testing.T) {
 	}
 }
 
+func TestRunSeamCarving(t *testing.T) {
+	w, h := 400, 300
+	pamData := rgbPAM(w, h)
+	rr := postRun(t, "op=seam_carving&w=350&h=300", pamData)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if processNs := rr.Header().Get("X-Arena-Process-Ns"); processNs == "" {
+		t.Error("missing X-Arena-Process-Ns header")
+	}
+	outPam, err := pam.Decode(bytes.NewReader(rr.Body.Bytes()))
+	if err != nil {
+		t.Fatalf("failed to decode returned PAM: %v", err)
+	}
+	if outPam.Width != 350 || outPam.Height != 300 {
+		t.Errorf("expected 350x300, got %dx%d", outPam.Width, outPam.Height)
+	}
+}
+
 

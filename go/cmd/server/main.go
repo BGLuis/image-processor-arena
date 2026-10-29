@@ -227,6 +227,25 @@ func parseRunRequest(qParams url.Values) (runRequest, error) {
 		req.filter = filter
 		req.sigma = sigma
 		req.impl = qParams.Get("impl")
+	case "seam_carving":
+		wStr := qParams.Get("w")
+		hStr := qParams.Get("h")
+		if wStr == "" || hStr == "" {
+			return req, errors.New("Missing 'w' or 'h' query parameter")
+		}
+		w, err := strconv.Atoi(wStr)
+		if err != nil || w <= 0 {
+			return req, fmt.Errorf("Invalid width 'w': %q", wStr)
+		}
+		h, err := strconv.Atoi(hStr)
+		if err != nil || h <= 0 {
+			return req, fmt.Errorf("Invalid height 'h': %q", hStr)
+		}
+		if int64(w)*int64(h) > int64(srvLimits.maxPixels) || w > srvLimits.maxPixels || h > srvLimits.maxPixels {
+			return req, fmt.Errorf("Dimensions %dx%d exceed maximum allowed pixels (%d)", w, h, srvLimits.maxPixels)
+		}
+		req.targetW = w
+		req.targetH = h
 	default:
 		return req, fmt.Errorf("Unsupported op: %q", req.op)
 	}
@@ -411,6 +430,27 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 		dstPam, err := ops.Filter(pamImg, req.filter, req.sigma, req.impl)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Filter error: %v", err), http.StatusBadRequest)
+			return
+		}
+		processNs := time.Since(start).Nanoseconds()
+
+		outBytes := pam.EncodeBytes(dstPam)
+
+		w.Header().Set("X-Arena-Process-Ns", strconv.FormatInt(processNs, 10))
+		w.Header().Set("Content-Type", "image/x-netpbm-pam")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(outBytes)
+
+	case "seam_carving":
+		pamImg, ok := decodePAM(w, body)
+		if !ok {
+			return
+		}
+
+		start := time.Now()
+		dstPam, err := ops.SeamCarve(pamImg, req.targetW, req.targetH)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Seam carving error: %v", err), http.StatusBadRequest)
 			return
 		}
 		processNs := time.Since(start).Nanoseconds()
