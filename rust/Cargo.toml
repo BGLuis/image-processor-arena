@@ -49,6 +49,11 @@ rgb = "0.8"
 bytemuck = "1.25"
 zenpixels = "0.2"
 
+# Operações de imagem: resize e filtros
+fast_image_resize = "5.1"
+imageproc = { version = "0.25", default-features = false }
+image = { version = "0.25", default-features = false }
+
 [[bin]]
 name = "arena-server"
 path = "src/bin/server.rs"

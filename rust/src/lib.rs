@@ -7,4 +7,5 @@
 pub mod analyze;
 pub mod codec;
 pub mod limits;
+pub mod ops;
 pub mod pam;

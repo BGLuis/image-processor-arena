@@ -190,3 +190,42 @@ def find_matching_q(psnr_at: Callable[[int], float], target: float, lo: int = 1,
         else:
             lo = mid + 1
     return lo
+
+
+# --------------------------------------------------------------------------------------
+# Validação de operações de matriz PAM (Resize e Filtros)
+# --------------------------------------------------------------------------------------
+
+
+def validate_resize(
+    orig: "Image.Image",
+    got: "Image.Image",
+    target_w: int,
+    target_h: int,
+    resample_filter: str = "lanczos3",
+    min_psnr: float = 28.0,
+) -> float:
+    """Valida correspondência exata de dimensões e conformidade com piso de PSNR contra o oráculo Pillow."""
+    if got.size != (target_w, target_h):
+        raise ValidationError(f"Dimensão incorreta pós-resize: esperada {(target_w, target_h)}, obtida {got.size}")
+
+    if Image is None:
+        return float("inf")
+
+    resample_map = {
+        "lanczos3": getattr(getattr(Image, "Resampling", Image), "LANCZOS", 1),
+        "lanczos": getattr(getattr(Image, "Resampling", Image), "LANCZOS", 1),
+        "bicubic": getattr(getattr(Image, "Resampling", Image), "BICUBIC", 3),
+        "catmullrom": getattr(getattr(Image, "Resampling", Image), "BICUBIC", 3),
+        "bilinear": getattr(getattr(Image, "Resampling", Image), "BILINEAR", 2),
+        "linear": getattr(getattr(Image, "Resampling", Image), "BILINEAR", 2),
+        "nearest": getattr(getattr(Image, "Resampling", Image), "NEAREST", 0),
+        "box": getattr(getattr(Image, "Resampling", Image), "BOX", 4),
+    }
+    filt = resample_map.get(resample_filter.lower(), getattr(getattr(Image, "Resampling", Image), "LANCZOS", 1))
+    oracle = orig.resize((target_w, target_h), resample=filt)
+    score = psnr(oracle, got)
+    if score < min_psnr:
+        raise ValidationError(f"PSNR do resize ({score:.2f} dB) abaixo do piso ({min_psnr:.2f} dB) contra oráculo Pillow")
+    return score
+

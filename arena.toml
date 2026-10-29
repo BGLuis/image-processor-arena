@@ -24,6 +24,21 @@ avif_decode = "zenavif 0.1.6 / rav1d 1.1.0 (no asm)"
 jxl_encode = "jxl-encoder 0.3.1"
 jxl_decode = "jxl-oxide 0.12.6"
 
+[operations.go]
+resize = ["golang.org/x/image/draw", "github.com/disintegration/imaging"]
+filter = ["github.com/disintegration/imaging"]
+
+[operations.rust]
+resize = ["fast_image_resize", "image"]
+filter = ["imageproc"]
+
+[ops]
+routes = ["analyze", "encode", "decode", "transcode", "resize", "filter"]
+resize_filters = ["lanczos3", "catmullrom", "bilinear", "nearest"]
+resize_default_filter = "lanczos3"
+filter_types = ["blur", "sharpen", "grayscale", "invert", "edge"]
+filter_default = "blur"
+
 [purity]
 go_cgo_enabled = 0
 go_forbidden = ["github.com/ebitengine/purego", "github.com/tetratelabs/wazero"]

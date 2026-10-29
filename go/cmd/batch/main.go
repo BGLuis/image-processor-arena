@@ -11,20 +11,25 @@ import (
 
 	"github.com/image-processor-arena/go/internal/analyze"
 	"github.com/image-processor-arena/go/internal/codec"
+	"github.com/image-processor-arena/go/internal/ops"
 	"github.com/image-processor-arena/go/internal/pam"
 )
 
 func main() {
 	var (
-		opFlag     = flag.String("op", "", "Operation: analyze, encode, decode, transcode")
-		formatFlag = flag.String("format", "", "Image format: png, jpeg, webp, avif, jxl")
-		toFlag     = flag.String("to", "", "Target format for transcode")
-		modeFlag   = flag.String("mode", "", "Compression mode: lossy, lossless (default lossy)")
-		qFlag      = flag.String("q", "", "Quality level 1-100 (default 75)")
+		opFlag       = flag.String("op", "", "Operation: analyze, encode, decode, transcode, resize, filter")
+		formatFlag   = flag.String("format", "", "Image format: png, jpeg, webp, avif, jxl")
+		toFlag       = flag.String("to", "", "Target format for transcode")
+		modeFlag     = flag.String("mode", "", "Compression mode: lossy, lossless (default lossy)")
+		qFlag        = flag.String("q", "", "Quality level 1-100 (default 75)")
 		effortFlag   = flag.String("effort", "", "Effort level 1-10, higher is slower and smaller (default 4)")
 		implFlag     = flag.String("impl", "", "Codec implementation name")
 		fromImplFlag = flag.String("from-impl", "", "Source codec implementation name for decode/transcode")
 		toImplFlag   = flag.String("to-impl", "", "Target codec implementation name for encode/transcode")
+		wFlag        = flag.Int("w", 0, "Target width for resize")
+		hFlag        = flag.Int("h", 0, "Target height for resize")
+		filterFlag   = flag.String("filter", "", "Filter name (resize filter or convolution filter)")
+		sigmaFlag    = flag.Float64("sigma", 1.0, "Sigma for filter operations")
 		inputFlag    = flag.String("input", "", "Input file path (or '-' for stdin)")
 		outputFlag   = flag.String("output", "", "Output file path (or '-' for stdout)")
 	)
@@ -177,6 +182,48 @@ func main() {
 		}
 
 		writeOutput(*outputFlag, outBuf.Bytes())
+
+	case "resize":
+		if *wFlag <= 0 || *hFlag <= 0 {
+			fmt.Fprintln(os.Stderr, "Error: --w and --h must be positive integers")
+			os.Exit(1)
+		}
+		if int64(*wFlag)*int64(*hFlag) > int64(maxPixels) || *wFlag > maxPixels || *hFlag > maxPixels {
+			fmt.Fprintf(os.Stderr, "Error: dimensions %dx%d exceed maximum allowed pixels (%d)\n", *wFlag, *hFlag, maxPixels)
+			os.Exit(1)
+		}
+		pamImg, err := pam.DecodeLimit(bytes.NewReader(inputData), maxPixels)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error decoding PAM: %v\n", err)
+			os.Exit(1)
+		}
+		filter := *filterFlag
+		if filter == "" {
+			filter = "lanczos3"
+		}
+		dstPam, err := ops.Resize(pamImg, *wFlag, *hFlag, filter, *implFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error resizing: %v\n", err)
+			os.Exit(1)
+		}
+		writeOutput(*outputFlag, pam.EncodeBytes(dstPam))
+
+	case "filter":
+		if *filterFlag == "" {
+			fmt.Fprintln(os.Stderr, "Error: --filter is required for filter operation")
+			os.Exit(1)
+		}
+		pamImg, err := pam.DecodeLimit(bytes.NewReader(inputData), maxPixels)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error decoding PAM: %v\n", err)
+			os.Exit(1)
+		}
+		dstPam, err := ops.Filter(pamImg, *filterFlag, *sigmaFlag, *implFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error filtering: %v\n", err)
+			os.Exit(1)
+		}
+		writeOutput(*outputFlag, pam.EncodeBytes(dstPam))
 
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown op: %q\n", *opFlag)
