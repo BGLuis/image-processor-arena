@@ -1,0 +1,77 @@
+name: Go variant
+
+on:
+  workflow_call:
+    inputs:
+      id:
+        description: Variant id (artifact name)
+        required: true
+        type: string
+      path:
+        description: Variant directory (contains go.mod)
+        required: true
+        type: string
+      bin_dir:
+        description: Directory where the binaries are produced
+        required: true
+        type: string
+
+permissions: {}
+
+env:
+  CGO_ENABLED: '0'
+
+jobs:
+  go:
+    name: "Go ${{ inputs.id }} (Pure, CGO=0)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read  # checkout
+    defaults:
+      run:
+        working-directory: ${{ inputs.path }}
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: ${{ inputs.path }}/go.mod
+          cache-dependency-path: ${{ inputs.path }}/go.sum
+
+      - name: Verify gofmt formatting
+        run: |
+          UNFORMATTED=$(gofmt -l .)
+          if [ -n "$UNFORMATTED" ]; then
+            echo "[-] Arquivos Go fora dos padrões de formatação (gofmt):"
+            echo "$UNFORMATTED"
+            exit 1
+          fi
+          echo "[+] Todos os arquivos Go estão devidamente formatados!"
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run Go unit tests
+        run: go test -v ./...
+
+      - name: Compile Go static binaries
+        run: |
+          mkdir -p bin
+          go build -trimpath -ldflags="-s -w" -o bin/arena-server ./cmd/server &
+          go build -trimpath -ldflags="-s -w" -o bin/arena-batch ./cmd/batch &
+          wait -n && wait -n
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.id }}-bin
+          path: |
+            ${{ inputs.bin_dir }}/arena-server
+            ${{ inputs.bin_dir }}/arena-batch
+          if-no-files-found: error
+          retention-days: 1

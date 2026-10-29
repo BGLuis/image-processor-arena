@@ -1,0 +1,68 @@
+name: Rust variant
+
+on:
+  workflow_call:
+    inputs:
+      id:
+        description: Variant id (artifact name)
+        required: true
+        type: string
+      path:
+        description: Variant directory (contains Cargo.toml)
+        required: true
+        type: string
+      bin_dir:
+        description: Directory where the release binaries are produced
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  rust:
+    name: "Rust ${{ inputs.id }} (Pure)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      MANIFEST: ${{ inputs.path }}/Cargo.toml
+    permissions:
+      contents: read  # checkout
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de  # master
+        with:
+          toolchain: 1.97.0
+          components: rustfmt, clippy
+
+      - name: Cache Cargo Dependencies and Targets
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: ${{ inputs.path }} -> target
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Verify rustfmt formatting
+        run: cargo fmt --manifest-path "${MANIFEST}" --all -- --check
+
+      - name: Run clippy checks (-D warnings)
+        run: cargo clippy --manifest-path "${MANIFEST}" --all-targets -- -D warnings
+
+      - name: Run Rust unit tests
+        run: cargo test --manifest-path "${MANIFEST}"
+
+      - name: Compile Rust release binaries
+        run: cargo build --release --manifest-path "${MANIFEST}" --bin arena-server --bin arena-batch
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.id }}-bin
+          path: |
+            ${{ inputs.bin_dir }}/arena-server
+            ${{ inputs.bin_dir }}/arena-batch
+          if-no-files-found: error
+          retention-days: 1
