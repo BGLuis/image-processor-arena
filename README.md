@@ -260,6 +260,17 @@ A escolha segue as dependências. Sete crates Rust são licenciados como `AGPL-3
 Os resultados consolidados da arena, comparativos de latência, throughput em Megapixels por segundo (MP/s) e detalhamento por codec estão documentados em:
 👉 [`results/PODIUM.md`](results/PODIUM.md)
 
+### 📈 Dashboard Interativo com Banco de Dados DuckDB
+Você também pode explorar os resultados de forma interativa através do site/dashboard construído com **Next.js**, **Tailwind CSS** e **DuckDB-Wasm**:
+```sh
+cd dashboard
+npm install
+npm run dev
+# Acesse http://localhost:3000
+```
+O dashboard oferece gráficos comparativos (Throughput MP/s, Latência, Distribuição de Vitórias, Tamanho de Saída), filtros dinâmicos reativos e um **Console SQL Interativo** com motor analítico DuckDB-Wasm executando consultas em tempo real no seu navegador.
+
+
 # 🤝 Contribuidores
 <a href="https://github.com/bgluis/image-processor-arena/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=bgluis/image-processor-arena"/>

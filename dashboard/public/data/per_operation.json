@@ -1,0 +1,42 @@
+[
+  {
+    "op": "analyze",
+    "tasks": 4,
+    "go_wins": 0,
+    "rust_wins": 3,
+    "ties": 1,
+    "geomean_go_over_rust": 1.1124256065715534
+  },
+  {
+    "op": "encode",
+    "tasks": 21,
+    "go_wins": 3,
+    "rust_wins": 18,
+    "ties": 0,
+    "geomean_go_over_rust": 4.143810919214566
+  },
+  {
+    "op": "decode",
+    "tasks": 5,
+    "go_wins": 2,
+    "rust_wins": 3,
+    "ties": 0,
+    "geomean_go_over_rust": 1.9949080556696546
+  },
+  {
+    "op": "transcode",
+    "tasks": 4,
+    "go_wins": 2,
+    "rust_wins": 2,
+    "ties": 0,
+    "geomean_go_over_rust": 0.9089578438703505
+  },
+  {
+    "op": "total",
+    "tasks": 34,
+    "go_wins": 7,
+    "rust_wins": 26,
+    "ties": 1,
+    "geomean_go_over_rust": 2.6669077606960387
+  }
+]

@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
+
+  --color-arena-canvas: #0a0c0f;
+  --color-arena-surface: #111418;
+  --color-arena-raised: #171b21;
+  --color-arena-inset: #0d1013;
+  --color-arena-border: #222831;
+  --color-arena-border-strong: #2e3540;
+  --color-arena-text-primary: #eceff3;
+  --color-arena-text-secondary: #a3acb9;
+  --color-arena-text-muted: #6b7480;
+
+  --color-lang-go: #2ec4e6;
+  --color-lang-rust: #f4743b;
+  --color-lang-zig: #f7c548;
+  --color-lang-java: #e8618c;
+  --color-lang-csharp: #8b7cf6;
+  --color-lang-swift: #a3e635;
+  --color-lang-other: #8a93a0;
+
+  --color-status-ok: #3dd68c;
+  --color-status-error: #f2546b;
+  --color-status-warn: #f5a524;
+  --color-status-tie: #8a93a0;
+
+  --color-heat-0: #3dd68c;
+  --color-heat-1: #2a9f6b;
+  --color-heat-2: #1e6e4e;
+  --color-heat-3: #1d4f3a;
+  --color-heat-4: #5c2532;
+
+  --color-medal-gold: #f2c14e;
+  --color-medal-gold-tint: #312c20;
+  --color-medal-gold-line: #816b33;
+  --color-medal-silver: #c9d1db;
+  --color-medal-silver-tint: #2b2e33;
+  --color-medal-silver-line: #6d737a;
+  --color-medal-bronze: #d08b5b;
+  --color-medal-bronze-tint: #2c2521;
+  --color-medal-bronze-line: #71503a;
+  --color-status-warn-tint: #31281a;
+  --color-status-warn-line: #835d1e;
+}
+
+:root {
+  --background: #0a0c0f;
+  --foreground: #eceff3;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  min-height: 100vh;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0a0c0f;
+}
+::-webkit-scrollbar-thumb {
+  background: #222831;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2e3540;
+}

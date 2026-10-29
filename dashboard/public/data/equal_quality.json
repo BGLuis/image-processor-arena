@@ -1,0 +1,130 @@
+[
+  {
+    "task": "Encode AVIF Lossy [photo.pam]",
+    "format": "avif",
+    "image": "photo.pam",
+    "target_psnr_db": 41.482,
+    "go_q": 75,
+    "rust_q": 46,
+    "go_psnr_db": 41.482,
+    "rust_psnr_db": 41.734,
+    "go_bytes": 10788,
+    "rust_bytes": 7371,
+    "bytes_ratio": 1.4635734635734636,
+    "metric": "codec_ms",
+    "go_time_ms": {
+      "median": 66.79371549999999,
+      "p25": 65.23391,
+      "p75": 68.5490925,
+      "min": 64.348947,
+      "max": 69.663766,
+      "n": 10
+    },
+    "rust_time_ms": {
+      "median": 242.29499650000002,
+      "p25": 226.96205824999998,
+      "p75": 261.94408050000004,
+      "min": 216.979885,
+      "max": 275.286421,
+      "n": 10
+    },
+    "winner": "Go",
+    "speedup": 3.627511880215738
+  },
+  {
+    "task": "Encode AVIF Lossy [screenshot.pam]",
+    "format": "avif",
+    "image": "screenshot.pam",
+    "target_psnr_db": 33.058,
+    "go_q": 75,
+    "rust_q": 36,
+    "go_psnr_db": 33.058,
+    "rust_psnr_db": 33.191,
+    "go_bytes": 38247,
+    "rust_bytes": 12050,
+    "bytes_ratio": 3.17402489626556,
+    "metric": "codec_ms",
+    "go_time_ms": {
+      "median": 110.649244,
+      "p25": 106.39081675,
+      "p75": 115.01349775,
+      "min": 103.968014,
+      "max": 125.84498,
+      "n": 10
+    },
+    "rust_time_ms": {
+      "median": 118.81391550000001,
+      "p25": 113.20679200000001,
+      "p75": 126.2142495,
+      "min": 110.401475,
+      "max": 149.889372,
+      "n": 10
+    },
+    "winner": "Empate",
+    "speedup": 1.0737887689499261
+  },
+  {
+    "task": "Encode JXL Lossy [photo.pam]",
+    "format": "jxl",
+    "image": "photo.pam",
+    "target_psnr_db": 38.254,
+    "go_q": 75,
+    "rust_q": 66,
+    "go_psnr_db": 38.254,
+    "rust_psnr_db": 38.293,
+    "go_bytes": 11961,
+    "rust_bytes": 9328,
+    "bytes_ratio": 1.2822684391080617,
+    "metric": "codec_ms",
+    "go_time_ms": {
+      "median": 50.636644000000004,
+      "p25": 48.35607975,
+      "p75": 51.967755,
+      "min": 47.195202,
+      "max": 61.607529,
+      "n": 10
+    },
+    "rust_time_ms": {
+      "median": 11.710339,
+      "p25": 11.65002375,
+      "p75": 11.9140985,
+      "min": 11.322028,
+      "max": 12.200319,
+      "n": 10
+    },
+    "winner": "Rust",
+    "speedup": 4.324097193087238
+  },
+  {
+    "task": "Encode JXL Lossy [screenshot.pam]",
+    "format": "jxl",
+    "image": "screenshot.pam",
+    "target_psnr_db": 31.833,
+    "go_q": 75,
+    "rust_q": 71,
+    "go_psnr_db": 31.833,
+    "rust_psnr_db": 31.906,
+    "go_bytes": 30793,
+    "rust_bytes": 32453,
+    "bytes_ratio": 0.948849104859335,
+    "metric": "codec_ms",
+    "go_time_ms": {
+      "median": 82.8855345,
+      "p25": 81.3166335,
+      "p75": 87.73454075,
+      "min": 78.622958,
+      "max": 112.31485,
+      "n": 10
+    },
+    "rust_time_ms": {
+      "median": 21.110789,
+      "p25": 20.349916999999998,
+      "p75": 21.672879249999998,
+      "min": 19.280015,
+      "max": 22.484064,
+      "n": 10
+    },
+    "winner": "Rust",
+    "speedup": 3.926216803171118
+  }
+]
