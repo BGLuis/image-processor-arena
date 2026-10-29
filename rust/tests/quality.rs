@@ -43,6 +43,7 @@ fn params(format: ImageFormat, mode: CodecMode, quality: u8) -> EncodeParams {
         mode,
         quality,
         effort: 4,
+        implementation: None,
     }
 }
 

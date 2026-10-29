@@ -421,6 +421,76 @@ class ScorecardStatusTests(unittest.TestCase):
             self.assertIn("seam_carving", md)
 
 
+class TierAndMultiImplTests(unittest.TestCase):
+    def test_portable_tier_forces_gowebp(self):
+        b_port = bench.ArenaBenchmark(tier="portable", validate=False, equal_quality=False)
+        tasks = b_port.build_tasks()
+        webp_tasks = [t for t in tasks if t.fmt == "webp"]
+        self.assertGreater(len(webp_tasks), 0)
+        for t in webp_tasks:
+            self.assertEqual(t.impl, "gowebp")
+
+        b_accel = bench.ArenaBenchmark(tier="accelerated", validate=False, equal_quality=False)
+        tasks_accel = b_accel.build_tasks()
+        webp_tasks_accel = [t for t in tasks_accel if t.fmt == "webp"]
+        for t in webp_tasks_accel:
+            self.assertIsNone(t.impl)
+
+    def test_all_impls_adds_multi_impl_tasks(self):
+        b = bench.ArenaBenchmark(all_impls=True, validate=False, equal_quality=False)
+        tasks = b.build_tasks()
+        impls = {t.impl for t in tasks if t.impl is not None}
+        self.assertIn("deepteams", impls)
+        self.assertIn("gowebp", impls)
+        self.assertIn("xdraw", impls)
+        self.assertIn("imaging", impls)
+        self.assertIn("fast_image_resize", impls)
+        self.assertIn("image", impls)
+
+    def test_scorecard_and_intra_results_in_reports(self):
+        b = bench.ArenaBenchmark(tier="portable", all_impls=True, validate=False, equal_quality=False)
+        b.intra_results = [
+            {
+                "language": "Go",
+                "operation": "WebP Encode Lossy",
+                "impl_a": "deepteams",
+                "impl_b": "gowebp",
+                "time_a_ms": 15.2,
+                "time_b_ms": 28.4,
+                "winner": "deepteams",
+                "speedup": 1.87,
+            }
+        ]
+        with tempfile.TemporaryDirectory() as d:
+            b.export_reports(d)
+            scorecard_path = os.path.join(d, "MATURITY_SCORECARD.md")
+            self.assertTrue(os.path.exists(scorecard_path))
+            with open(scorecard_path, "r", encoding="utf-8") as f:
+                scorecard_content = f.read()
+
+            self.assertIn("Matriz de Capacidades", scorecard_content)
+            self.assertIn("Análise de Risco de Licenciamento", scorecard_content)
+            self.assertIn("AGPL-3.0", scorecard_content)
+            self.assertIn("Seção 13", scorecard_content)
+            self.assertIn("Resiliência contra Arquivos Corrompidos", scorecard_content)
+            self.assertIn("Tiers de Pureza e Maturidade", scorecard_content)
+            self.assertIn("PORTABLE", scorecard_content)
+            self.assertIn("Comparações Intra-Linguagem", scorecard_content)
+            self.assertIn("deepteams", scorecard_content)
+
+            with open(os.path.join(d, "benchmark_results.json")) as f:
+                report = json.load(f)
+            self.assertEqual(report["metadata"]["tier"], "portable")
+            self.assertTrue(report["metadata"]["all_impls"])
+            self.assertEqual(len(report["intra_language_comparisons"]), 1)
+            self.assertEqual(report["intra_language_comparisons"][0]["winner"], "deepteams")
+
+            with open(os.path.join(d, "PODIUM.md")) as f:
+                podium_content = f.read()
+            self.assertIn("Comparações Intra-Linguagem", podium_content)
+            self.assertIn("deepteams", podium_content)
+
+
 if __name__ == "__main__":
     unittest.main()
 

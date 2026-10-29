@@ -260,6 +260,7 @@ mod tests {
             mode: CodecMode::Lossless,
             quality: 100,
             effort: 4,
+            implementation: None,
         };
         let png_bytes = encode(&pam, &params_png).expect("PNG encode falhou");
         let decoded_png = decode(&png_bytes, ImageFormat::Png).expect("PNG decode falhou");
@@ -273,6 +274,7 @@ mod tests {
             mode: CodecMode::Lossy,
             quality: 85,
             effort: 4,
+            implementation: None,
         };
         let jpeg_bytes = encode(&pam, &params_jpeg).expect("JPEG encode falhou");
         let decoded_jpeg = decode(&jpeg_bytes, ImageFormat::Jpeg).expect("JPEG decode falhou");
@@ -285,6 +287,7 @@ mod tests {
             mode: CodecMode::Lossless,
             quality: 100,
             effort: 4,
+            implementation: None,
         };
         let webp_lossless_bytes =
             encode(&pam, &params_webp_lossless).expect("WebP lossless encode falhou");
@@ -300,6 +303,7 @@ mod tests {
             mode: CodecMode::Lossy,
             quality: 80,
             effort: 4,
+            implementation: None,
         };
         let webp_lossy_bytes = encode(&pam, &params_webp_lossy).expect("WebP lossy encode falhou");
         let decoded_webp_lossy =
@@ -313,6 +317,7 @@ mod tests {
             mode: CodecMode::Lossless,
             quality: 100,
             effort: 3,
+            implementation: None,
         };
         let jxl_bytes = encode(&pam, &params_jxl).expect("JXL encode falhou");
         let decoded_jxl = decode(&jxl_bytes, ImageFormat::Jxl).expect("JXL decode falhou");
@@ -326,6 +331,7 @@ mod tests {
             mode: CodecMode::Lossy,
             quality: 60,
             effort: 10,
+            implementation: None,
         };
         let avif_bytes = encode(&pam, &params_avif).expect("AVIF encode falhou");
         let decoded_avif = decode(&avif_bytes, ImageFormat::Avif).expect("AVIF decode falhou");
@@ -343,6 +349,7 @@ mod tests {
             mode: CodecMode::Lossless,
             quality: 100,
             effort: 4,
+            implementation: None,
         };
 
         let result = encode(&pam, &params);
@@ -364,6 +371,7 @@ mod tests {
                 mode: CodecMode::Lossless,
                 quality: 100,
                 effort: 4,
+                implementation: None,
             };
             let bytes = encode(&pam, &params).expect("encode lossless falhou");
             let decoded = decode(&bytes, format).expect("decode lossless falhou");
