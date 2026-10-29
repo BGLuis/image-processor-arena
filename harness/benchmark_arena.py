@@ -43,6 +43,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import arena_load as load
 import arena_quality as quality
+import arena_scorecard as scorecard
 
 MIN_ITERATIONS = 5
 STARTUP_PROBE_ARGS = ["--op", "analyze", "--input", "/dev/null"]
@@ -299,6 +300,8 @@ class ArenaBenchmark:
         validate: bool = True,
         equal_quality: bool = True,
         tmp_dir: Optional[str] = None,
+        tier: str = "accelerated",
+        all_impls: bool = False,
     ):
         if iterations < MIN_ITERATIONS:
             raise ValueError(f"iterations deve ser >= {MIN_ITERATIONS} (recebido: {iterations})")
@@ -312,10 +315,13 @@ class ArenaBenchmark:
         self.validate = validate
         self.equal_quality_enabled = equal_quality
         self.tmp_dir = tmp_dir
+        self.tier = tier
+        self.all_impls = all_impls
         self.arena = load_arena_toml()
         self.results: List[Dict[str, Any]] = []
         self.equal_quality: List[Dict[str, Any]] = []
         self.failures: List[Dict[str, Any]] = []
+        self.intra_results: List[Dict[str, Any]] = []
         self.load_results: List[Dict[str, Any]] = []
         self.load_meta: Dict[str, Any] = {}
         self.startup_ms: Dict[str, Dict[str, float]] = {}
@@ -330,6 +336,40 @@ class ArenaBenchmark:
         if op in ops_table:
             return len(ops_table[op]) > 0
         return False
+
+    def engine_supports_impl(self, engine_key: str, task: Task) -> bool:
+        if not task.impl:
+            return True
+        imp = task.impl.lower().strip()
+        if engine_key == "go":
+            if task.op == "encode" and task.fmt == "webp":
+                return imp in ("deepteams", "gowebp", "default")
+            if task.op == "decode" and task.fmt == "webp":
+                return imp in ("ximage", "gowebp", "default")
+            if task.op == "resize":
+                return imp in ("xdraw", "draw", "imaging", "default")
+            if task.op == "filter":
+                return imp in ("imaging", "default")
+            return imp in ("stdlib", "default", "")
+        elif engine_key == "rust":
+            if task.op == "encode" and task.fmt == "webp":
+                return imp in ("zenwebp", "image-webp", "image_webp", "gowebp", "default")
+            if task.op == "decode" and task.fmt == "webp":
+                return imp in ("image-webp", "image_webp", "imagewebp", "zenwebp", "default")
+            if task.op == "resize":
+                return imp in ("fast_image_resize", "fir", "image", "imageproc", "default")
+            if task.op == "filter":
+                return imp in ("imageproc", "default")
+            if task.fmt == "avif":
+                return imp in ("ravif", "zenravif", "zenavif", "rav1d", "default")
+            if task.fmt == "jxl":
+                return imp in ("jxl-encoder", "jxl-oxide", "gen2brain", "jxl", "default")
+            if task.fmt == "jpeg":
+                return imp in ("jpeg-encoder", "zune-jpeg", "zune", "stdlib", "default")
+            if task.fmt == "png":
+                return imp in ("png", "stdlib", "default")
+            return imp in ("default", "")
+        return True
 
     # ------------------------------------------------------------------ medição
 
@@ -403,6 +443,9 @@ class ArenaBenchmark:
         if task.to_format:
             batch_args.extend(["--to", task.to_format])
             query["to"] = task.to_format
+        if task.impl:
+            batch_args.extend(["--impl", task.impl])
+            query["impl"] = task.impl
         return batch_args, query
 
     def run_http_req(self, engine: Engine, op: str, query: Dict[str, str], body: bytes) -> Tuple[float, float, bytes]:
@@ -561,7 +604,7 @@ class ArenaBenchmark:
         measured: Dict[str, Dict[str, Any]] = {}
         with self.workdir() as workdir:
             for engine in self.engines:
-                if not self.engine_supports_op(engine.key, task.op):
+                if not self.engine_supports_op(engine.key, task.op) or not self.engine_supports_impl(engine.key, task):
                     measured[engine.key] = {
                         "supported": False,
                         "status": "unsupported",
@@ -661,6 +704,7 @@ class ArenaBenchmark:
         pams = [self.corpus(f"{n}.pam") for n in names]
         base = lambda p: os.path.basename(p)  # noqa: E731
         tasks: List[Task] = []
+        webp_impl = "gowebp" if self.tier == "portable" else None
 
         # 1. ANALYZE (16 métricas formais)
         for img in pams:
@@ -673,8 +717,8 @@ class ArenaBenchmark:
             tasks.append(Task(f"Encode JPEG [{base(img)}]", "encode", "jpeg", "lossy", img))
         # 4. ENCODE WebP Lossy & Lossless
         for img in pams:
-            tasks.append(Task(f"Encode WebP Lossy [{base(img)}]", "encode", "webp", "lossy", img))
-            tasks.append(Task(f"Encode WebP Lossless [{base(img)}]", "encode", "webp", "lossless", img))
+            tasks.append(Task(f"Encode WebP Lossy [{base(img)}]", "encode", "webp", "lossy", img, impl=webp_impl))
+            tasks.append(Task(f"Encode WebP Lossless [{base(img)}]", "encode", "webp", "lossless", img, impl=webp_impl))
         # 5. ENCODE AVIF Lossy (lossless é recusado: nenhuma biblioteca pura o implementa)
         for img in pams[:2]:
             tasks.append(Task(f"Encode AVIF Lossy [{base(img)}]", "encode", "avif", "lossy", img))
@@ -686,18 +730,35 @@ class ArenaBenchmark:
         photo = {"png": "photo.png", "jpeg": "photo.jpg", "webp": "photo.webp", "avif": "photo.avif", "jxl": "photo.jxl"}
         for fmt, filename in photo.items():
             mode = "lossless" if fmt == "png" else "lossy"
-            tasks.append(Task(f"Decode {fmt.upper()} [{filename}]", "decode", fmt, mode, self.corpus(filename)))
+            dec_impl = webp_impl if fmt == "webp" else None
+            tasks.append(Task(f"Decode {fmt.upper()} [{filename}]", "decode", fmt, mode, self.corpus(filename), impl=dec_impl))
         # 8. TRANSCODE
         tasks.append(Task("Transcode PNG -> WebP", "transcode", "png", "lossy", self.corpus("photo.png"), "webp"))
         tasks.append(Task("Transcode PNG -> AVIF", "transcode", "png", "lossy", self.corpus("photo.png"), "avif"))
         tasks.append(Task("Transcode JPEG -> WebP", "transcode", "jpeg", "lossy", self.corpus("photo.jpg"), "webp"))
         tasks.append(Task("Transcode JXL -> PNG", "transcode", "jxl", "lossless", self.corpus("photo.jxl"), "png"))
+
+        # 9. MULTI-BIBLIOTECA (--all-impls)
+        if self.all_impls:
+            photo_pam = self.corpus("photo.pam")
+            photo_webp = self.corpus("photo.webp")
+            if os.path.exists(photo_pam):
+                tasks.append(Task("Encode WebP Lossy [photo.pam] (deepteams)", "encode", "webp", "lossy", photo_pam, impl="deepteams"))
+                tasks.append(Task("Encode WebP Lossy [photo.pam] (gowebp)", "encode", "webp", "lossy", photo_pam, impl="gowebp"))
+                tasks.append(Task("Resize Lanczos3 [photo.pam] (xdraw)", "resize", "pam", "lossless", photo_pam, target_w=256, target_h=256, filter_name="lanczos3", impl="xdraw"))
+                tasks.append(Task("Resize Lanczos3 [photo.pam] (imaging)", "resize", "pam", "lossless", photo_pam, target_w=256, target_h=256, filter_name="lanczos3", impl="imaging"))
+                tasks.append(Task("Resize Lanczos3 [photo.pam] (fast_image_resize)", "resize", "pam", "lossless", photo_pam, target_w=256, target_h=256, filter_name="lanczos3", impl="fast_image_resize"))
+                tasks.append(Task("Resize Lanczos3 [photo.pam] (image)", "resize", "pam", "lossless", photo_pam, target_w=256, target_h=256, filter_name="lanczos3", impl="image"))
+            if os.path.exists(photo_webp):
+                tasks.append(Task("Decode WebP [photo.webp] (ximage)", "decode", "webp", "lossy", photo_webp, impl="ximage"))
+                tasks.append(Task("Decode WebP [photo.webp] (gowebp)", "decode", "webp", "lossy", photo_webp, impl="gowebp"))
+
         return tasks
 
     def banner(self) -> None:
         print("=" * 80)
         print("          ARENA DE PROCESSAMENTO DE IMAGENS — BATERIA DE BENCHMARK")
-        print(f"Modo: {self.mode.upper()} | Iterações: {self.iterations} | Warmup: {self.warmup} | "
+        print(f"Modo: {self.mode.upper()} | Tier: {self.tier.upper()} | Iterações: {self.iterations} | Warmup: {self.warmup} | "
               f"Validação das saídas: {'ligada' if self.validate else 'DESLIGADA'}")
         print("=" * 80)
 
@@ -730,6 +791,8 @@ class ArenaBenchmark:
 
         if self.equal_quality_enabled and self.validate:
             self.run_equal_quality(tasks)
+        if self.all_impls:
+            self.run_intra_language()
         return results
 
     # ------------------------------------------------------------------ qualidade equivalente
@@ -786,6 +849,122 @@ class ArenaBenchmark:
             self.equal_quality.append(row)
             print(f"Rust q={rust_q} (PSNR {row['rust_psnr_db']} dB, alvo {row['target_psnr_db']} dB) "
                   f"-> Go/Rust bytes {format_ratio(row['bytes_ratio'])}, vencedor {row['winner']} ({row['speedup']:.2f}x)")
+
+    def run_intra_language(self) -> List[Dict[str, Any]]:
+        """Comparações intra-linguagem para formatos com múltiplos codecs registrados (--all-impls)."""
+        print("\n" + "=" * 80)
+        print("          COMPARAÇÕES INTRA-LINGUAGEM (--all-impls)")
+        print("=" * 80)
+        photo_pam = self.corpus("photo.pam")
+        photo_webp = self.corpus("photo.webp")
+        intra: List[Dict[str, Any]] = []
+
+        # 1. Go: WebP Lossy Encode (deepteams vs gowebp)
+        if os.path.exists(photo_pam):
+            try:
+                t_deep = Task("WebP Encode (deepteams)", "encode", "webp", "lossy", photo_pam, impl="deepteams")
+                t_gow = Task("WebP Encode (gowebp)", "encode", "webp", "lossy", photo_pam, impl="gowebp")
+                res_deep = self.benchmark_task(t_deep)
+                res_gow = self.benchmark_task(t_gow)
+                time_deep = res_deep["go"][self.metric]["median"]
+                time_gow = res_gow["go"][self.metric]["median"]
+                winner = "deepteams" if time_deep < time_gow else "gowebp"
+                speedup = max(time_deep, time_gow) / min(time_deep, time_gow) if min(time_deep, time_gow) > 0 else 1.0
+                row = {
+                    "language": "Go",
+                    "operation": "WebP Lossy Encode [photo.pam]",
+                    "impl_a": "deepteams",
+                    "impl_b": "gowebp",
+                    "time_a_ms": time_deep,
+                    "time_b_ms": time_gow,
+                    "winner": winner,
+                    "speedup": speedup,
+                }
+                intra.append(row)
+                print(f"[Go] WebP Lossy Encode: deepteams ({time_deep:.2f} ms) vs gowebp ({time_gow:.2f} ms) -> Vencedor: {winner} ({speedup:.2f}x)")
+            except Exception as e:
+                print(f"[!] Falha na comparação intra-linguagem Go WebP encode: {e}")
+
+        # 2. Go: WebP Decode (ximage vs gowebp)
+        if os.path.exists(photo_webp):
+            try:
+                t_xim = Task("WebP Decode (ximage)", "decode", "webp", "lossy", photo_webp, impl="ximage")
+                t_gow = Task("WebP Decode (gowebp)", "decode", "webp", "lossy", photo_webp, impl="gowebp")
+                res_xim = self.benchmark_task(t_xim)
+                res_gow = self.benchmark_task(t_gow)
+                time_xim = res_xim["go"][self.metric]["median"]
+                time_gow = res_gow["go"][self.metric]["median"]
+                winner = "ximage" if time_xim < time_gow else "gowebp"
+                speedup = max(time_xim, time_gow) / min(time_xim, time_gow) if min(time_xim, time_gow) > 0 else 1.0
+                row = {
+                    "language": "Go",
+                    "operation": "WebP Decode [photo.webp]",
+                    "impl_a": "ximage",
+                    "impl_b": "gowebp",
+                    "time_a_ms": time_xim,
+                    "time_b_ms": time_gow,
+                    "winner": winner,
+                    "speedup": speedup,
+                }
+                intra.append(row)
+                print(f"[Go] WebP Decode: ximage ({time_xim:.2f} ms) vs gowebp ({time_gow:.2f} ms) -> Vencedor: {winner} ({speedup:.2f}x)")
+            except Exception as e:
+                print(f"[!] Falha na comparação intra-linguagem Go WebP decode: {e}")
+
+        # 3. Go: Resize Lanczos3 (xdraw vs imaging)
+        if os.path.exists(photo_pam):
+            try:
+                t_xdr = Task("Resize Lanczos3 (xdraw)", "resize", "pam", "lossless", photo_pam, target_w=256, target_h=256, filter_name="lanczos3", impl="xdraw")
+                t_img = Task("Resize Lanczos3 (imaging)", "resize", "pam", "lossless", photo_pam, target_w=256, target_h=256, filter_name="lanczos3", impl="imaging")
+                res_xdr = self.benchmark_task(t_xdr)
+                res_img = self.benchmark_task(t_img)
+                time_xdr = res_xdr["go"][self.metric]["median"]
+                time_img = res_img["go"][self.metric]["median"]
+                winner = "xdraw" if time_xdr < time_img else "imaging"
+                speedup = max(time_xdr, time_img) / min(time_xdr, time_img) if min(time_xdr, time_img) > 0 else 1.0
+                row = {
+                    "language": "Go",
+                    "operation": "Resize Lanczos3 [photo.pam]",
+                    "impl_a": "xdraw",
+                    "impl_b": "imaging",
+                    "time_a_ms": time_xdr,
+                    "time_b_ms": time_img,
+                    "winner": winner,
+                    "speedup": speedup,
+                }
+                intra.append(row)
+                print(f"[Go] Resize Lanczos3: xdraw ({time_xdr:.2f} ms) vs imaging ({time_img:.2f} ms) -> Vencedor: {winner} ({speedup:.2f}x)")
+            except Exception as e:
+                print(f"[!] Falha na comparação intra-linguagem Go Resize: {e}")
+
+        # 4. Rust: Resize Lanczos3 (fast_image_resize vs image)
+        if os.path.exists(photo_pam):
+            try:
+                t_fir = Task("Resize Lanczos3 (fast_image_resize)", "resize", "pam", "lossless", photo_pam, target_w=256, target_h=256, filter_name="lanczos3", impl="fast_image_resize")
+                t_imr = Task("Resize Lanczos3 (image)", "resize", "pam", "lossless", photo_pam, target_w=256, target_h=256, filter_name="lanczos3", impl="image")
+                res_fir = self.benchmark_task(t_fir)
+                res_imr = self.benchmark_task(t_imr)
+                time_fir = res_fir["rust"][self.metric]["median"]
+                time_imr = res_imr["rust"][self.metric]["median"]
+                winner = "fast_image_resize" if time_fir < time_imr else "image"
+                speedup = max(time_fir, time_imr) / min(time_fir, time_imr) if min(time_fir, time_imr) > 0 else 1.0
+                row = {
+                    "language": "Rust",
+                    "operation": "Resize Lanczos3 [photo.pam]",
+                    "impl_a": "fast_image_resize",
+                    "impl_b": "image",
+                    "time_a_ms": time_fir,
+                    "time_b_ms": time_imr,
+                    "winner": winner,
+                    "speedup": speedup,
+                }
+                intra.append(row)
+                print(f"[Rust] Resize Lanczos3: fast_image_resize ({time_fir:.2f} ms) vs image ({time_imr:.2f} ms) -> Vencedor: {winner} ({speedup:.2f}x)")
+            except Exception as e:
+                print(f"[!] Falha na comparação intra-linguagem Rust Resize: {e}")
+
+        self.intra_results = intra
+        return intra
 
     # ------------------------------------------------------------------ relatórios (pódio)
 
@@ -919,13 +1098,15 @@ class ArenaBenchmark:
             "tie_rule": TIE_RULE,
             "environment": environment(),
             "notes": self.notes(),
+            "tier": self.tier,
+            "all_impls": self.all_impls,
         }
-        scorecard = {}
+        scorecard_matrix = {}
         routes = self.arena.get("ops", {}).get(
             "routes", ["analyze", "encode", "decode", "transcode", "resize", "filter", "seam_carving"]
         )
         for op in routes:
-            scorecard[op] = {
+            scorecard_matrix[op] = {
                 "go": "supported" if self.engine_supports_op("go", op) else "unsupported",
                 "rust": "supported" if self.engine_supports_op("rust", op) else "unsupported",
             }
@@ -938,7 +1119,8 @@ class ArenaBenchmark:
                     "results": self.results,
                     "equal_quality": self.equal_quality,
                     "failures": self.failures,
-                    "scorecard": scorecard,
+                    "scorecard": scorecard_matrix,
+                    "intra_language_comparisons": self.intra_results,
                 },
                 f,
                 indent=2,
@@ -953,6 +1135,7 @@ class ArenaBenchmark:
         md = []
         md.append("# 🏆 Pódio da Arena: Go Puro × Rust Puro\n")
         md.append(f"**Modo de Execução**: `{self.mode.upper()}`  ")
+        md.append(f"**Tier de Execução**: `{self.tier.upper()}`  ")
         md.append(f"**Métrica primária**: {labels['column']}  ")
         md.append(f"**Iterações por teste**: {self.iterations} medidas (+ {self.warmup} warmup); tempos como mediana [p25-p75]  ")
         md.append(f"**Máquina**: {env['cpu']} ({env['cpu_count']} CPUs lógicas), {env['platform']}  ")
@@ -965,7 +1148,7 @@ class ArenaBenchmark:
         md.append("## 📋 Matriz de Suporte por Operação\n")
         md.append("| Operação | Suporte em Go | Suporte em Rust |")
         md.append("|---|---|---|")
-        for op, st in scorecard.items():
+        for op, st in scorecard_matrix.items():
             go_st = "✅ Suportado" if st["go"] == "supported" else "❌ Não suportado"
             rust_st = "✅ Suportado" if st["rust"] == "supported" else "❌ Não suportado"
             md.append(f"| {op} | {go_st} | {rust_st} |")
@@ -1059,11 +1242,23 @@ class ArenaBenchmark:
                     f"| {row['winner']} | **{row['speedup']:.2f}x** |"
                 )
 
+        if self.intra_results:
+            md.append("\n## 🔄 Comparações Intra-Linguagem (--all-impls)\n")
+            md.append("| Linguagem | Operação / Formato | Implementação A | Implementação B | Tempo A (ms) | Tempo B (ms) | 🥇 Vencedor | Vantagem |")
+            md.append("|---|---|---|---|---|---|---|---|")
+            for ir in self.intra_results:
+                md.append(
+                    f"| {ir['language']} | {ir['operation']} | `{ir['impl_a']}` | `{ir['impl_b']}` | "
+                    f"{ir['time_a_ms']:.2f} | {ir['time_b_ms']:.2f} | **{ir['winner']}** | **{ir['speedup']:.2f}x** |"
+                )
+
         with open(md_path, "w", encoding="utf-8") as f:
             f.write("\n".join(md) + "\n")
+        scorecard_path = scorecard.generate_scorecard(output_dir, self.arena, self.tier, self.intra_results)
         print(f"\n[✓] Relatórios exportados para:")
         print(f"    - JSON: {json_path}")
         print(f"    - Markdown: {md_path}")
+        print(f"    - Scorecard: {scorecard_path}")
 
     # ------------------------------------------------------------------ modo load
 
@@ -1235,6 +1430,10 @@ def main() -> int:
     parser.add_argument("--no-equal-quality", action="store_true", help="Pular a comparação a qualidade equivalente (AVIF e JXL lossy)")
     parser.add_argument("--allow-failures", action="store_true", help="Terminar com código 0 mesmo que alguma tarefa tenha falhado (as falhas continuam nos relatórios)")
     parser.add_argument("--tmp-dir", default=None, help="Diretório dos arquivos temporários (padrão: ARENA_TMPDIR ou o tmpfs_path de arena.toml)")
+    parser.add_argument("--tier", choices=["portable", "accelerated", "hybrid"], default="accelerated",
+                        help="Tier de pureza da arena (padrão: accelerated)")
+    parser.add_argument("--all-impls", action="store_true",
+                        help="Executa comparações multi-biblioteca e intra-linguagem")
     parser.add_argument("--duration", type=float, default=10.0, help="[load] segundos de carga por engine e tarefa")
     parser.add_argument("--concurrency", type=int, default=os.cpu_count() or 4, help="[load] conexões concorrentes do oha")
     parser.add_argument("--oha-bin", default="oha", help="[load] caminho do binário oha")
@@ -1257,6 +1456,8 @@ def main() -> int:
             validate=not args.no_validate,
             equal_quality=not args.no_equal_quality,
             tmp_dir=args.tmp_dir or default_tmp_dir(arena),
+            tier=args.tier,
+            all_impls=args.all_impls,
         )
     except quality.ReferenceUnavailable as exc:
         print(f"ERRO: {exc}", file=sys.stderr)

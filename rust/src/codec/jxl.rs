@@ -118,6 +118,7 @@ mod tests {
                     mode: CodecMode::Lossless,
                     quality: 100,
                     effort,
+                    implementation: None,
                 };
                 let encoded = encode(&pam, &params)
                     .unwrap_or_else(|e| panic!("encode falhou em {name} effort {effort}: {e}"));

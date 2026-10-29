@@ -132,7 +132,7 @@ func init() {
 		if params.Mode == ModeLossless {
 			opts := &gowebp.Options{
 				Lossy:             false,
-				UseExtendedFormat: true,
+				UseExtendedFormat: false,
 			}
 			return gowebp.Encode(w, src, opts)
 		}
