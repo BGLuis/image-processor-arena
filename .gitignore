@@ -8,6 +8,8 @@ env/
 # Temp data
 ramdisk/
 tmp/
+results/ci_download/
+results/local/
 
 # Corpus grande (gerado por make_corpus.py --large)
 harness/fixtures/corpus-large/
