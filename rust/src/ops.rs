@@ -46,7 +46,9 @@ impl ResampleFilter {
             "catmullrom" | "bicubic" => Ok(Self::CatmullRom),
             "bilinear" | "linear" => Ok(Self::Bilinear),
             "nearest" | "box" => Ok(Self::Nearest),
-            _ => Err(OpError::InvalidParam(format!("Filtro de resize desconhecido: '{s}'"))),
+            _ => Err(OpError::InvalidParam(format!(
+                "Filtro de resize desconhecido: '{s}'"
+            ))),
         }
     }
 
@@ -163,7 +165,8 @@ pub fn filter(
                 let img = image::RgbaImage::from_raw(pam.width, pam.height, pam.data.clone())
                     .ok_or_else(|| OpError::ProcessError("Buffer RGBA inválido".to_string()))?;
                 let sharpened = imageproc::filter::filter3x3(&img, &kernel);
-                PamImage::new_rgba(pam.width, pam.height, sharpened.into_raw()).map_err(OpError::Pam)
+                PamImage::new_rgba(pam.width, pam.height, sharpened.into_raw())
+                    .map_err(OpError::Pam)
             } else {
                 let img = image::RgbImage::from_raw(pam.width, pam.height, pam.data.clone())
                     .ok_or_else(|| OpError::ProcessError("Buffer RGB inválido".to_string()))?;

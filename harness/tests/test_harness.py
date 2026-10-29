@@ -502,8 +502,9 @@ class TierAndMultiImplTests(unittest.TestCase):
 
         pam_header = b"P7\nWIDTH 256\nHEIGHT 256\nDEPTH 3\nMAXVAL 255\nTUPLTYPE RGB\nENDHDR\n"
         valid_pam = pam_header + bytes(256 * 256 * 3)
-        res = b.validate_output(t_resize, valid_pam)
-        self.assertTrue(res["validated"])
+        with mock.patch.object(quality, "validate_resize", return_value=35.0):
+            res = b.validate_output(t_resize, valid_pam)
+            self.assertTrue(res["validated"])
 
         bad_pam = b"P7\nWIDTH 128\nHEIGHT 128\nDEPTH 3\nMAXVAL 255\nTUPLTYPE RGB\nENDHDR\n" + bytes(128 * 128 * 3)
         with self.assertRaises(quality.ValidationError):

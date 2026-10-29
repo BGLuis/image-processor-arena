@@ -432,13 +432,9 @@ async fn run_handler(
             let (body_pam, process_ns) = tokio::task::spawn_blocking(move || {
                 let pam = PamImage::parse_with_limit(&body, max_pixels).map_err(pam_error)?;
                 let t0 = Instant::now();
-                let res = arena_rust::ops::filter(
-                    &pam,
-                    &filter_name,
-                    sigma,
-                    implementation.as_deref(),
-                )
-                .map_err(|e| client_error(e.to_string()))?;
+                let res =
+                    arena_rust::ops::filter(&pam, &filter_name, sigma, implementation.as_deref())
+                        .map_err(|e| client_error(e.to_string()))?;
                 let elapsed = t0.elapsed().as_nanos();
                 Ok::<_, HttpError>((res.encode(), elapsed))
             })
@@ -470,7 +466,11 @@ mod tests {
     fn query(op: &str, format: &str, extra: &[(&str, &str)]) -> RunQuery {
         let mut q = RunQuery {
             op: op.to_string(),
-            format: if format.is_empty() { None } else { Some(format.to_string()) },
+            format: if format.is_empty() {
+                None
+            } else {
+                Some(format.to_string())
+            },
             to: None,
             mode: None,
             q: None,
@@ -665,13 +665,45 @@ mod tests {
                 Bytes::from_static(b"not a png"),
             ),
             ("unknown op", query("unknown_op", "png", &[]), sample_pam()),
-            ("resize missing w and h", query("resize", "", &[]), sample_pam()),
-            ("resize negative w", query("resize", "", &[("w", "-256"), ("h", "256")]), sample_pam()),
-            ("resize zero h", query("resize", "", &[("w", "256"), ("h", "0")]), sample_pam()),
-            ("resize oversized", query("resize", "", &[("w", "100000"), ("h", "100000")]), sample_pam()),
-            ("resize unknown filter", query("resize", "", &[("w", "256"), ("h", "256"), ("filter", "invalid")]), sample_pam()),
-            ("filter missing filter", query("filter", "", &[]), sample_pam()),
-            ("filter unknown filter", query("filter", "", &[("filter", "invalid")]), sample_pam()),
+            (
+                "resize missing w and h",
+                query("resize", "", &[]),
+                sample_pam(),
+            ),
+            (
+                "resize negative w",
+                query("resize", "", &[("w", "-256"), ("h", "256")]),
+                sample_pam(),
+            ),
+            (
+                "resize zero h",
+                query("resize", "", &[("w", "256"), ("h", "0")]),
+                sample_pam(),
+            ),
+            (
+                "resize oversized",
+                query("resize", "", &[("w", "100000"), ("h", "100000")]),
+                sample_pam(),
+            ),
+            (
+                "resize unknown filter",
+                query(
+                    "resize",
+                    "",
+                    &[("w", "256"), ("h", "256"), ("filter", "invalid")],
+                ),
+                sample_pam(),
+            ),
+            (
+                "filter missing filter",
+                query("filter", "", &[]),
+                sample_pam(),
+            ),
+            (
+                "filter unknown filter",
+                query("filter", "", &[("filter", "invalid")]),
+                sample_pam(),
+            ),
             ("empty body", query("analyze", "png", &[]), Bytes::new()),
         ];
         for (name, q, body) in cases {
@@ -683,7 +715,11 @@ mod tests {
     #[tokio::test]
     async fn resize_with_lanczos3() {
         let response = run(
-            query("resize", "", &[("w", "256"), ("h", "256"), ("filter", "lanczos3")]),
+            query(
+                "resize",
+                "",
+                &[("w", "256"), ("h", "256"), ("filter", "lanczos3")],
+            ),
             sample_pam(),
         )
         .await

@@ -114,7 +114,10 @@ pub fn validate_encode_impl(format: ImageFormat, implementation: &str) -> Result
     let valid = match format {
         ImageFormat::Png => matches!(imp.as_str(), "png" | "stdlib"),
         ImageFormat::Jpeg => matches!(imp.as_str(), "jpeg-encoder" | "stdlib"),
-        ImageFormat::Webp => matches!(imp.as_str(), "zenwebp" | "image-webp" | "image_webp" | "gowebp"),
+        ImageFormat::Webp => matches!(
+            imp.as_str(),
+            "zenwebp" | "image-webp" | "image_webp" | "gowebp"
+        ),
         ImageFormat::Avif => matches!(imp.as_str(), "ravif" | "zenravif"),
         ImageFormat::Jxl => matches!(imp.as_str(), "jxl-encoder" | "gen2brain" | "jxl"),
     };
@@ -134,7 +137,10 @@ pub fn validate_decode_impl(format: ImageFormat, implementation: &str) -> Result
     let valid = match format {
         ImageFormat::Png => matches!(imp.as_str(), "png" | "stdlib"),
         ImageFormat::Jpeg => matches!(imp.as_str(), "zune-jpeg" | "zune" | "stdlib"),
-        ImageFormat::Webp => matches!(imp.as_str(), "image-webp" | "image_webp" | "imagewebp" | "zenwebp" | "gowebp"),
+        ImageFormat::Webp => matches!(
+            imp.as_str(),
+            "image-webp" | "image_webp" | "imagewebp" | "zenwebp" | "gowebp"
+        ),
         ImageFormat::Avif => matches!(imp.as_str(), "zenavif" | "rav1d"),
         ImageFormat::Jxl => matches!(imp.as_str(), "jxl-oxide" | "gen2brain" | "jxl"),
     };

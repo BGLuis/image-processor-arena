@@ -137,10 +137,7 @@ fn main() {
             let format_str = args
                 .format
                 .expect("Argumento '--format' obrigatório para op=encode");
-            let imp = args
-                .to_impl
-                .as_deref()
-                .or(args.implementation.as_deref());
+            let imp = args.to_impl.as_deref().or(args.implementation.as_deref());
             let params = EncodeParams::parse_with_impl(
                 &format_str,
                 args.mode.as_deref(),
@@ -183,10 +180,7 @@ fn main() {
                 eprintln!("[-] {e}");
                 process::exit(1);
             });
-            let imp = args
-                .from_impl
-                .as_deref()
-                .or(args.implementation.as_deref());
+            let imp = args.from_impl.as_deref().or(args.implementation.as_deref());
 
             let pam = match codec::decode_with_impl(&input_bytes, format, imp) {
                 Ok(p) => p,
@@ -215,14 +209,8 @@ fn main() {
                 eprintln!("[-] {e}");
                 process::exit(1);
             });
-            let from_impl = args
-                .from_impl
-                .as_deref()
-                .or(args.implementation.as_deref());
-            let to_impl = args
-                .to_impl
-                .as_deref()
-                .or(args.implementation.as_deref());
+            let from_impl = args.from_impl.as_deref().or(args.implementation.as_deref());
+            let to_impl = args.to_impl.as_deref().or(args.implementation.as_deref());
             let params = EncodeParams::parse_with_impl(
                 &to_str,
                 args.mode.as_deref(),
@@ -283,7 +271,9 @@ fn main() {
         }
 
         "filter" => {
-            let filter_name = args.filter.expect("Argumento '--filter' obrigatório para op=filter");
+            let filter_name = args
+                .filter
+                .expect("Argumento '--filter' obrigatório para op=filter");
             let pam = match PamImage::parse(&input_bytes) {
                 Ok(p) => p,
                 Err(e) => {

@@ -103,4 +103,3 @@ func TestSeamCarve(t *testing.T) {
 		t.Errorf("expected 350x300, got %dx%d", dst.Width, dst.Height)
 	}
 }
-
