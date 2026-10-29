@@ -490,6 +490,46 @@ class TierAndMultiImplTests(unittest.TestCase):
             self.assertIn("Comparações Intra-Linguagem", podium_content)
             self.assertIn("deepteams", podium_content)
 
+    def test_rust_supports_gowebp_for_decode(self):
+        b = bench.ArenaBenchmark(validate=False, equal_quality=False)
+        t = bench.Task("Decode WebP (gowebp)", "decode", "webp", "lossy", "dummy.webp", impl="gowebp")
+        self.assertTrue(b.engine_supports_impl("rust", t))
+
+    def test_validate_output_resize_and_filter(self):
+        b = bench.ArenaBenchmark(validate=False, equal_quality=False)
+        b.validate = True
+        t_resize = bench.Task("Resize", "resize", "pam", "lossless", os.path.join(CORPUS, "photo.pam"), target_w=256, target_h=256)
+
+        pam_header = b"P7\nWIDTH 256\nHEIGHT 256\nDEPTH 3\nMAXVAL 255\nTUPLTYPE RGB\nENDHDR\n"
+        valid_pam = pam_header + bytes(256 * 256 * 3)
+        res = b.validate_output(t_resize, valid_pam)
+        self.assertTrue(res["validated"])
+
+        bad_pam = b"P7\nWIDTH 128\nHEIGHT 128\nDEPTH 3\nMAXVAL 255\nTUPLTYPE RGB\nENDHDR\n" + bytes(128 * 128 * 3)
+        with self.assertRaises(quality.ValidationError):
+            b.validate_output(t_resize, bad_pam)
+
+        t_filter = bench.Task("Filter", "filter", "pam", "lossless", os.path.join(CORPUS, "photo.pam"), filter_name="blur")
+        filter_header = b"P7\nWIDTH 512\nHEIGHT 512\nDEPTH 3\nMAXVAL 255\nTUPLTYPE RGB\nENDHDR\n"
+        valid_filter_pam = filter_header + bytes(512 * 512 * 3)
+        res_filter = b.validate_output(t_filter, valid_filter_pam)
+        self.assertTrue(res_filter["validated"])
+
+    def test_validate_resize_calls_rgb_psnr(self):
+        class DummyImage:
+            size = (50, 50)
+            mode = "RGB"
+            def resize(self, size, resample=None):
+                return self
+            def convert(self, mode):
+                return self
+
+        with mock.patch.object(quality, "Image", DummyImage):
+            with mock.patch.object(quality, "rgb_psnr", return_value=35.0) as mock_psnr:
+                score = quality.validate_resize(DummyImage(), DummyImage(), 50, 50, "lanczos3", min_psnr=30.0)
+                self.assertEqual(score, 35.0)
+                mock_psnr.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

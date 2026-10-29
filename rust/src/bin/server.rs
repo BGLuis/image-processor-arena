@@ -604,11 +604,19 @@ mod tests {
         let webp = encoded_bytes(query("encode", "webp", &[])).await;
         let response = run(
             query("decode", "webp", &[("impl", "image-webp")]),
-            Bytes::from(webp),
+            Bytes::from(webp.clone()),
         )
         .await
         .expect("decode com impl válido");
         assert_eq!(response.status(), StatusCode::OK);
+
+        let response_gowebp = run(
+            query("decode", "webp", &[("impl", "gowebp")]),
+            Bytes::from(webp),
+        )
+        .await
+        .expect("decode com impl gowebp");
+        assert_eq!(response_gowebp.status(), StatusCode::OK);
     }
 
     #[tokio::test]

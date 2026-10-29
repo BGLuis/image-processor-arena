@@ -355,7 +355,7 @@ class ArenaBenchmark:
             if task.op == "encode" and task.fmt == "webp":
                 return imp in ("zenwebp", "image-webp", "image_webp", "gowebp", "default")
             if task.op == "decode" and task.fmt == "webp":
-                return imp in ("image-webp", "image_webp", "imagewebp", "zenwebp", "default")
+                return imp in ("image-webp", "image_webp", "imagewebp", "zenwebp", "gowebp", "default")
             if task.op == "resize":
                 return imp in ("fast_image_resize", "fir", "image", "imageproc", "default")
             if task.op == "filter":
@@ -562,6 +562,37 @@ class ArenaBenchmark:
             if (pam_img.width, pam_img.height) != (expected_w, expected_h):
                 raise quality.ValidationError(
                     f"seam_carving produziu {pam_img.width}x{pam_img.height}, esperado {expected_w}x{expected_h}"
+                )
+            return {"validated": True, "exact": None, "psnr_db": None}
+
+        if task.op == "resize":
+            try:
+                pam_img = quality.parse_pam(output)
+            except Exception as exc:
+                raise quality.ValidationError(f"resize não devolveu PAM válido: {exc}") from exc
+            expected_w = task.target_w or 256
+            expected_h = task.target_h or 256
+            if (pam_img.width, pam_img.height) != (expected_w, expected_h):
+                raise quality.ValidationError(
+                    f"resize produziu {pam_img.width}x{pam_img.height}, esperado {expected_w}x{expected_h}"
+                )
+            if quality.Image is not None:
+                got = quality.pam_to_image(pam_img)
+                orig = self.reference_image(task.input_file)
+                filter_name = task.filter_name or "lanczos3"
+                score = quality.validate_resize(orig, got, expected_w, expected_h, filter_name)
+                return {"validated": True, "exact": None, "psnr_db": None if math.isinf(score) else round(score, 3)}
+            return {"validated": True, "exact": None, "psnr_db": None}
+
+        if task.op == "filter":
+            try:
+                pam_img = quality.parse_pam(output)
+            except Exception as exc:
+                raise quality.ValidationError(f"filter não devolveu PAM válido: {exc}") from exc
+            orig_w, orig_h, _ = read_pam_dims(task.input_file)
+            if (pam_img.width, pam_img.height) != (orig_w, orig_h):
+                raise quality.ValidationError(
+                    f"filter produziu {pam_img.width}x{pam_img.height}, esperado {orig_w}x{orig_h}"
                 )
             return {"validated": True, "exact": None, "psnr_db": None}
 

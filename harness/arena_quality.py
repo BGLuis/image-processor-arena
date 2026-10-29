@@ -224,7 +224,7 @@ def validate_resize(
     }
     filt = resample_map.get(resample_filter.lower(), getattr(getattr(Image, "Resampling", Image), "LANCZOS", 1))
     oracle = orig.resize((target_w, target_h), resample=filt)
-    score = psnr(oracle, got)
+    score = rgb_psnr(oracle, got)
     if score < min_psnr:
         raise ValidationError(f"PSNR do resize ({score:.2f} dB) abaixo do piso ({min_psnr:.2f} dB) contra oráculo Pillow")
     return score
