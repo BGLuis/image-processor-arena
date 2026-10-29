@@ -35,6 +35,10 @@ struct RunQuery {
     implementation: Option<String>,
     from_impl: Option<String>,
     to_impl: Option<String>,
+    w: Option<String>,
+    h: Option<String>,
+    filter: Option<String>,
+    sigma: Option<String>,
 }
 
 /// Requisição já conferida contra o contrato de parâmetros: nada inválido chega aos codecs.
@@ -50,13 +54,24 @@ enum Plan {
         from_impl: Option<String>,
         to: EncodeParams,
     },
+    Resize {
+        target_w: u32,
+        target_h: u32,
+        filter: arena_rust::ops::ResampleFilter,
+        implementation: Option<String>,
+    },
+    Filter {
+        filter_name: String,
+        sigma: Option<f32>,
+        implementation: Option<String>,
+    },
 }
 
 fn client_error(message: impl Into<String>) -> HttpError {
     (StatusCode::BAD_REQUEST, message.into())
 }
 
-fn plan(params: &RunQuery) -> Result<Plan, HttpError> {
+fn plan(params: &RunQuery, max_pixels: usize) -> Result<Plan, HttpError> {
     let op = params.op.to_ascii_lowercase();
     let mode = params.mode.as_deref();
     let q = params.q.as_deref();
@@ -125,8 +140,66 @@ fn plan(params: &RunQuery) -> Result<Plan, HttpError> {
             })
         }
 
+        "resize" => {
+            let w_str = params
+                .w
+                .as_deref()
+                .ok_or_else(|| client_error("Parâmetro 'w' obrigatório para op=resize"))?;
+            let h_str = params
+                .h
+                .as_deref()
+                .ok_or_else(|| client_error("Parâmetro 'h' obrigatório para op=resize"))?;
+            let target_w: i64 = w_str
+                .parse()
+                .map_err(|_| client_error(format!("Largura 'w' inválida: {w_str}")))?;
+            let target_h: i64 = h_str
+                .parse()
+                .map_err(|_| client_error(format!("Altura 'h' inválida: {h_str}")))?;
+            if target_w <= 0 || target_h <= 0 {
+                return Err(client_error(format!(
+                    "Dimensões devem ser positivas: w={target_w}, h={target_h}"
+                )));
+            }
+            if (target_w as u64) > max_pixels as u64
+                || (target_h as u64) > max_pixels as u64
+                || (target_w as u64) * (target_h as u64) > max_pixels as u64
+            {
+                return Err(client_error(format!(
+                    "Dimensões {target_w}x{target_h} excedem o limite de {max_pixels} pixels"
+                )));
+            }
+            let filter_str = params.filter.as_deref().unwrap_or("lanczos3");
+            let filter = arena_rust::ops::ResampleFilter::parse(filter_str)
+                .map_err(|e| client_error(e.to_string()))?;
+            let implementation = params.implementation.clone();
+            Ok(Plan::Resize {
+                target_w: target_w as u32,
+                target_h: target_h as u32,
+                filter,
+                implementation,
+            })
+        }
+
+        "filter" => {
+            let filter_name = params
+                .filter
+                .as_deref()
+                .ok_or_else(|| client_error("Parâmetro 'filter' obrigatório para op=filter"))?;
+            let sigma: Option<f32> = if let Some(s) = params.sigma.as_deref() {
+                Some(s.parse().map_err(|_| client_error(format!("Sigma inválido: {s}")))?)
+            } else {
+                None
+            };
+            let implementation = params.implementation.clone();
+            Ok(Plan::Filter {
+                filter_name: filter_name.to_string(),
+                sigma,
+                implementation,
+            })
+        }
+
         _ => Err(client_error(format!(
-            "Operação desconhecida: '{op}'. Esperado: analyze, encode, decode, transcode"
+            "Operação desconhecida: '{op}'. Esperado: analyze, encode, decode, transcode, resize, filter"
         ))),
     }
 }
@@ -221,7 +294,7 @@ async fn run_handler(
     Query(params): Query<RunQuery>,
     body: Bytes,
 ) -> Result<Response, HttpError> {
-    let plan = plan(&params)?;
+    let plan = plan(&params, limits.max_pixels)?;
     if body.is_empty() {
         return Err(client_error("Corpo da requisição vazio"));
     }
@@ -315,6 +388,64 @@ async fn run_handler(
                 out_bytes,
             ))
         }
+
+        Plan::Resize {
+            target_w,
+            target_h,
+            filter,
+            implementation,
+        } => {
+            let (body_pam, process_ns) = tokio::task::spawn_blocking(move || {
+                let pam = PamImage::parse_with_limit(&body, max_pixels).map_err(pam_error)?;
+                let t0 = Instant::now();
+                let res = arena_rust::ops::resize(
+                    &pam,
+                    target_w,
+                    target_h,
+                    filter,
+                    implementation.as_deref(),
+                )
+                .map_err(|e| client_error(e.to_string()))?;
+                let elapsed = t0.elapsed().as_nanos();
+                Ok::<_, HttpError>((res.encode(), elapsed))
+            })
+            .await
+            .map_err(join_error)??;
+
+            Ok(response(
+                "image/x-netpbm-pam",
+                &[("x-arena-process-ns", process_ns)],
+                body_pam,
+            ))
+        }
+
+        Plan::Filter {
+            filter_name,
+            sigma,
+            implementation,
+        } => {
+            let (body_pam, process_ns) = tokio::task::spawn_blocking(move || {
+                let pam = PamImage::parse_with_limit(&body, max_pixels).map_err(pam_error)?;
+                let t0 = Instant::now();
+                let res = arena_rust::ops::filter(
+                    &pam,
+                    &filter_name,
+                    sigma,
+                    implementation.as_deref(),
+                )
+                .map_err(|e| client_error(e.to_string()))?;
+                let elapsed = t0.elapsed().as_nanos();
+                Ok::<_, HttpError>((res.encode(), elapsed))
+            })
+            .await
+            .map_err(join_error)??;
+
+            Ok(response(
+                "image/x-netpbm-pam",
+                &[("x-arena-process-ns", process_ns)],
+                body_pam,
+            ))
+        }
     }
 }
 
@@ -334,7 +465,7 @@ mod tests {
     fn query(op: &str, format: &str, extra: &[(&str, &str)]) -> RunQuery {
         let mut q = RunQuery {
             op: op.to_string(),
-            format: Some(format.to_string()),
+            format: if format.is_empty() { None } else { Some(format.to_string()) },
             to: None,
             mode: None,
             q: None,
@@ -342,6 +473,10 @@ mod tests {
             implementation: None,
             from_impl: None,
             to_impl: None,
+            w: None,
+            h: None,
+            filter: None,
+            sigma: None,
         };
         for (key, value) in extra {
             let value = Some(value.to_string());
@@ -353,6 +488,10 @@ mod tests {
                 "impl" => q.implementation = value,
                 "from_impl" => q.from_impl = value,
                 "to_impl" => q.to_impl = value,
+                "w" => q.w = value,
+                "h" => q.h = value,
+                "filter" => q.filter = value,
+                "sigma" => q.sigma = value,
                 other => panic!("chave desconhecida: {other}"),
             }
         }
@@ -512,13 +651,68 @@ mod tests {
                 query("decode", "png", &[]),
                 Bytes::from_static(b"not a png"),
             ),
-            ("unknown op", query("resize", "png", &[]), sample_pam()),
+            ("unknown op", query("unknown_op", "png", &[]), sample_pam()),
+            ("resize missing w and h", query("resize", "", &[]), sample_pam()),
+            ("resize negative w", query("resize", "", &[("w", "-256"), ("h", "256")]), sample_pam()),
+            ("resize zero h", query("resize", "", &[("w", "256"), ("h", "0")]), sample_pam()),
+            ("resize oversized", query("resize", "", &[("w", "100000"), ("h", "100000")]), sample_pam()),
+            ("resize unknown filter", query("resize", "", &[("w", "256"), ("h", "256"), ("filter", "invalid")]), sample_pam()),
+            ("filter missing filter", query("filter", "", &[]), sample_pam()),
+            ("filter unknown filter", query("filter", "", &[("filter", "invalid")]), sample_pam()),
             ("empty body", query("analyze", "png", &[]), Bytes::new()),
         ];
         for (name, q, body) in cases {
             let err = run(q, body).await.unwrap_err();
             assert_eq!(err.0, StatusCode::BAD_REQUEST, "{name}: {}", err.1);
         }
+    }
+
+    #[tokio::test]
+    async fn resize_with_lanczos3() {
+        let response = run(
+            query("resize", "", &[("w", "256"), ("h", "256"), ("filter", "lanczos3")]),
+            sample_pam(),
+        )
+        .await
+        .expect("requisição válida de resize");
+        assert_eq!(response.status(), StatusCode::OK);
+        let ns = response
+            .headers()
+            .get("x-arena-process-ns")
+            .expect("header x-arena-process-ns")
+            .to_str()
+            .unwrap()
+            .parse::<u128>()
+            .unwrap();
+        assert!(ns > 0);
+        let body_bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let pam = PamImage::parse(&body_bytes).expect("PAM válido retornado");
+        assert_eq!(pam.width, 256);
+        assert_eq!(pam.height, 256);
+    }
+
+    #[tokio::test]
+    async fn filter_with_blur() {
+        let response = run(
+            query("filter", "", &[("filter", "blur"), ("sigma", "1.5")]),
+            sample_pam(),
+        )
+        .await
+        .expect("requisição válida de filter");
+        assert_eq!(response.status(), StatusCode::OK);
+        let ns = response
+            .headers()
+            .get("x-arena-process-ns")
+            .expect("header x-arena-process-ns")
+            .to_str()
+            .unwrap()
+            .parse::<u128>()
+            .unwrap();
+        assert!(ns > 0);
+        let body_bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let pam = PamImage::parse(&body_bytes).expect("PAM válido retornado");
+        assert_eq!(pam.width, 32);
+        assert_eq!(pam.height, 32);
     }
 
     #[tokio::test]

@@ -45,6 +45,18 @@ struct Args {
     to_impl: Option<String>,
 
     #[arg(long)]
+    w: Option<u32>,
+
+    #[arg(long)]
+    h: Option<u32>,
+
+    #[arg(long)]
+    filter: Option<String>,
+
+    #[arg(long)]
+    sigma: Option<f32>,
+
+    #[arg(long)]
     input: String,
 
     #[arg(long)]
@@ -238,9 +250,66 @@ fn main() {
             }
         }
 
+        "resize" => {
+            let target_w = args.w.expect("Argumento '--w' obrigatório para op=resize");
+            let target_h = args.h.expect("Argumento '--h' obrigatório para op=resize");
+            let pam = match PamImage::parse(&input_bytes) {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("[-] Erro ao parsear PAM: {e}");
+                    process::exit(1);
+                }
+            };
+            let filter_str = args.filter.as_deref().unwrap_or("lanczos3");
+            let filter = arena_rust::ops::ResampleFilter::parse(filter_str).unwrap_or_else(|e| {
+                eprintln!("[-] {e}");
+                process::exit(1);
+            });
+            let resized = arena_rust::ops::resize(
+                &pam,
+                target_w,
+                target_h,
+                filter,
+                args.implementation.as_deref(),
+            )
+            .unwrap_or_else(|e| {
+                eprintln!("[-] Erro resize: {e}");
+                process::exit(1);
+            });
+            if let Err(e) = write_output(args.output.as_deref(), &resized.encode()) {
+                eprintln!("[-] Erro ao escrever saída: {e}");
+                process::exit(1);
+            }
+        }
+
+        "filter" => {
+            let filter_name = args.filter.expect("Argumento '--filter' obrigatório para op=filter");
+            let pam = match PamImage::parse(&input_bytes) {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("[-] Erro ao parsear PAM: {e}");
+                    process::exit(1);
+                }
+            };
+            let filtered = arena_rust::ops::filter(
+                &pam,
+                &filter_name,
+                args.sigma,
+                args.implementation.as_deref(),
+            )
+            .unwrap_or_else(|e| {
+                eprintln!("[-] Erro filter: {e}");
+                process::exit(1);
+            });
+            if let Err(e) = write_output(args.output.as_deref(), &filtered.encode()) {
+                eprintln!("[-] Erro ao escrever saída: {e}");
+                process::exit(1);
+            }
+        }
+
         _ => {
             eprintln!(
-                "[-] Operação desconhecida: '{op}'. Esperado: analyze, encode, decode, transcode"
+                "[-] Operação desconhecida: '{op}'. Esperado: analyze, encode, decode, transcode, resize, filter"
             );
             process::exit(1);
         }

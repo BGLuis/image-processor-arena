@@ -361,5 +361,25 @@ class TmpDirTests(unittest.TestCase):
                 self.assertEqual(bench.default_tmp_dir(arena), "/somewhere")
 
 
+class ResizeValidationTests(unittest.TestCase):
+    @unittest.skipUnless(HAS_PILLOW, "requer Pillow")
+    def test_validate_resize_dimensions_and_psnr(self):
+        from PIL import Image
+        img = Image.new("RGB", (100, 100), color=(128, 64, 32))
+        resized = img.resize((50, 50), Image.Resampling.LANCZOS)
+        # Identical dimensions and identical oracle should pass with inf or very high PSNR
+        score = quality.validate_resize(img, resized, 50, 50, "lanczos3", min_psnr=30.0)
+        self.assertGreaterEqual(score, 30.0)
+
+        # Wrong dimensions should raise ValidationError
+        with self.assertRaises(quality.ValidationError):
+            quality.validate_resize(img, resized, 60, 50, "lanczos3")
+
+        # Heavily degraded should fail PSNR floor
+        degraded = Image.new("RGB", (50, 50), color=(0, 0, 0))
+        with self.assertRaises(quality.ValidationError):
+            quality.validate_resize(img, degraded, 50, 50, "lanczos3", min_psnr=30.0)
+
+
 if __name__ == "__main__":
     unittest.main()

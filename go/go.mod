@@ -10,4 +10,7 @@ require (
 	github.com/gen2brain/jxl v0.2.0
 )
 
-require golang.org/x/image v0.24.0 // indirect
+require (
+	github.com/disintegration/imaging v1.6.2 // indirect
+	golang.org/x/image v0.24.0 // indirect
+)

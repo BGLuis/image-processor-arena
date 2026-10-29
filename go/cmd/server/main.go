@@ -16,6 +16,7 @@ import (
 
 	"github.com/image-processor-arena/go/internal/analyze"
 	"github.com/image-processor-arena/go/internal/codec"
+	"github.com/image-processor-arena/go/internal/ops"
 	"github.com/image-processor-arena/go/internal/pam"
 )
 
@@ -116,6 +117,11 @@ type runRequest struct {
 	from     string // source format for decode and transcode
 	fromImpl string // source implementation for decode and transcode
 	params   codec.Params
+	targetW  int
+	targetH  int
+	filter   string
+	sigma    float64
+	impl     string
 }
 
 func parseRunRequest(qParams url.Values) (runRequest, error) {
@@ -180,6 +186,47 @@ func parseRunRequest(qParams url.Values) (runRequest, error) {
 			return req, err
 		}
 		req.from, req.params = from, params
+	case "resize":
+		wStr := qParams.Get("w")
+		hStr := qParams.Get("h")
+		if wStr == "" || hStr == "" {
+			return req, errors.New("Missing 'w' or 'h' query parameter")
+		}
+		w, err := strconv.Atoi(wStr)
+		if err != nil || w <= 0 {
+			return req, fmt.Errorf("Invalid width 'w': %q", wStr)
+		}
+		h, err := strconv.Atoi(hStr)
+		if err != nil || h <= 0 {
+			return req, fmt.Errorf("Invalid height 'h': %q", hStr)
+		}
+		if int64(w)*int64(h) > int64(srvLimits.maxPixels) || w > srvLimits.maxPixels || h > srvLimits.maxPixels {
+			return req, fmt.Errorf("Dimensions %dx%d exceed maximum allowed pixels (%d)", w, h, srvLimits.maxPixels)
+		}
+		filter := qParams.Get("filter")
+		if filter == "" {
+			filter = "lanczos3"
+		}
+		req.targetW = w
+		req.targetH = h
+		req.filter = filter
+		req.impl = qParams.Get("impl")
+	case "filter":
+		filter := qParams.Get("filter")
+		if filter == "" {
+			return req, errors.New("Missing 'filter' query parameter")
+		}
+		var sigma float64 = 1.0
+		if sStr := qParams.Get("sigma"); sStr != "" {
+			s, err := strconv.ParseFloat(sStr, 64)
+			if err != nil {
+				return req, fmt.Errorf("Invalid sigma: %q", sStr)
+			}
+			sigma = s
+		}
+		req.filter = filter
+		req.sigma = sigma
+		req.impl = qParams.Get("impl")
 	default:
 		return req, fmt.Errorf("Unsupported op: %q", req.op)
 	}
@@ -332,6 +379,48 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", mimeForFormat(req.params.Format))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(encBuf.Bytes())
+
+	case "resize":
+		pamImg, ok := decodePAM(w, body)
+		if !ok {
+			return
+		}
+
+		start := time.Now()
+		dstPam, err := ops.Resize(pamImg, req.targetW, req.targetH, req.filter, req.impl)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Resize error: %v", err), http.StatusBadRequest)
+			return
+		}
+		processNs := time.Since(start).Nanoseconds()
+
+		outBytes := pam.EncodeBytes(dstPam)
+
+		w.Header().Set("X-Arena-Process-Ns", strconv.FormatInt(processNs, 10))
+		w.Header().Set("Content-Type", "image/x-netpbm-pam")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(outBytes)
+
+	case "filter":
+		pamImg, ok := decodePAM(w, body)
+		if !ok {
+			return
+		}
+
+		start := time.Now()
+		dstPam, err := ops.Filter(pamImg, req.filter, req.sigma, req.impl)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Filter error: %v", err), http.StatusBadRequest)
+			return
+		}
+		processNs := time.Since(start).Nanoseconds()
+
+		outBytes := pam.EncodeBytes(dstPam)
+
+		w.Header().Set("X-Arena-Process-Ns", strconv.FormatInt(processNs, 10))
+		w.Header().Set("Content-Type", "image/x-netpbm-pam")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(outBytes)
 	}
 }
 

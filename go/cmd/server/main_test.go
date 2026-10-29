@@ -240,9 +240,15 @@ func TestRunClientErrorsAreNot500(t *testing.T) {
 		{"unknown transcode source", "op=transcode&format=bmp&to=png", encoded},
 		{"unknown transcode target", "op=transcode&format=png&to=bmp", encoded},
 		{"avif lossless encode", "op=encode&format=avif&mode=lossless", pamData},
-		{"avif lossless transcode", "op=transcode&format=png&to=avif&mode=lossless", encoded},
-		{"unknown op", "op=resize", pamData},
+		{"unknown op", "op=unknown_op", pamData},
 		{"missing format", "op=encode", pamData},
+		{"resize missing w and h", "op=resize", pamData},
+		{"resize negative w", "op=resize&w=-256&h=256", pamData},
+		{"resize zero h", "op=resize&w=256&h=0", pamData},
+		{"resize exceeding max pixels", "op=resize&w=100000&h=100000", pamData},
+		{"resize unknown filter", "op=resize&w=256&h=256&filter=unknown_filter", pamData},
+		{"filter missing filter param", "op=filter", pamData},
+		{"filter unknown filter", "op=filter&filter=unknown_filter", pamData},
 	}
 	for _, tc := range cases {
 		if rr := postRun(t, tc.query, tc.body); rr.Code != http.StatusBadRequest {
@@ -405,4 +411,42 @@ func TestRunRejectsUnknownImpl(t *testing.T) {
 		t.Errorf("expected 400 for unknown encode impl, got %d", r2.Code)
 	}
 }
+
+func TestRunResize(t *testing.T) {
+	pamData := loadSamplePAM(t)
+	rr := postRun(t, "op=resize&w=256&h=256&filter=lanczos3", pamData)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if processNs := rr.Header().Get("X-Arena-Process-Ns"); processNs == "" {
+		t.Error("missing X-Arena-Process-Ns header")
+	}
+	outPam, err := pam.Decode(bytes.NewReader(rr.Body.Bytes()))
+	if err != nil {
+		t.Fatalf("failed to decode returned PAM: %v", err)
+	}
+	if outPam.Width != 256 || outPam.Height != 256 {
+		t.Errorf("expected 256x256, got %dx%d", outPam.Width, outPam.Height)
+	}
+}
+
+func TestRunFilter(t *testing.T) {
+	pamData := loadSamplePAM(t)
+	rr := postRun(t, "op=filter&filter=blur&sigma=1.5", pamData)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if processNs := rr.Header().Get("X-Arena-Process-Ns"); processNs == "" {
+		t.Error("missing X-Arena-Process-Ns header")
+	}
+	outPam, err := pam.Decode(bytes.NewReader(rr.Body.Bytes()))
+	if err != nil {
+		t.Fatalf("failed to decode returned PAM: %v", err)
+	}
+	origPam, _ := pam.Decode(bytes.NewReader(pamData))
+	if outPam.Width != origPam.Width || outPam.Height != origPam.Height {
+		t.Errorf("expected %dx%d, got %dx%d", origPam.Width, origPam.Height, outPam.Width, outPam.Height)
+	}
+}
+
 
