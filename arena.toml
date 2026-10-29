@@ -8,6 +8,7 @@ png = "image/png (stdlib)"
 jpeg = "image/jpeg (stdlib, baseline 4:2:0)"
 webp_lossy = "github.com/deepteams/webp"
 webp_lossless = "github.com/KarpelesLab/gowebp"
+webp_decode_alt = "golang.org/x/image/webp"
 avif_lossy = "github.com/gen2brain/gav1d/avif"
 jxl = "github.com/gen2brain/jxl"
 
@@ -42,6 +43,9 @@ effort_max = 10
 out_of_range = "reject"
 # effort 1..10 -> 0..6 (rounded linear). webp lossy method = step, jxl effort = step + 1.
 effort_step = [0, 1, 1, 2, 3, 3, 4, 5, 5, 6]
+impl_param = "impl"
+from_impl_param = "from_impl"
+to_impl_param = "to_impl"
 
 [params.mapping]
 # Higher effort always means slower and smaller. Native scales are matched by position, not by

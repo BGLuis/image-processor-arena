@@ -21,9 +21,12 @@ func main() {
 		toFlag     = flag.String("to", "", "Target format for transcode")
 		modeFlag   = flag.String("mode", "", "Compression mode: lossy, lossless (default lossy)")
 		qFlag      = flag.String("q", "", "Quality level 1-100 (default 75)")
-		effortFlag = flag.String("effort", "", "Effort level 1-10, higher is slower and smaller (default 4)")
-		inputFlag  = flag.String("input", "", "Input file path (or '-' for stdin)")
-		outputFlag = flag.String("output", "", "Output file path (or '-' for stdout)")
+		effortFlag   = flag.String("effort", "", "Effort level 1-10, higher is slower and smaller (default 4)")
+		implFlag     = flag.String("impl", "", "Codec implementation name")
+		fromImplFlag = flag.String("from-impl", "", "Source codec implementation name for decode/transcode")
+		toImplFlag   = flag.String("to-impl", "", "Target codec implementation name for encode/transcode")
+		inputFlag    = flag.String("input", "", "Input file path (or '-' for stdin)")
+		outputFlag   = flag.String("output", "", "Output file path (or '-' for stdout)")
 	)
 	flag.Parse()
 
@@ -86,7 +89,11 @@ func main() {
 			os.Exit(1)
 		}
 
-		params, err := codec.ParseParams(fmtStr, *modeFlag, *qFlag, *effortFlag)
+		encImpl := *toImplFlag
+		if encImpl == "" {
+			encImpl = *implFlag
+		}
+		params, err := codec.ParseParams(fmtStr, *modeFlag, *qFlag, *effortFlag, encImpl)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -122,7 +129,11 @@ func main() {
 			os.Exit(1)
 		}
 
-		pamImg, err := codec.Decode(bytes.NewReader(inputData), fmtStr)
+		decImpl := *fromImplFlag
+		if decImpl == "" {
+			decImpl = *implFlag
+		}
+		pamImg, err := codec.Decode(bytes.NewReader(inputData), fmtStr, decImpl)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error decoding: %v\n", err)
 			os.Exit(1)
@@ -139,13 +150,21 @@ func main() {
 			os.Exit(1)
 		}
 
-		params, err := codec.ParseParams(toFmt, *modeFlag, *qFlag, *effortFlag)
+		encImpl := *toImplFlag
+		if encImpl == "" {
+			encImpl = *implFlag
+		}
+		params, err := codec.ParseParams(toFmt, *modeFlag, *qFlag, *effortFlag, encImpl)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 
-		pamImg, err := codec.Decode(bytes.NewReader(inputData), fromFmt)
+		decImpl := *fromImplFlag
+		if decImpl == "" {
+			decImpl = *implFlag
+		}
+		pamImg, err := codec.Decode(bytes.NewReader(inputData), fromFmt, decImpl)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error decoding input: %v\n", err)
 			os.Exit(1)

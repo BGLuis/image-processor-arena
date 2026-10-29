@@ -31,14 +31,25 @@ struct RunQuery {
     mode: Option<String>,
     q: Option<String>,
     effort: Option<String>,
+    #[serde(rename = "impl")]
+    implementation: Option<String>,
+    from_impl: Option<String>,
+    to_impl: Option<String>,
 }
 
 /// Requisição já conferida contra o contrato de parâmetros: nada inválido chega aos codecs.
 enum Plan {
     Analyze,
     Encode(EncodeParams),
-    Decode(ImageFormat),
-    Transcode { from: ImageFormat, to: EncodeParams },
+    Decode {
+        format: ImageFormat,
+        implementation: Option<String>,
+    },
+    Transcode {
+        from: ImageFormat,
+        from_impl: Option<String>,
+        to: EncodeParams,
+    },
 }
 
 fn client_error(message: impl Into<String>) -> HttpError {
@@ -59,7 +70,11 @@ fn plan(params: &RunQuery) -> Result<Plan, HttpError> {
                 .format
                 .as_deref()
                 .ok_or_else(|| client_error("Parâmetro 'format' obrigatório para op=encode"))?;
-            let encode = EncodeParams::parse(format, mode, q, effort)
+            let imp = params
+                .to_impl
+                .as_deref()
+                .or(params.implementation.as_deref());
+            let encode = EncodeParams::parse_with_impl(format, mode, q, effort, imp)
                 .map_err(|e| client_error(e.to_string()))?;
             Ok(Plan::Encode(encode))
         }
@@ -70,7 +85,18 @@ fn plan(params: &RunQuery) -> Result<Plan, HttpError> {
                 .as_deref()
                 .ok_or_else(|| client_error("Parâmetro 'format' obrigatório para op=decode"))?;
             let format = ImageFormat::from_str(format).map_err(|e| client_error(e.to_string()))?;
-            Ok(Plan::Decode(format))
+            let imp = params
+                .from_impl
+                .clone()
+                .or_else(|| params.implementation.clone());
+            if let Some(ref i) = imp {
+                arena_rust::codec::params::validate_decode_impl(format, i)
+                    .map_err(|e| client_error(e.to_string()))?;
+            }
+            Ok(Plan::Decode {
+                format,
+                implementation: imp,
+            })
         }
 
         "transcode" => {
@@ -81,9 +107,22 @@ fn plan(params: &RunQuery) -> Result<Plan, HttpError> {
                 client_error("Parâmetro 'to' (destino) obrigatório para op=transcode")
             })?;
             let from = ImageFormat::from_str(from).map_err(|e| client_error(e.to_string()))?;
-            let to = EncodeParams::parse(to, mode, q, effort)
+            let from_impl = params.from_impl.clone();
+            if let Some(ref i) = from_impl {
+                arena_rust::codec::params::validate_decode_impl(from, i)
+                    .map_err(|e| client_error(e.to_string()))?;
+            }
+            let to_impl = params
+                .to_impl
+                .as_deref()
+                .or(params.implementation.as_deref());
+            let to = EncodeParams::parse_with_impl(to, mode, q, effort, to_impl)
                 .map_err(|e| client_error(e.to_string()))?;
-            Ok(Plan::Transcode { from, to })
+            Ok(Plan::Transcode {
+                from,
+                from_impl,
+                to,
+            })
         }
 
         _ => Err(client_error(format!(
@@ -233,11 +272,14 @@ async fn run_handler(
             ))
         }
 
-        Plan::Decode(format) => {
+        Plan::Decode {
+            format,
+            implementation,
+        } => {
             let (pam_bytes, decode_ns) = tokio::task::spawn_blocking(move || {
                 let t0 = Instant::now();
-                let pam =
-                    codec::decode(&body, format).map_err(|e| codec_error("Erro decode", e))?;
+                let pam = codec::decode_with_impl(&body, format, implementation.as_deref())
+                    .map_err(|e| codec_error("Erro decode", e))?;
                 let elapsed = t0.elapsed().as_nanos();
                 Ok::<_, HttpError>((pam.encode(), elapsed))
             })
@@ -251,10 +293,15 @@ async fn run_handler(
             ))
         }
 
-        Plan::Transcode { from, to } => {
+        Plan::Transcode {
+            from,
+            from_impl,
+            to,
+        } => {
             let to_format = to.format;
             let (out_bytes, decode_ns, encode_ns) = tokio::task::spawn_blocking(move || {
-                codec::transcode(&body, from, &to).map_err(|e| codec_error("Erro transcode", e))
+                codec::transcode_with_impl(&body, from, from_impl.as_deref(), &to)
+                    .map_err(|e| codec_error("Erro transcode", e))
             })
             .await
             .map_err(join_error)??;
@@ -292,6 +339,9 @@ mod tests {
             mode: None,
             q: None,
             effort: None,
+            implementation: None,
+            from_impl: None,
+            to_impl: None,
         };
         for (key, value) in extra {
             let value = Some(value.to_string());
@@ -300,6 +350,9 @@ mod tests {
                 "mode" => q.mode = value,
                 "q" => q.q = value,
                 "effort" => q.effort = value,
+                "impl" => q.implementation = value,
+                "from_impl" => q.from_impl = value,
+                "to_impl" => q.to_impl = value,
                 other => panic!("chave desconhecida: {other}"),
             }
         }
@@ -380,6 +433,49 @@ mod tests {
         ))
         .await;
         assert_eq!(implicit, empty);
+    }
+
+    #[tokio::test]
+    async fn transcode_with_impl_flags() {
+        let png = encoded_bytes(query("encode", "png", &[])).await;
+        let response = run(
+            query(
+                "transcode",
+                "png",
+                &[
+                    ("to", "webp"),
+                    ("from_impl", "stdlib"),
+                    ("to_impl", "gowebp"),
+                ],
+            ),
+            Bytes::from(png),
+        )
+        .await
+        .expect("requisição válida com from_impl e to_impl");
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn decode_with_impl_flag() {
+        let webp = encoded_bytes(query("encode", "webp", &[])).await;
+        let response = run(
+            query("decode", "webp", &[("impl", "image-webp")]),
+            Bytes::from(webp),
+        )
+        .await
+        .expect("decode com impl válido");
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn rejects_unknown_impl() {
+        let err = run(
+            query("decode", "webp", &[("impl", "nonexistent")]),
+            sample_pam(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]

@@ -16,6 +16,7 @@ import (
 	gav1davif "github.com/gen2brain/gav1d/avif"
 	genjxl "github.com/gen2brain/jxl"
 	"github.com/image-processor-arena/go/internal/pam"
+	xwebp "golang.org/x/image/webp"
 )
 
 var (
@@ -29,6 +30,7 @@ type Params struct {
 	Mode   string // lossy or lossless
 	Q      int    // Quality [1..100], 0 means default
 	Effort int    // Effort [1..10], 0 means default
+	Impl   string // Implementation name, "" means default
 }
 
 // Largest side each format can represent. The Rust engine enforces the same ceilings, so a
@@ -63,77 +65,185 @@ func NormalizeFormat(fmtStr string) string {
 	return s
 }
 
+// EncoderAdapter represents an encoding function for a specific library.
+type EncoderAdapter func(w io.Writer, pamImg *pam.Image, params Params) error
+
+// DecoderAdapter represents a decoding function for a specific library.
+type DecoderAdapter func(r io.Reader) (image.Image, error)
+
+var (
+	encoderAdapters = make(map[string]map[string]EncoderAdapter)
+	decoderAdapters = make(map[string]map[string]DecoderAdapter)
+)
+
+// RegisterEncoder registers an encoder implementation for a given format.
+func RegisterEncoder(format, name string, enc EncoderAdapter) {
+	format = NormalizeFormat(format)
+	name = strings.ToLower(strings.TrimSpace(name))
+	if encoderAdapters[format] == nil {
+		encoderAdapters[format] = make(map[string]EncoderAdapter)
+	}
+	encoderAdapters[format][name] = enc
+}
+
+// RegisterDecoder registers a decoder implementation for a given format.
+func RegisterDecoder(format, name string, dec DecoderAdapter) {
+	format = NormalizeFormat(format)
+	name = strings.ToLower(strings.TrimSpace(name))
+	if decoderAdapters[format] == nil {
+		decoderAdapters[format] = make(map[string]DecoderAdapter)
+	}
+	decoderAdapters[format][name] = dec
+}
+
+func init() {
+	// PNG
+	RegisterEncoder("png", "stdlib", func(w io.Writer, pamImg *pam.Image, params Params) error {
+		src := encoderInput(pamImg)
+		enc := &png.Encoder{
+			CompressionLevel: pngCompression(params.Effort),
+		}
+		return enc.Encode(w, src)
+	})
+	RegisterDecoder("png", "stdlib", func(r io.Reader) (image.Image, error) {
+		return png.Decode(r)
+	})
+
+	// JPEG
+	RegisterEncoder("jpeg", "stdlib", func(w io.Writer, pamImg *pam.Image, params Params) error {
+		if err := checkSide(pamImg, "jpeg", jpegMaxSide); err != nil {
+			return err
+		}
+		src := encoderInput(pamImg)
+		opts := &jpeg.Options{
+			Quality: params.Q,
+		}
+		return jpeg.Encode(w, src, opts)
+	})
+	RegisterDecoder("jpeg", "stdlib", func(r io.Reader) (image.Image, error) {
+		return jpeg.Decode(r)
+	})
+
+	// WebP encoders
+	RegisterEncoder("webp", "deepteams", func(w io.Writer, pamImg *pam.Image, params Params) error {
+		if err := checkSide(pamImg, "webp", webpMaxSide); err != nil {
+			return err
+		}
+		if params.Mode == ModeLossless {
+			return fmt.Errorf("%w: deepteams does not support lossless webp", ErrUnsupportedFormat)
+		}
+		src := encoderInput(pamImg)
+		opts := deepwebp.DefaultOptions()
+		opts.Lossless = false
+		opts.Quality = float32(params.Q)
+		opts.Method = webpMethod(params.Effort)
+		return deepwebp.Encode(w, src, opts)
+	})
+	RegisterEncoder("webp", "gowebp", func(w io.Writer, pamImg *pam.Image, params Params) error {
+		if err := checkSide(pamImg, "webp", webpMaxSide); err != nil {
+			return err
+		}
+		src := encoderInput(pamImg)
+		if params.Mode == ModeLossless {
+			opts := &gowebp.Options{
+				Lossy:             false,
+				UseExtendedFormat: true,
+			}
+			return gowebp.Encode(w, src, opts)
+		}
+		opts := &gowebp.Options{
+			Lossy:             true,
+			Quality:           float32(params.Q),
+			Method:            webpMethod(params.Effort),
+			UseExtendedFormat: true,
+		}
+		return gowebp.Encode(w, src, opts)
+	})
+
+	// WebP decoders
+	RegisterDecoder("webp", "deepteams", func(r io.Reader) (image.Image, error) {
+		return deepwebp.Decode(r)
+	})
+	RegisterDecoder("webp", "gowebp", func(r io.Reader) (image.Image, error) {
+		return gowebp.Decode(r)
+	})
+	RegisterDecoder("webp", "ximage", func(r io.Reader) (image.Image, error) {
+		return xwebp.Decode(r)
+	})
+
+	// AVIF
+	RegisterEncoder("avif", "gav1d", func(w io.Writer, pamImg *pam.Image, params Params) error {
+		if params.Mode == ModeLossless {
+			return fmt.Errorf("%w: avif lossless", ErrUnsupportedFormat)
+		}
+		src := encoderInput(pamImg)
+		opts := gav1davif.EncodeOptions{
+			Quality: params.Q,
+			Speed:   avifSpeed(params.Effort),
+		}
+		return gav1davif.Encode(w, src, opts)
+	})
+	RegisterDecoder("avif", "gav1d", func(r io.Reader) (image.Image, error) {
+		return gav1davif.Decode(r)
+	})
+	RegisterDecoder("avif", "goavif", func(r io.Reader) (image.Image, error) {
+		return goavif.Decode(r)
+	})
+
+	// JXL
+	RegisterEncoder("jxl", "gen2brain", func(w io.Writer, pamImg *pam.Image, params Params) error {
+		src := encoderInput(pamImg)
+		opts := genjxl.EncodeOptions{
+			Quality:  params.Q,
+			Effort:   jxlEffort(params.Effort),
+			Lossless: (params.Mode == ModeLossless),
+		}
+		return genjxl.Encode(w, src, opts)
+	})
+	RegisterDecoder("jxl", "gen2brain", func(r io.Reader) (image.Image, error) {
+		return genjxl.Decode(r)
+	})
+}
+
 // Encode encodes a PAM image into the target format.
 func Encode(w io.Writer, pamImg *pam.Image, params Params) error {
 	params, err := params.resolve()
 	if err != nil {
 		return err
 	}
-	format, q, mode := params.Format, params.Q, params.Mode
-	src := encoderInput(pamImg)
-
-	switch format {
-	case "png":
-		enc := &png.Encoder{
-			CompressionLevel: pngCompression(params.Effort),
-		}
-		return enc.Encode(w, src)
-
-	case "jpeg":
-		if err := checkSide(pamImg, "jpeg", jpegMaxSide); err != nil {
-			return err
-		}
-		// Standard library JPEG encoder only supports lossy baseline
-		opts := &jpeg.Options{
-			Quality: q,
-		}
-		// image/jpeg handles image.Image, but for RGB without alpha, *image.RGBA or *image.NRGBA is fine.
-		return jpeg.Encode(w, src, opts)
-
-	case "webp":
-		if err := checkSide(pamImg, "webp", webpMaxSide); err != nil {
-			return err
-		}
-		if mode == "lossless" {
-			opts := &gowebp.Options{
-				Lossy:             false,
-				UseExtendedFormat: true,
+	format := params.Format
+	impl := params.Impl
+	if impl == "" || impl == "default" {
+		if format == "webp" {
+			if params.Mode == ModeLossless {
+				impl = "gowebp"
+			} else {
+				impl = "deepteams"
 			}
-			return gowebp.Encode(w, src, opts)
-		} else {
-			// Lossy WebP with deepteams/webp
-			opts := deepwebp.DefaultOptions()
-			opts.Lossless = false
-			opts.Quality = float32(q)
-			opts.Method = webpMethod(params.Effort)
-			return deepwebp.Encode(w, src, opts)
+		} else if format == "png" || format == "jpeg" {
+			impl = "stdlib"
+		} else if format == "avif" {
+			impl = "gav1d"
+		} else if format == "jxl" {
+			impl = "gen2brain"
 		}
+	}
+	if impl == "image/png" || impl == "image/jpeg" {
+		impl = "stdlib"
+	}
+	if impl == "jxl" {
+		impl = "gen2brain"
+	}
 
-	case "avif":
-		if mode == "lossless" {
-			// goavif ignores Options.Lossless and gav1d/avif always converts RGB to
-			// BT.601 4:2:0, so no available pure-Go encoder round-trips RGB exactly.
-			return fmt.Errorf("%w: avif lossless", ErrUnsupportedFormat)
-		} else {
-			// Lossy AVIF with gav1d/avif
-			opts := gav1davif.EncodeOptions{
-				Quality: q,
-				Speed:   avifSpeed(params.Effort),
-			}
-			return gav1davif.Encode(w, src, opts)
-		}
-
-	case "jxl":
-		opts := genjxl.EncodeOptions{
-			Quality:  q,
-			Effort:   jxlEffort(params.Effort),
-			Lossless: (mode == "lossless"),
-		}
-		return genjxl.Encode(w, src, opts)
-
-	default:
+	adapters, ok := encoderAdapters[format]
+	if !ok {
 		return fmt.Errorf("%w: %q", ErrUnsupportedFormat, format)
 	}
+	enc, ok := adapters[impl]
+	if !ok {
+		return fmt.Errorf("%w: unknown encoder implementation %q for %s", ErrInvalidParams, impl, format)
+	}
+	return enc(w, pamImg, params)
 }
 
 // encoderInput picks the in-memory layout handed to every encoder: depth 3 becomes an
@@ -148,47 +258,91 @@ func encoderInput(pamImg *pam.Image) image.Image {
 }
 
 // Decode decodes a compressed image into a Netpbm PAM image.
-func Decode(r io.Reader, format string) (*pam.Image, error) {
+func Decode(r io.Reader, format string, impl ...string) (*pam.Image, error) {
 	fmtNorm := NormalizeFormat(format)
+	if err := ValidateDecoderImpl(fmtNorm, ""); err != nil {
+		return nil, err
+	}
+	implementation := ""
+	if len(impl) > 0 {
+		implementation = strings.ToLower(strings.TrimSpace(impl[0]))
+	}
+	if implementation != "" && implementation != "default" {
+		if err := ValidateDecoderImpl(fmtNorm, implementation); err != nil {
+			return nil, err
+		}
+	}
+	if implementation == "image/png" || implementation == "image/jpeg" {
+		implementation = "stdlib"
+	}
+	if implementation == "golang.org/x/image/webp" {
+		implementation = "ximage"
+	}
+	if implementation == "jxl" {
+		implementation = "gen2brain"
+	}
+
+	adapters, ok := decoderAdapters[fmtNorm]
+	if !ok {
+		return nil, fmt.Errorf("%w: %q", ErrUnsupportedFormat, fmtNorm)
+	}
 
 	var decoded image.Image
 	var err error
 
 	switch fmtNorm {
-	case "png":
-		decoded, err = png.Decode(r)
-	case "jpeg":
-		decoded, err = jpeg.Decode(r)
 	case "webp":
-		// Read entire stream if needed since some webp decoders require seek or full buffer
 		data, readErr := io.ReadAll(r)
 		if readErr != nil {
 			return nil, readErr
 		}
-		// Each library composites animation frames its own way (the Rust blend drifts by one
-		// level), so there is no portable "first frame": both engines refuse animated WebP.
 		if isAnimatedWebP(data) {
 			return nil, fmt.Errorf("decode webp: animated WebP is not supported")
 		}
-		decoded, err = deepwebp.Decode(bytes.NewReader(data))
-		if err != nil {
-			// Fallback to gowebp
-			decoded, err = gowebp.Decode(bytes.NewReader(data))
+		if implementation != "" && implementation != "default" {
+			dec, ok := adapters[implementation]
+			if !ok {
+				return nil, fmt.Errorf("%w: unknown decoder implementation %q for webp", ErrInvalidParams, implementation)
+			}
+			decoded, err = dec(bytes.NewReader(data))
+		} else {
+			decoded, err = adapters["deepteams"](bytes.NewReader(data))
+			if err != nil {
+				decoded, err = adapters["gowebp"](bytes.NewReader(data))
+			}
 		}
+
 	case "avif":
 		data, readErr := io.ReadAll(r)
 		if readErr != nil {
 			return nil, readErr
 		}
-		decoded, err = gav1davif.Decode(bytes.NewReader(data))
-		if err != nil {
-			// Fallback to goavif
-			decoded, err = goavif.Decode(bytes.NewReader(data))
+		if implementation != "" && implementation != "default" {
+			dec, ok := adapters[implementation]
+			if !ok {
+				return nil, fmt.Errorf("%w: unknown decoder implementation %q for avif", ErrInvalidParams, implementation)
+			}
+			decoded, err = dec(bytes.NewReader(data))
+		} else {
+			decoded, err = adapters["gav1d"](bytes.NewReader(data))
+			if err != nil {
+				decoded, err = adapters["goavif"](bytes.NewReader(data))
+			}
 		}
-	case "jxl":
-		decoded, err = genjxl.Decode(r)
+
 	default:
-		return nil, fmt.Errorf("%w: %q", ErrUnsupportedFormat, fmtNorm)
+		if implementation == "" || implementation == "default" {
+			if fmtNorm == "png" || fmtNorm == "jpeg" {
+				implementation = "stdlib"
+			} else if fmtNorm == "jxl" {
+				implementation = "gen2brain"
+			}
+		}
+		dec, ok := adapters[implementation]
+		if !ok {
+			return nil, fmt.Errorf("%w: unknown decoder implementation %q for %s", ErrInvalidParams, implementation, fmtNorm)
+		}
+		decoded, err = dec(r)
 	}
 
 	if err != nil {

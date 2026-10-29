@@ -57,9 +57,41 @@ func ParseFormat(format string) (string, error) {
 	return f, nil
 }
 
+var validEncoderImpls = map[string]map[string]bool{
+	"png":  {"stdlib": true, "image/png": true, "default": true},
+	"jpeg": {"stdlib": true, "image/jpeg": true, "default": true},
+	"webp": {"deepteams": true, "gowebp": true, "default": true},
+	"avif": {"gav1d": true, "goavif": true, "default": true},
+	"jxl":  {"gen2brain": true, "jxl": true, "default": true},
+}
+
+var validDecoderImpls = map[string]map[string]bool{
+	"png":  {"stdlib": true, "image/png": true, "default": true},
+	"jpeg": {"stdlib": true, "image/jpeg": true, "default": true},
+	"webp": {"deepteams": true, "gowebp": true, "ximage": true, "golang.org/x/image/webp": true, "default": true},
+	"avif": {"gav1d": true, "goavif": true, "default": true},
+	"jxl":  {"gen2brain": true, "jxl": true, "default": true},
+}
+
+// ValidateDecoderImpl checks if the given decoder implementation is valid for the format.
+func ValidateDecoderImpl(format, impl string) error {
+	f := NormalizeFormat(format)
+	if !supportedFormats[f] {
+		return fmt.Errorf("%w: %q", ErrUnsupportedFormat, f)
+	}
+	imp := strings.ToLower(strings.TrimSpace(impl))
+	if imp == "" || imp == "default" {
+		return nil
+	}
+	if !validDecoderImpls[f][imp] {
+		return fmt.Errorf("%w: unknown implementation %q for format %s", ErrInvalidParams, impl, f)
+	}
+	return nil
+}
+
 // ParseParams builds validated Params from the raw textual values of a request.
 // An empty value selects the default; anything outside the contract is rejected, never clamped.
-func ParseParams(format, mode, q, effort string) (Params, error) {
+func ParseParams(format, mode, q, effort string, impl ...string) (Params, error) {
 	qVal, err := parseBounded("q", q, DefaultQ, MinQ, MaxQ)
 	if err != nil {
 		return Params{}, err
@@ -68,7 +100,11 @@ func ParseParams(format, mode, q, effort string) (Params, error) {
 	if err != nil {
 		return Params{}, err
 	}
-	return Params{Format: format, Mode: mode, Q: qVal, Effort: effortVal}.resolve()
+	implementation := ""
+	if len(impl) > 0 {
+		implementation = impl[0]
+	}
+	return Params{Format: format, Mode: mode, Q: qVal, Effort: effortVal, Impl: implementation}.resolve()
 }
 
 func parseBounded(name, raw string, def, lo, hi int) (int, error) {
@@ -110,6 +146,13 @@ func (p Params) resolve() (Params, error) {
 	}
 	if p.Effort < MinEffort || p.Effort > MaxEffort {
 		return Params{}, fmt.Errorf("%w: effort must be an integer in %d..%d, got %d", ErrInvalidParams, MinEffort, MaxEffort, p.Effort)
+	}
+
+	p.Impl = strings.ToLower(strings.TrimSpace(p.Impl))
+	if p.Impl != "" && p.Impl != "default" {
+		if !validEncoderImpls[p.Format][p.Impl] {
+			return Params{}, fmt.Errorf("%w: unknown implementation %q for %s", ErrInvalidParams, p.Impl, p.Format)
+		}
 	}
 	return p, nil
 }
