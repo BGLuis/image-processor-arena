@@ -29,6 +29,30 @@ go_cgo_enabled = 0
 go_forbidden = ["github.com/ebitengine/purego", "github.com/tetratelabs/wazero"]
 rust_banned_crates = ["cc", "cmake", "bindgen", "nasm-rs", "pkg-config"]
 
+[tiers]
+default = "accelerated"
+
+[tiers.portable]
+name = "Tier 1: Portável"
+description = "Código 100% puro e portável sem código assembly (.s) em dependências externas nem CGO/FFI"
+go_tags = ["noasm", "portable"]
+rust_features = []
+cgo_enabled = 0
+
+[tiers.accelerated]
+name = "Tier 2: Acelerado"
+description = "Código 100% puro (sem CGO/FFI), permitindo aceleração SIMD/assembly nativo do ecossistema"
+go_tags = []
+rust_features = []
+cgo_enabled = 0
+
+[tiers.hybrid]
+name = "Tier 3: Híbrido"
+description = "Extensões com bindings CGO/FFI para bibliotecas de sistema C/C++"
+go_tags = ["hybrid"]
+rust_features = ["hybrid"]
+cgo_enabled = 1
+
 [params]
 # Single parameter contract for both engines, servers and batch CLIs. Go and Rust tests read
 # these values; the benchmark harness sends them. Out-of-range or non-numeric values are rejected

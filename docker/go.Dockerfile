@@ -20,6 +20,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # ---------------------------------------------------------------------------
 FROM base AS test
 
+ARG TIER=accelerated
 WORKDIR /workspace
 COPY go/ ./go/
 COPY harness/ ./harness/
@@ -32,22 +33,32 @@ RUN chmod +x ./scripts/check-purity-go.sh
 WORKDIR /workspace/go
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go test -v ./...
+    if [ "$TIER" = "hybrid" ]; then \
+        CGO_ENABLED=1 go test -tags hybrid -v ./...; \
+    else \
+        CGO_ENABLED=0 go test -v ./...; \
+    fi
 
-RUN /workspace/scripts/check-purity-go.sh
+RUN /workspace/scripts/check-purity-go.sh --tier=${TIER}
 
 # ---------------------------------------------------------------------------
-# Stage 3: Builder (compilação de binários estáticos sem CGO)
+# Stage 3: Builder (compilação de binários)
 # ---------------------------------------------------------------------------
 FROM base AS builder
 
+ARG TIER=accelerated
 WORKDIR /workspace/go
 COPY go/ ./
 
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /app/server ./cmd/server && \
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /app/batch ./cmd/batch
+    if [ "$TIER" = "hybrid" ]; then \
+        CGO_ENABLED=1 go build -tags hybrid -trimpath -ldflags="-s -w" -o /app/server ./cmd/server && \
+        CGO_ENABLED=1 go build -tags hybrid -trimpath -ldflags="-s -w" -o /app/batch ./cmd/batch; \
+    else \
+        CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /app/server ./cmd/server && \
+        CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /app/batch ./cmd/batch; \
+    fi
 
 # ---------------------------------------------------------------------------
 # Stage 4: Runtime mínimo não-root

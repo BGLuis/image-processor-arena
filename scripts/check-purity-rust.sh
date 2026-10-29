@@ -8,21 +8,43 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUST_DIR="${ROOT_DIR}/rust"
 
-echo "=== Verificação de Pureza Rust (image-processor-arena) ==="
+TIER="accelerated"
+for arg in "$@"; do
+    case "$arg" in
+        --tier=portable|--portable)
+            TIER="portable"
+            ;;
+        --tier=accelerated)
+            TIER="accelerated"
+            ;;
+        --tier=hybrid)
+            TIER="hybrid"
+            ;;
+    esac
+done
+
+echo "=== Verificação de Pureza Rust (Tier: ${TIER}) ==="
 
 if [[ ! -f "${RUST_DIR}/Cargo.toml" ]]; then
     echo "[-] ERRO: ${RUST_DIR}/Cargo.toml não encontrado!"
     exit 1
 fi
 
+CARGO_FEATURES=""
+if [[ "${TIER}" == "hybrid" ]]; then
+    CARGO_FEATURES="--features hybrid"
+fi
+
 echo "[*] Obtendo árvore de dependências ativas para o alvo x86_64-unknown-linux-gnu..."
-ACTIVE_PKGS=$(cargo tree --manifest-path "${RUST_DIR}/Cargo.toml" --target x86_64-unknown-linux-gnu --edges no-dev --prefix none | awk '{print $1}' | sort -u)
+ACTIVE_PKGS=$(cargo tree --manifest-path "${RUST_DIR}/Cargo.toml" ${CARGO_FEATURES} --target x86_64-unknown-linux-gnu --edges no-dev --prefix none | awk '{print $1}' | sort -u)
 export ACTIVE_PKGS
+export TIER
 
 echo "[*] Inspecionando metadados do Cargo..."
 cargo metadata --manifest-path "${RUST_DIR}/Cargo.toml" --format-version 1 | python3 -c '
 import sys, json, os
 
+tier = os.environ.get("TIER", "accelerated")
 active = set(os.environ.get("ACTIVE_PKGS", "").split())
 data = json.load(sys.stdin)
 packages = data.get("packages", [])
@@ -41,27 +63,28 @@ for pkg in packages:
     version = pkg["version"]
 
     if name in active:
-        # Bloqueio incondicional de crates -sys (FFI com C)
-        if name.endswith("-sys") and name not in ["libc"]:
-            print(f"[-] VIOLAÇÃO: Crate FFI \x27-sys\x27 detectada no grafo ativo: {name} v{version}")
-            errors += 1
-
-        # Bloqueio incondicional de cmake, bindgen, pkg-config
-        if name in BANNED_GLOBAL:
-            print(f"[-] VIOLAÇÃO: Ferramenta de build/FFI proibida detectada no grafo ativo: {name} v{version}")
-            errors += 1
-
-        # Checagem de campo links
-        # rayon-core usa links="rayon-core" como token puro do Rust para unicidade no binário.
-        # Qualquer outro links (como z, png, jpeg, dav1d, aom) é FFI com biblioteca nativa.
-        links = pkg.get("links")
-        if links:
-            if links in ["rayon-core"]:
-                # Permitido: pure rust synchronization token
-                pass
-            else:
-                print(f"[-] VIOLAÇÃO: Pacote com link FFI C nativo detectado no grafo ativo: {name} (links = \x27{links}\x27)")
+        if tier != "hybrid":
+            # Bloqueio incondicional de crates -sys (FFI com C)
+            if name.endswith("-sys") and name not in ["libc"]:
+                print(f"[-] VIOLAÇÃO: Crate FFI \x27-sys\x27 detectada no grafo ativo: {name} v{version}")
                 errors += 1
+
+            # Bloqueio incondicional de cmake, bindgen, pkg-config
+            if name in BANNED_GLOBAL:
+                print(f"[-] VIOLAÇÃO: Ferramenta de build/FFI proibida detectada no grafo ativo: {name} v{version}")
+                errors += 1
+
+            # Checagem de campo links
+            # rayon-core usa links="rayon-core" como token puro do Rust para unicidade no binário.
+            # Qualquer outro links (como z, png, jpeg, dav1d, aom) é FFI com biblioteca nativa.
+            links = pkg.get("links")
+            if links:
+                if links in ["rayon-core"]:
+                    # Permitido: pure rust synchronization token
+                    pass
+                else:
+                    print(f"[-] VIOLAÇÃO: Pacote com link FFI C nativo detectado no grafo ativo: {name} (links = \x27{links}\x27)")
+                    errors += 1
 
 # 2. Notifica sobre cc e nasm-rs como inertes upstream
 for pkg in packages:
@@ -114,18 +137,20 @@ else
 fi
 
 # 5. Se o binário batch ou server já estiver compilado, inspeciona ldd
-for bin_candidate in "${RUST_DIR}/target/release/arena-server" "${RUST_DIR}/target/release/arena-batch"; do
-    if [[ -f "${bin_candidate}" ]]; then
-        echo "[*] Inspecionando links dinâmicos do binário: $(basename "${bin_candidate}")..."
-        NON_STD_LIBS=$(ldd "${bin_candidate}" | grep -v -E "linux-vdso|libc\.so|libgcc_s|ld-linux|libm\.so" || true)
-        if [[ -n "${NON_STD_LIBS}" ]]; then
-            echo "[-] VIOLAÇÃO: Binário contém bibliotecas C compartilhadas inesperadas:"
-            echo "${NON_STD_LIBS}"
-            exit 1
+if [[ "${TIER}" != "hybrid" ]]; then
+    for bin_candidate in "${RUST_DIR}/target/release/arena-server" "${RUST_DIR}/target/release/arena-batch"; do
+        if [[ -f "${bin_candidate}" ]]; then
+            echo "[*] Inspecionando links dinâmicos do binário: $(basename "${bin_candidate}")..."
+            NON_STD_LIBS=$(ldd "${bin_candidate}" | grep -v -E "linux-vdso|libc\.so|libgcc_s|ld-linux|libm\.so" || true)
+            if [[ -n "${NON_STD_LIBS}" ]]; then
+                echo "[-] VIOLAÇÃO: Binário contém bibliotecas C compartilhadas inesperadas:"
+                echo "${NON_STD_LIBS}"
+                exit 1
+            fi
+            echo "[+] Binário 100% puro: nenhuma biblioteca nativa de terceiros vinculada."
         fi
-        echo "[+] Binário 100% puro: nenhuma biblioteca nativa de terceiros vinculada."
-    fi
-done
+    done
+fi
 
-echo "[✓] Verificação de pureza Rust CONCLUÍDA COM SUCESSO! 100% Rust puro e livre de C/FFI."
+echo "[✓] Verificação de pureza Rust CONCLUÍDA COM SUCESSO! Tier: ${TIER}."
 exit 0

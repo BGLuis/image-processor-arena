@@ -17,25 +17,50 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GO_DIR="${ROOT_DIR}/go"
 
-echo "=== Verificação de Pureza Go (image-processor-arena) ==="
+TIER="accelerated"
+for arg in "$@"; do
+    case "$arg" in
+        --tier=portable|--portable|-tags=noasm)
+            TIER="portable"
+            ;;
+        --tier=accelerated)
+            TIER="accelerated"
+            ;;
+        --tier=hybrid)
+            TIER="hybrid"
+            ;;
+    esac
+done
 
-# 1. Valida e impõe CGO_ENABLED=0
-if [[ "${CGO_ENABLED:-0}" != "0" ]]; then
-    echo "[-] ERRO: CGO_ENABLED deve ser 0! Valor atual: ${CGO_ENABLED}"
-    exit 1
+echo "=== Verificação de Pureza Go (Tier: ${TIER}) ==="
+
+# 1. Valida e impõe CGO_ENABLED
+if [[ "${TIER}" == "hybrid" ]]; then
+    export CGO_ENABLED=1
+    echo "[*] Tier Híbrido ativo: CGO_ENABLED=1 habilitado."
+else
+    if [[ "${CGO_ENABLED:-0}" != "0" ]]; then
+        echo "[-] ERRO: CGO_ENABLED deve ser 0 no tier ${TIER}! Valor atual: ${CGO_ENABLED}"
+        exit 1
+    fi
+    export CGO_ENABLED=0
+    echo "[+] CGO_ENABLED=0 confirmado."
 fi
-export CGO_ENABLED=0
-echo "[+] CGO_ENABLED=0 confirmado."
 
 # 2. Executa go list -deps
 cd "${GO_DIR}"
 
 TAGS=""
 PORTABLE_CHECK=false
-if [[ "${1:-}" == "--portable" || "${1:-}" == "-tags=noasm" ]]; then
+if [[ "${TIER}" == "portable" ]]; then
     TAGS="-tags noasm"
     PORTABLE_CHECK=true
     echo "[*] Modo portável ativo (-tags noasm)."
+elif [[ "${TIER}" == "hybrid" ]]; then
+    TAGS="-tags hybrid"
+    echo "[*] Modo híbrido ativo (-tags hybrid)."
+else
+    echo "[*] Modo acelerado ativo (padrão)."
 fi
 
 echo "[*] Inspecionando dependências..."
@@ -44,8 +69,8 @@ DEPS_OUTPUT=$(go list ${TAGS} -deps -f '{{.ImportPath}}|{{.CgoFiles}}|{{.SFiles}
 ERRORS=0
 
 while IFS='|' read -r import_path cgo_files s_files is_standard; do
-    # Verifica CgoFiles
-    if [[ -n "${cgo_files}" && "${cgo_files}" != "[]" ]]; then
+    # Verifica CgoFiles (proibido em portable e accelerated)
+    if [[ "${TIER}" != "hybrid" && -n "${cgo_files}" && "${cgo_files}" != "[]" ]]; then
         echo "[-] VIOLAÇÃO: Pacote ${import_path} contém CgoFiles: ${cgo_files}"
         ERRORS=$((ERRORS + 1))
     fi

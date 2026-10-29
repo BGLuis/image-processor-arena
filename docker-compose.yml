@@ -151,3 +151,55 @@ services:
       - /arena/ramdisk:rw,size=1024M
     profiles:
       - bench-isolated
+
+  # ---------------------------------------------------------------------------
+  # Servidor Go Híbrido (Perfil 'hybrid')
+  # ---------------------------------------------------------------------------
+  go-server-hybrid:
+    build:
+      context: .
+      dockerfile: docker/go.Dockerfile
+      args:
+        TIER: hybrid
+    image: arena-go-hybrid:latest
+    container_name: arena-go-hybrid-server
+    environment:
+      - PORT=8080
+      - GOMAXPROCS=${ARENA_GOMAXPROCS:-6}
+      - GOGC=100
+    ports:
+      - "8082:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -f http://localhost:8080/health || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+      start_period: 3s
+    profiles:
+      - hybrid
+
+  # ---------------------------------------------------------------------------
+  # Servidor Rust Híbrido (Perfil 'hybrid')
+  # ---------------------------------------------------------------------------
+  rust-server-hybrid:
+    build:
+      context: .
+      dockerfile: docker/rust.Dockerfile
+      args:
+        TIER: hybrid
+    image: arena-rust-hybrid:latest
+    container_name: arena-rust-hybrid-server
+    environment:
+      - PORT=8081
+      - RUST_LOG=info
+    ports:
+      - "8083:8081"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -f http://localhost:8081/health || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+      start_period: 3s
+    profiles:
+      - hybrid
+

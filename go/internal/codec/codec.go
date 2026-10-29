@@ -12,7 +12,6 @@ import (
 
 	goavif "github.com/KarpelesLab/goavif"
 	gowebp "github.com/KarpelesLab/gowebp"
-	deepwebp "github.com/deepteams/webp"
 	gav1davif "github.com/gen2brain/gav1d/avif"
 	genjxl "github.com/gen2brain/jxl"
 	"github.com/image-processor-arena/go/internal/pam"
@@ -125,20 +124,6 @@ func init() {
 	})
 
 	// WebP encoders
-	RegisterEncoder("webp", "deepteams", func(w io.Writer, pamImg *pam.Image, params Params) error {
-		if err := checkSide(pamImg, "webp", webpMaxSide); err != nil {
-			return err
-		}
-		if params.Mode == ModeLossless {
-			return fmt.Errorf("%w: deepteams does not support lossless webp", ErrUnsupportedFormat)
-		}
-		src := encoderInput(pamImg)
-		opts := deepwebp.DefaultOptions()
-		opts.Lossless = false
-		opts.Quality = float32(params.Q)
-		opts.Method = webpMethod(params.Effort)
-		return deepwebp.Encode(w, src, opts)
-	})
 	RegisterEncoder("webp", "gowebp", func(w io.Writer, pamImg *pam.Image, params Params) error {
 		if err := checkSide(pamImg, "webp", webpMaxSide); err != nil {
 			return err
@@ -161,9 +146,6 @@ func init() {
 	})
 
 	// WebP decoders
-	RegisterDecoder("webp", "deepteams", func(r io.Reader) (image.Image, error) {
-		return deepwebp.Decode(r)
-	})
 	RegisterDecoder("webp", "gowebp", func(r io.Reader) (image.Image, error) {
 		return gowebp.Decode(r)
 	})
@@ -306,9 +288,13 @@ func Decode(r io.Reader, format string, impl ...string) (*pam.Image, error) {
 			}
 			decoded, err = dec(bytes.NewReader(data))
 		} else {
-			decoded, err = adapters["deepteams"](bytes.NewReader(data))
-			if err != nil {
-				decoded, err = adapters["gowebp"](bytes.NewReader(data))
+			if dec, ok := adapters["deepteams"]; ok {
+				decoded, err = dec(bytes.NewReader(data))
+			}
+			if err != nil || decoded == nil {
+				if dec, ok := adapters["gowebp"]; ok {
+					decoded, err = dec(bytes.NewReader(data))
+				}
 			}
 		}
 

@@ -36,25 +36,31 @@ COPY docs/ ./docs/
 COPY scripts/ ./scripts/
 COPY arena.toml ./arena.toml
 
+ARG TIER=accelerated
 RUN chmod +x ./scripts/check-purity-rust.sh
 
 # Compila e roda os testes com cache mount
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/arena/rust/target \
-    cargo test --manifest-path rust/Cargo.toml
+    if [ "$TIER" = "hybrid" ]; then \
+        cargo test --features hybrid --manifest-path rust/Cargo.toml; \
+    else \
+        cargo test --manifest-path rust/Cargo.toml; \
+    fi
 
 # Executa verificação de pureza
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/arena/rust/target \
-    ./scripts/check-purity-rust.sh
+    ./scripts/check-purity-rust.sh --tier=${TIER}
 
 # -----------------------------------------------------------------------------
 # Estágio Builder: Compila binários em release
 # -----------------------------------------------------------------------------
 FROM base AS builder
 
+ARG TIER=accelerated
 WORKDIR /app
 
 COPY rust-toolchain.toml ./
@@ -66,7 +72,11 @@ COPY rust/vendor/ ./rust/vendor/
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/app/rust/target \
-    cargo build --release --manifest-path rust/Cargo.toml && \
+    if [ "$TIER" = "hybrid" ]; then \
+        cargo build --release --features hybrid --manifest-path rust/Cargo.toml; \
+    else \
+        cargo build --release --manifest-path rust/Cargo.toml; \
+    fi && \
     mkdir -p /app/bin && \
     cp /app/rust/target/release/arena-server /app/bin/arena-server && \
     cp /app/rust/target/release/arena-batch /app/bin/arena-batch
