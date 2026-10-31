@@ -1,17 +1,17 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Check, AlertTriangle } from 'lucide-react';
+import { ChevronDown, ChevronRight, Check, AlertTriangle, Info } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import type { ImplementationSummary } from '../types';
 
 const langColors: Record<string, string> = {
-  go: '#2ec4e6',
-  rust: '#f4743b',
-  zig: '#f7c548',
-  java: '#e8618c',
-  csharp: '#8b7cf6',
-  swift: '#a3e635',
+  go: 'var(--lang-go)',
+  rust: 'var(--lang-rust)',
+  zig: 'var(--lang-zig)',
+  java: 'var(--lang-java)',
+  csharp: 'var(--lang-csharp)',
+  swift: 'var(--lang-swift)',
 };
 
 const langDisplayNames: Record<string, string> = {
@@ -45,7 +45,23 @@ export default function LeaderboardTable() {
 
   // Filter implementations according to identity filters
   const filteredImpls = implementations.filter(item => {
+    if (filters.selectedLanguages.length > 0 && !filters.selectedLanguages.includes(item.language)) {
+      return false;
+    }
     if (filters.language !== 'all' && item.language !== filters.language) return false;
+    if (filters.purity === 'pure') {
+      const isHybrid = item.tier === 'hybrid' || item.lib.toLowerCase().includes('cgo') || item.lib.toLowerCase().includes('libvips');
+      if (isHybrid) return false;
+    }
+    if (filters.purity === 'hybrid') {
+      const isHybrid = item.tier === 'hybrid' || item.lib.toLowerCase().includes('cgo') || item.lib.toLowerCase().includes('libvips');
+      if (!isHybrid) return false;
+    }
+    if (filters.dataType === 'real') {
+      const isReal = (item.language === 'go' && (item.impl_id === 'go:accelerated:1.25:padrao' || item.impl_id === 'go:accelerated:1.25:pgo')) ||
+                     (item.language === 'rust' && (item.impl_id === 'rust:accelerated:stable:padrao'));
+      if (!isReal) return false;
+    }
     if (filters.tier !== 'all' && item.tier !== filters.tier) return false;
     if (filters.toolchain !== 'all' && item.toolchain !== filters.toolchain) return false;
     if (filters.lib !== 'all' && item.lib !== filters.lib) return false;
@@ -67,57 +83,94 @@ export default function LeaderboardTable() {
   const getRankBadge = (rank: number) => {
     if (rank === 1) {
       return (
-        <div className="w-5 h-5 rounded-full bg-[#312c20] border border-[#816b33] flex items-center justify-center text-[#f2c14e] text-[11px] font-bold font-mono">
+        <div className="w-5 h-5 rounded-full bg-[#F2C14E]/20 border border-[#F2C14E]/40 flex items-center justify-center text-[#D9A326] dark:text-[#F2C14E] text-[11px] font-bold font-mono">
           1
         </div>
       );
     }
     if (rank === 2) {
       return (
-        <div className="w-5 h-5 rounded-full bg-[#2b2e33] border border-[#6d737a] flex items-center justify-center text-[#c9d1db] text-[11px] font-bold font-mono">
+        <div className="w-5 h-5 rounded-full bg-[#C9D1DB]/20 border border-[#C9D1DB]/40 flex items-center justify-center text-[#5E584D] dark:text-[#C9D1DB] text-[11px] font-bold font-mono">
           2
         </div>
       );
     }
     if (rank === 3) {
       return (
-        <div className="w-5 h-5 rounded-full bg-[#2c2521] border border-[#71503a] flex items-center justify-center text-[#d08b5b] text-[11px] font-bold font-mono">
+        <div className="w-5 h-5 rounded-full bg-[#D08B5B]/20 border border-[#D08B5B]/40 flex items-center justify-center text-[#A65B2E] dark:text-[#D08B5B] text-[11px] font-bold font-mono">
           3
         </div>
       );
     }
     return (
-      <div className="w-5 h-5 rounded-full bg-[#171b21] border border-[#222831] flex items-center justify-center text-[#a3acb9] text-[11px] font-mono">
+      <div className="w-5 h-5 rounded-full bg-[var(--arena-canvas)] border border-[var(--arena-border)] flex items-center justify-center text-[var(--arena-text-secondary)] text-[11px] font-mono">
         {rank}
       </div>
     );
+  };
+
+  const getLogPos = (v: number) => {
+    const minVal = 1.0;
+    const maxVal = 8.0;
+    const clamped = Math.max(minVal, Math.min(maxVal, v));
+    return ((Math.log2(clamped) - Math.log2(minVal)) / (Math.log2(maxVal) - Math.log2(minVal))) * 100;
   };
 
   const renderRow = (item: ImplementationSummary) => {
     const isSelectedA = item.impl_id === duelImplA;
     const isSelectedB = item.impl_id === duelImplB;
     const isSelected = isSelectedA || isSelectedB;
-    const color = langColors[item.language] || '#a3acb9';
+    const color = langColors[item.language] || 'var(--lang-rust)';
 
-    // Calculate score bar width (from 1x up to 8x scale)
-    const barWidthPercent = Math.min(100, Math.max(8, ((item.score - 1.0) / 7.0) * 100));
+    const p25Val = item.p25 ?? item.score;
+    const p75Val = item.p75 ?? item.score;
+    const pos25 = getLogPos(p25Val);
+    const pos75 = getLogPos(p75Val);
+    const posScore = getLogPos(item.score);
 
     return (
       <tr 
         key={item.impl_id}
         onClick={() => toggleDuelSelection(item.impl_id)}
-        className={`group border-b border-[#222831]/50 hover:bg-[#171b21]/70 transition-colors cursor-pointer text-xs ${
-          isSelected ? 'bg-[#171b21]/90' : ''
+        className={`group border-b border-[var(--arena-border)]/50 hover:bg-[var(--arena-raised)]/60 transition-colors cursor-pointer text-xs ${
+          isSelected ? 'bg-[var(--arena-raised)]/80' : ''
         }`}
       >
-        {/* Checkbox */}
-        <td className="py-2.5 pl-3 pr-2 w-8">
-          <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
-            isSelected 
-              ? isSelectedA ? 'bg-[#f4743b] border-[#f4743b] text-white' : 'bg-[#2ec4e6] border-[#2ec4e6] text-black'
-              : 'border-[#2e3540] bg-[#0d1013] group-hover:border-[#6b7480]'
-          }`}>
-            {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+        {/* Duelo Slot Badge (A or B) with direct selection buttons */}
+        <td className="py-2.5 pl-3 pr-2 w-14">
+          <div className="flex items-center justify-center">
+            {isSelectedA ? (
+              <span className="w-5 h-5 rounded-full bg-[#C9501C] dark:bg-[#E0703A] text-white text-[11px] font-mono font-bold flex items-center justify-center shadow-xs" title="Slot A do Duelo (clique para alternar)">
+                A
+              </span>
+            ) : isSelectedB ? (
+              <span className="w-5 h-5 rounded-full bg-[#0086A3] dark:bg-[#25A3B5] text-white text-[11px] font-mono font-bold flex items-center justify-center shadow-xs" title="Slot B do Duelo (clique para alternar)">
+                B
+              </span>
+            ) : (
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleDuelSelection(item.impl_id, 'A');
+                  }}
+                  className="w-4 h-4 rounded text-[9px] font-mono font-bold bg-[#C9501C]/20 hover:bg-[#C9501C] text-[#C9501C] hover:text-white transition-colors flex items-center justify-center cursor-pointer"
+                  title="Definir como Implementação A"
+                >
+                  A
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleDuelSelection(item.impl_id, 'B');
+                  }}
+                  className="w-4 h-4 rounded text-[9px] font-mono font-bold bg-[#0086A3]/20 hover:bg-[#0086A3] text-[#0086A3] hover:text-white transition-colors flex items-center justify-center cursor-pointer"
+                  title="Definir como Implementação B"
+                >
+                  B
+                </button>
+              </div>
+            )}
           </div>
         </td>
 
@@ -133,10 +186,10 @@ export default function LeaderboardTable() {
               className="w-2 h-2 rounded-full shrink-0" 
               style={{ backgroundColor: color }} 
             />
-            <span className="font-semibold text-[#eceff3] capitalize">
+            <span className="font-semibold text-[var(--arena-text-primary)] capitalize">
               {item.language}
             </span>
-            <span className="text-[#a3acb9] text-[11px] truncate">
+            <span className="text-[var(--arena-text-secondary)] text-[11px] truncate">
               {item.toolchain} · {item.lib}
             </span>
           </div>
@@ -145,31 +198,65 @@ export default function LeaderboardTable() {
         {/* Tier */}
         <td className="py-2.5 px-3 w-28">
           {item.tier === 'hybrid' ? (
-            <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#31281a] border border-[#835d1e] text-[#f5a524]">
+            <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#9A7B00]/15 text-[#9A7B00] dark:text-[#F5A524] border border-[#9A7B00]/30 font-semibold">
               hybrid · FFI
             </span>
           ) : item.tier === 'accelerated' ? (
-            <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#171b21] border border-[#2e3540] text-[#a3acb9]">
+            <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-[var(--arena-canvas)] border border-[var(--arena-border)] text-[var(--arena-text-secondary)]">
               accelerated
             </span>
           ) : (
-            <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#0d1013] border border-[#222831] text-[#6b7480]">
+            <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-[var(--arena-canvas)] border border-[var(--arena-border)] text-[var(--arena-text-muted)]">
               portable
             </span>
           )}
         </td>
 
-        {/* Score & Bar */}
-        <td className="py-2.5 px-3 min-w-[180px]">
+        {/* Score & Logarithmic Span [p25, p75] Bar */}
+        <td className="py-2.5 px-3 min-w-[220px]">
           <div className="flex items-center gap-3">
-            <span className="w-12 font-mono font-bold text-[#eceff3]">
+            <span className="w-12 font-mono font-bold text-[var(--arena-text-primary)] shrink-0">
               {item.score.toFixed(2).replace('.', ',')}×
             </span>
-            <div className="flex-1 h-1.5 bg-[#0d1013] rounded-full overflow-hidden">
+            <div 
+              className="relative flex-1 h-5 bg-[var(--arena-canvas)] rounded-md border border-[var(--arena-border)]/60 flex items-center overflow-hidden"
+              title={`Score: ${item.score.toFixed(2)}× · Intervalo p25-p75: [${p25Val.toFixed(2)}×, ${p75Val.toFixed(2)}×]`}
+            >
+              {/* Reference scale tick marks at 1x, 2x, 4x, 8x */}
+              <div className="absolute left-[0%] top-0 bottom-0 w-px bg-[var(--arena-border)]" />
+              <div className="absolute left-[33.3%] top-0 bottom-0 w-px bg-[var(--arena-border)]/40" />
+              <div className="absolute left-[66.7%] top-0 bottom-0 w-px bg-[var(--arena-border)]/40" />
+              <div className="absolute left-[100%] top-0 bottom-0 w-px bg-[var(--arena-border)]" />
+
+              {/* Shaded span [p25, p75] */}
               <div 
-                className="h-full rounded-full transition-all duration-300"
+                className="absolute top-1 bottom-1 rounded-xs transition-all duration-300"
                 style={{ 
-                  width: `${barWidthPercent}%`,
+                  left: `${pos25}%`,
+                  width: `${Math.max(4, pos75 - pos25)}%`,
+                  backgroundColor: color,
+                  opacity: 0.3
+                }} 
+              />
+
+              {/* Whisker line from p25 to p75 */}
+              <div 
+                className="absolute top-1/2 -translate-y-1/2 h-px transition-all duration-300"
+                style={{
+                  left: `${pos25}%`,
+                  width: `${Math.max(2, pos75 - pos25)}%`,
+                  backgroundColor: color,
+                }}
+              >
+                <div className="absolute left-0 top-[-2px] w-px h-1.5" style={{ backgroundColor: color }} />
+                <div className="absolute right-0 top-[-2px] w-px h-1.5" style={{ backgroundColor: color }} />
+              </div>
+
+              {/* Median Score Marker */}
+              <div 
+                className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-3 rounded-xs shadow-xs z-10 transition-all duration-300"
+                style={{ 
+                  left: `${posScore}%`,
                   backgroundColor: color
                 }} 
               />
@@ -178,26 +265,26 @@ export default function LeaderboardTable() {
         </td>
 
         {/* Vitórias */}
-        <td className="py-2.5 px-3 text-right font-mono text-[#a3acb9] w-20">
+        <td className="py-2.5 px-3 text-right font-mono text-[var(--arena-text-secondary)] w-20">
           {item.wins > 0 ? (
-            <span className="text-[#eceff3] font-semibold">{item.wins}</span>
+            <span className="text-[var(--arena-text-primary)] font-semibold">{item.wins}</span>
           ) : (
-            <span className="text-[#6b7480]">0</span>
+            <span className="text-[var(--arena-text-muted)]">0</span>
           )}
         </td>
 
         {/* Pódios */}
-        <td className="py-2.5 px-3 text-right font-mono text-[#a3acb9] w-20">
+        <td className="py-2.5 px-3 text-right font-mono text-[var(--arena-text-secondary)] w-20">
           {item.podiums}
         </td>
 
         {/* Cobertura */}
-        <td className="py-2.5 pl-3 pr-4 text-right font-mono text-[#a3acb9] w-24">
+        <td className="py-2.5 pl-3 pr-4 text-right font-mono text-[var(--arena-text-secondary)] w-24">
           {item.coverage === 34 ? (
-            <span className="text-[#a3acb9]">34/34</span>
+            <span>34/34</span>
           ) : (
-            <span className="text-[#f5a524] flex items-center justify-end gap-1 font-semibold">
-              {item.coverage}/34 <AlertTriangle className="w-3 h-3 text-[#f5a524]" />
+            <span className="text-[#9A7B00] dark:text-[#F5A524] flex items-center justify-end gap-1 font-semibold">
+              {item.coverage}/34 <AlertTriangle className="w-3 h-3 text-[#9A7B00] dark:text-[#F5A524]" />
             </span>
           )}
         </td>
@@ -206,100 +293,122 @@ export default function LeaderboardTable() {
   };
 
   return (
-    <div className="bg-[#111418] border border-[#222831] rounded-xl p-4 mb-6 shadow-sm">
+    <section id="ranking" className="mb-10 scroll-mt-28">
       
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div>
-          <h2 className="text-base font-semibold text-[#eceff3]">
-            Ranking de implementações
-          </h2>
-          <p className="text-xs text-[#6b7480] mt-0.5">
-            {filters.groupByLanguage ? 'Agrupado por linguagem' : 'Ordenação plana por score'} · selecione 2 linhas para o duelo
-          </p>
-        </div>
-
+      {/* Informational Banner */}
+      <div className="mb-3 px-3.5 py-2.5 rounded-lg bg-[var(--arena-surface)] border border-[var(--arena-border)] flex items-center justify-between text-xs text-[var(--arena-text-secondary)]">
         <div className="flex items-center gap-2">
-          <span className="px-2.5 py-1 text-xs font-mono rounded-full bg-[#1d4f3a]/40 border border-[#2a9f6b]/50 text-[#3dd68c]">
-            2 selecionadas
+          <Info className="w-4 h-4 text-[#0086A3] dark:text-[#25A3B5] shrink-0" />
+          <span>
+            Dados ilustrativos da rodada oficial · Ambiente Xeon @ 2.10GHz, 4 vCPUs · Clique em qualquer linha para alimentar os slots <strong>A</strong> e <strong>B</strong> do Duelo.
           </span>
         </div>
+        <span className="hidden sm:inline font-mono text-[11px] text-[var(--arena-text-muted)] shrink-0">
+          Slots ativos: A (Rust) · B (Go)
+        </span>
       </div>
 
-      {/* Table Container */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          
-          {/* Column Headers */}
-          <thead>
-            <tr className="border-b border-[#222831] text-[11px] font-mono text-[#6b7480] uppercase tracking-wider">
-              <th className="py-2 pl-3 pr-2 w-8" />
-              <th className="py-2 px-2 w-10">#</th>
-              <th className="py-2 px-3">Implementação</th>
-              <th className="py-2 px-3 w-28">Tier</th>
-              <th className="py-2 px-3 min-w-[180px]">Score (média geom.) ↑</th>
-              <th className="py-2 px-3 text-right w-20">Vitórias</th>
-              <th className="py-2 px-3 text-right w-20">Pódios</th>
-              <th className="py-2 pl-3 pr-4 text-right w-24">Cobertura</th>
-            </tr>
-          </thead>
+      <div className="bg-[var(--arena-surface)] border border-[var(--arena-border)] rounded-xl p-4 shadow-sm">
+        
+        {/* Header */}
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono font-bold text-[#C9501C] dark:text-[#E0703A] uppercase tracking-wider">
+                Seção 04
+              </span>
+              <h2 className="text-xl font-bold tracking-tight text-[var(--arena-text-primary)]">
+                Ranking de Implementações
+              </h2>
+            </div>
+            <p className="text-xs text-[var(--arena-text-secondary)] mt-1">
+              {filters.groupByLanguage ? 'Agrupado por linguagem com ordenação de variantes' : 'Ordenação plana por score global'}
+            </p>
+          </div>
 
-          <tbody>
-            {filters.groupByLanguage ? (
-              grouped.map(group => {
-                const isCollapsed = !!collapsedGroups[group.lang];
-                const color = langColors[group.lang] || '#a3acb9';
-                const displayName = langDisplayNames[group.lang] || group.lang;
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-1 text-xs font-mono rounded-full bg-[var(--arena-canvas)] border border-[var(--arena-border)] text-[var(--arena-text-secondary)]">
+              {filteredImpls.length} de {implementations.length} implementações
+            </span>
+          </div>
+        </div>
 
-                return (
-                  <React.Fragment key={group.lang}>
-                    {/* Collapsible Group Header Row */}
-                    <tr 
-                      onClick={() => toggleGroup(group.lang)}
-                      className="bg-[#0d1013]/90 hover:bg-[#171b21] border-y border-[#222831] cursor-pointer transition-colors text-xs"
-                    >
-                      <td colSpan={8} className="py-2 px-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            {isCollapsed ? (
-                              <ChevronRight className="w-4 h-4 text-[#6b7480]" />
-                            ) : (
-                              <ChevronDown className="w-4 h-4 text-[#6b7480]" />
+        {/* Table Container */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            
+            {/* Column Headers */}
+            <thead>
+              <tr className="border-b border-[var(--arena-border)] text-[11px] font-mono text-[var(--arena-text-muted)] uppercase tracking-wider">
+                <th className="py-2 pl-3 pr-2 w-14 text-center">Duelo</th>
+                <th className="py-2 px-2 w-10">#</th>
+                <th className="py-2 px-3">Implementação</th>
+                <th className="py-2 px-3 w-28">Tier</th>
+                <th className="py-2 px-3 min-w-[220px]">Score [p25, p75] log (1× a 8×) ↑</th>
+                <th className="py-2 px-3 text-right w-20">Vitórias</th>
+                <th className="py-2 px-3 text-right w-20">Pódios</th>
+                <th className="py-2 pl-3 pr-4 text-right w-24">Cobertura</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {filters.groupByLanguage ? (
+                grouped.map(group => {
+                  const isCollapsed = !!collapsedGroups[group.lang];
+                  const color = langColors[group.lang] || 'var(--lang-rust)';
+                  const displayName = langDisplayNames[group.lang] || group.lang;
+
+                  return (
+                    <React.Fragment key={group.lang}>
+                      {/* Collapsible Group Header Row */}
+                      <tr 
+                        onClick={() => toggleGroup(group.lang)}
+                        className="bg-[var(--arena-canvas)]/90 hover:bg-[var(--arena-raised)] border-y border-[var(--arena-border)] cursor-pointer transition-colors text-xs"
+                      >
+                        <td colSpan={8} className="py-2 px-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              {isCollapsed ? (
+                                <ChevronRight className="w-4 h-4 text-[var(--arena-text-muted)]" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4 text-[var(--arena-text-muted)]" />
+                              )}
+                              <span 
+                                className="w-2 h-2 rounded-full" 
+                                style={{ backgroundColor: color }} 
+                              />
+                              <span className="font-bold text-[var(--arena-text-primary)]">
+                                {displayName}
+                              </span>
+                              <span className="text-[var(--arena-text-muted)] text-[11px] font-mono">
+                                ({group.count} {group.count === 1 ? 'variante' : 'variantes'})
+                              </span>
+                            </div>
+
+                            {group.best && (
+                              <span className="text-[11px] font-mono text-[var(--arena-text-secondary)]">
+                                melhor #{group.best.rank} · {group.best.score.toFixed(2).replace('.', ',')}×
+                              </span>
                             )}
-                            <span 
-                              className="w-2 h-2 rounded-full" 
-                              style={{ backgroundColor: color }} 
-                            />
-                            <span className="font-semibold text-[#eceff3]">
-                              {displayName}
-                            </span>
-                            <span className="text-[#6b7480] text-[11px]">
-                              {group.count} {group.count === 1 ? 'implementação' : 'implementações'}
-                            </span>
                           </div>
+                        </td>
+                      </tr>
 
-                          {group.best && (
-                            <span className="text-[11px] font-mono text-[#a3acb9]">
-                              melhor #{group.best.rank} · {group.best.score.toFixed(2).replace('.', ',')}×
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                      {/* Group Rows */}
+                      {!isCollapsed && group.items.map(item => renderRow(item))}
+                    </React.Fragment>
+                  );
+                })
+              ) : (
+                filteredImpls.map(item => renderRow(item))
+              )}
+            </tbody>
 
-                    {/* Group Rows (if not collapsed) */}
-                    {!isCollapsed && group.items.map(item => renderRow(item))}
-                  </React.Fragment>
-                );
-              })
-            ) : (
-              filteredImpls.map(item => renderRow(item))
-            )}
-          </tbody>
+          </table>
+        </div>
 
-        </table>
       </div>
 
-    </div>
+    </section>
   );
 }

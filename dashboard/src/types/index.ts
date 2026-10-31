@@ -31,11 +31,16 @@ export interface ImplementationSummary {
   podiums: number;
   coverage: number;
   total_tasks: number;
+  p25: number;
+  p75: number;
 }
 
 export interface FilterState {
   search: string;
   language: string;
+  selectedLanguages: string[];
+  purity: 'all' | 'pure' | 'hybrid';
+  dataType: 'all' | 'real';
   tier: string;
   toolchain: string;
   lib: string;
@@ -98,23 +103,34 @@ export interface PerOperationSummary {
 
 export interface EqualQualityComparison {
   task: string;
+  format: string;
+  image: string;
   target_psnr_db: number;
   go_q: number;
   rust_q: number;
-  psnr_go: number;
-  psnr_rust: number;
+  go_psnr_db?: number;
+  rust_psnr_db?: number;
+  psnr_go?: number;
+  psnr_rust?: number;
   go_bytes: number;
   rust_bytes: number;
   bytes_ratio: number;
+  metric?: string;
   go_time_ms: {
     median: number;
     p25: number;
     p75: number;
+    min?: number;
+    max?: number;
+    n?: number;
   };
   rust_time_ms: {
     median: number;
     p25: number;
     p75: number;
+    min?: number;
+    max?: number;
+    n?: number;
   };
   winner: string;
   speedup: number;

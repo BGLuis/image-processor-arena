@@ -21,12 +21,14 @@ export interface DataContextValue {
   filters: FilterState;
   setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
   updateFilter: (key: keyof FilterState, value: any) => void;
+  toggleLanguageFilter: (lang: string) => void;
+  setOnlyLanguage: (lang: string) => void;
   resetFilters: () => void;
   duelImplA: string;
   duelImplB: string;
   setDuelImplA: (id: string) => void;
   setDuelImplB: (id: string) => void;
-  toggleDuelSelection: (id: string) => void;
+  toggleDuelSelection: (id: string, slot?: 'A' | 'B') => void;
   activeSql: string;
   queryLatencyMs: number;
   loading: boolean;
@@ -38,6 +40,9 @@ export interface DataContextValue {
 const initialFilters: FilterState = {
   search: '',
   language: 'all',
+  selectedLanguages: [],
+  purity: 'all',
+  dataType: 'all',
   tier: 'all',
   toolchain: 'all',
   lib: 'all',
@@ -98,7 +103,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         } catch (dbErr: any) {
           console.warn('DuckDB-Wasm inicializado em modo fallback:', dbErr);
           if (!active) return;
-          // Even if web worker fails in restricted headless sandbox, mark ready for client fallback
           setIsDbReady(true);
           setQueryLatencyMs(3.1);
         }
@@ -174,10 +178,24 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    function quantile(arr: number[], q: number): number {
+      if (!arr.length) return 1.0;
+      const sorted = [...arr].sort((a, b) => a - b);
+      const pos = (sorted.length - 1) * q;
+      const base = Math.floor(pos);
+      const rest = pos - base;
+      if (sorted[base + 1] !== undefined) {
+        return sorted[base] + rest * (sorted[base + 1] - sorted[base]);
+      }
+      return sorted[base];
+    }
+
     const list: ImplementationSummary[] = [];
     for (const item of map.values()) {
       const logSum = item.rel_times.reduce((acc, v) => acc + Math.log(Math.max(v, 1.0)), 0);
       const score = Math.round(Math.exp(logSum / item.rel_times.length) * 100) / 100;
+      const p25 = Math.round(quantile(item.rel_times, 0.25) * 100) / 100;
+      const p75 = Math.round(quantile(item.rel_times, 0.75) * 100) / 100;
       list.push({
         impl_id: item.impl_id,
         language: item.language,
@@ -189,7 +207,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         wins: item.wins,
         podiums: item.podiums,
         coverage: item.rel_times.length,
-        total_tasks: 34
+        total_tasks: 34,
+        p25,
+        p75
       });
     }
 
@@ -207,8 +227,24 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (filters.search && !r.task.toLowerCase().includes(filters.search.toLowerCase())) {
         return false;
       }
+      if (filters.selectedLanguages.length > 0 && !filters.selectedLanguages.includes(r.language.toLowerCase())) {
+        return false;
+      }
       if (filters.language !== 'all' && r.language !== filters.language) {
         return false;
+      }
+      if (filters.purity === 'pure') {
+        const isHybrid = r.tier === 'hybrid' || r.lib.toLowerCase().includes('cgo') || r.lib.toLowerCase().includes('libvips');
+        if (isHybrid) return false;
+      }
+      if (filters.purity === 'hybrid') {
+        const isHybrid = r.tier === 'hybrid' || r.lib.toLowerCase().includes('cgo') || r.lib.toLowerCase().includes('libvips');
+        if (!isHybrid) return false;
+      }
+      if (filters.dataType === 'real') {
+        const isReal = (r.language === 'go' && (r.impl_id === 'go:accelerated:1.25:padrao' || r.impl_id === 'go:accelerated:1.25:pgo')) ||
+                       (r.language === 'rust' && (r.impl_id === 'rust:accelerated:stable:padrao'));
+        if (!isReal) return false;
       }
       if (filters.tier !== 'all' && r.tier !== filters.tier) {
         return false;
@@ -228,7 +264,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (filters.mode !== 'all' && r.mode !== filters.mode) {
         return false;
       }
-      if (filters.image !== 'all' && r.image !== filters.image) {
+      if (filters.image !== 'all' && !r.image.toLowerCase().includes(filters.image.toLowerCase())) {
         return false;
       }
       return true;
@@ -239,7 +275,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const whereParts: string[] = [];
     if (filters.search) whereParts.push(`task ILIKE '%${filters.search}%'`);
-    if (filters.language !== 'all') whereParts.push(`language = '${filters.language}'`);
+    if (filters.selectedLanguages.length > 0) {
+      const langs = filters.selectedLanguages.map(l => `'${l}'`).join(', ');
+      whereParts.push(`language IN (${langs})`);
+    } else if (filters.language !== 'all') {
+      whereParts.push(`language = '${filters.language}'`);
+    }
+    if (filters.purity === 'pure') whereParts.push(`tier != 'hybrid' AND lib NOT LIKE '%cgo%' AND lib NOT LIKE '%libvips%'`);
+    if (filters.purity === 'hybrid') whereParts.push(`(tier = 'hybrid' OR lib LIKE '%cgo%' OR lib LIKE '%libvips%')`);
     if (filters.tier !== 'all') whereParts.push(`tier = '${filters.tier}'`);
     if (filters.op !== 'all') whereParts.push(`op = '${filters.op}'`);
     if (filters.format !== 'all') whereParts.push(`format = '${filters.format}'`);
@@ -255,18 +298,49 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setFilters(prev => ({ ...prev, [key]: value }));
   }, []);
 
+  const toggleLanguageFilter = useCallback((lang: string) => {
+    setFilters(prev => {
+      const exists = prev.selectedLanguages.includes(lang);
+      const updated = exists 
+        ? prev.selectedLanguages.filter(l => l !== lang)
+        : [...prev.selectedLanguages, lang];
+      return { ...prev, selectedLanguages: updated };
+    });
+  }, []);
+
+  const setOnlyLanguage = useCallback((lang: string) => {
+    setFilters(prev => ({ ...prev, selectedLanguages: [lang] }));
+  }, []);
+
   const resetFilters = useCallback(() => {
     setFilters(initialFilters);
   }, []);
 
-  const toggleDuelSelection = useCallback((implId: string) => {
-    if (implId === duelImplA) return;
+  const toggleDuelSelection = useCallback((implId: string, slot?: 'A' | 'B') => {
+    if (slot === 'A') {
+      if (implId === duelImplB) {
+        setDuelImplB(duelImplA);
+      }
+      setDuelImplA(implId);
+      return;
+    }
+    if (slot === 'B') {
+      if (implId === duelImplA) {
+        setDuelImplA(duelImplB);
+      }
+      setDuelImplB(implId);
+      return;
+    }
+    if (implId === duelImplA) {
+      setDuelImplA(duelImplB);
+      setDuelImplB(implId);
+      return;
+    }
     if (implId === duelImplB) {
       setDuelImplB(duelImplA);
       setDuelImplA(implId);
       return;
     }
-    // Replace B first, keeping A
     setDuelImplB(implId);
   }, [duelImplA, duelImplB]);
 
@@ -352,6 +426,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       filters,
       setFilters,
       updateFilter,
+      toggleLanguageFilter,
+      setOnlyLanguage,
       resetFilters,
       duelImplA,
       duelImplB,

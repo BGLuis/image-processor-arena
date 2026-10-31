@@ -1,20 +1,25 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Archivo, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
+import { ThemeProvider } from '../context/ThemeContext';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+const archivo = Archivo({
+  variable: '--font-archivo',
   subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800'],
+  display: 'swap',
 });
 
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
+const jetbrainsMono = JetBrains_Mono({
+  variable: '--font-jetbrains-mono',
   subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
-  title: 'Image Processor Arena — Pódio & Dashboard Analítico',
-  description: 'Dashboard analítico interativo e benchmark de processamento de imagem comparando implementações em 6 linguagens e 18 variantes.',
+  title: 'Image Processor Arena — Ficha de Cronometragem & Dashboard Analítico',
+  description: 'Ficha de cronometragem analítica e benchmark de processamento de imagem comparando implementações em 6 linguagens e 18 variantes.',
 };
 
 export default function RootLayout({
@@ -23,9 +28,32 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="pt-BR">
-      <body className={`${geistSans.variable} ${geistMono.variable} font-sans bg-[#0a0c0f] text-[#eceff3] antialiased selection:bg-[#2ec4e6]/30 selection:text-[#eceff3]`}>
-        {children}
+    <html lang="pt-BR" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var t = localStorage.getItem('arena_theme') || 'system';
+                  var isDark = t === 'dark' || (t !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                  if (isDark) {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                  } else {
+                    document.documentElement.classList.remove('dark');
+                    document.documentElement.setAttribute('data-theme', 'light');
+                  }
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
+      <body className={`${archivo.variable} ${jetbrainsMono.variable} font-sans antialiased selection:bg-[#E0703A]/20 selection:text-[#E0703A]`}>
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

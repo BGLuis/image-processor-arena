@@ -1,21 +1,47 @@
 'use client';
 
-import React, { useRef, useEffect } from 'react';
-import { Search, RotateCcw, ChevronDown, Check } from 'lucide-react';
+import React, { useRef, useEffect, useState } from 'react';
+import { Search, RotateCcw, ChevronDown, Check, Zap, Shield, Layers, SlidersHorizontal, X } from 'lucide-react';
 import { useData } from '../context/DataContext';
+
+const langConfig: Record<string, { label: string; color: string; count: number }> = {
+  rust: { label: 'Rust', color: 'var(--lang-rust)', count: 4 },
+  go: { label: 'Go', color: 'var(--lang-go)', count: 5 },
+  zig: { label: 'Zig', color: 'var(--lang-zig)', count: 2 },
+  swift: { label: 'Swift', color: 'var(--lang-swift)', count: 2 },
+  csharp: { label: 'C#', color: 'var(--lang-csharp)', count: 2 },
+  java: { label: 'Java', color: 'var(--lang-java)', count: 2 },
+};
 
 export default function FilterToolbar() {
   const { 
     filters, 
     updateFilter, 
+    toggleLanguageFilter,
+    setOnlyLanguage,
     resetFilters, 
     filteredResults, 
-    implementations,
     activeSql,
     queryLatencyMs 
   } = useData();
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [isLangPopoverOpen, setIsLangPopoverOpen] = useState(false);
+  const [langSearch, setLangSearch] = useState('');
+
+  // Close desktop popover on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setIsLangPopoverOpen(false);
+      }
+    };
+    if (isLangPopoverOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [isLangPopoverOpen]);
 
   // Focus search input on pressing '/'
   useEffect(() => {
@@ -33,7 +59,7 @@ export default function FilterToolbar() {
   const uniqueImplsCount = new Set(filteredResults.map(r => r.impl_id)).size;
 
   const scrollToDuel = () => {
-    const el = document.getElementById('duel-section');
+    const el = document.getElementById('duel');
     if (el) el.scrollIntoView({ behavior: 'smooth' });
   };
 
@@ -45,110 +71,40 @@ export default function FilterToolbar() {
     { id: 'transcode', label: 'Transcode' },
   ];
 
+  const isRealOnlyActive = filters.dataType === 'real';
+
   return (
-    <div className="sticky top-16 z-40 w-full mb-6">
-      <div className="bg-[#111418] border border-[#222831] rounded-xl shadow-2xl p-3 sm:p-4 space-y-3">
+    <div className="sticky top-16 z-40 w-full mb-8">
+      <div className="bg-[var(--arena-surface)] border border-[var(--arena-border)] rounded-xl shadow-lg p-3 sm:p-4 space-y-3 transition-colors backdrop-blur-md">
         
-        {/* Linha 1: Identity Filters */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        {/* Linha 1: Busca rápida, Contadores e Reset */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
           
           {/* Search Input */}
-          <div className="relative flex-1 min-w-[200px] max-w-xs">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6b7480]" />
+          <div className="relative flex-1 min-w-[220px] max-w-sm">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--arena-text-muted)]" />
             <input
               ref={searchInputRef}
               type="text"
-              placeholder="Buscar tarefa…"
+              placeholder="Buscar tarefa por nome, formato ou imagem…"
               value={filters.search}
               onChange={(e) => updateFilter('search', e.target.value)}
-              className="w-full h-8 pl-8 pr-7 text-xs bg-[#0d1013] border border-[#222831] rounded-md text-[#eceff3] placeholder-[#6b7480] focus:outline-none focus:border-[#2e3540] transition-colors"
+              className="w-full h-8 pl-8 pr-7 text-xs bg-[var(--arena-canvas)] border border-[var(--arena-border)] rounded-lg text-[var(--arena-text-primary)] placeholder-[var(--arena-text-muted)] focus:outline-none focus:border-[var(--arena-border-strong)] transition-colors"
             />
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-mono text-[#6b7480] px-1 py-0.5 border border-[#222831] rounded bg-[#111418] pointer-events-none">
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-mono text-[var(--arena-text-muted)] px-1 py-0.2 border border-[var(--arena-border)] rounded bg-[var(--arena-surface)] pointer-events-none">
               /
             </span>
           </div>
 
-          {/* Select: Linguagem */}
-          <div className="relative">
-            <select
-              value={filters.language}
-              onChange={(e) => updateFilter('language', e.target.value)}
-              className="appearance-none h-8 pl-3 pr-8 text-xs bg-[#0d1013] border border-[#222831] hover:border-[#2e3540] rounded-md text-[#eceff3] cursor-pointer focus:outline-none"
-            >
-              <option value="all">Linguagem: Todas · 6</option>
-              <option value="rust">Rust</option>
-              <option value="zig">Zig</option>
-              <option value="go">Go</option>
-              <option value="swift">Swift</option>
-              <option value="csharp">C#</option>
-              <option value="java">Java</option>
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#6b7480] pointer-events-none" />
-          </div>
-
-          {/* Select: Tier */}
-          <div className="relative">
-            <select
-              value={filters.tier}
-              onChange={(e) => updateFilter('tier', e.target.value)}
-              className="appearance-none h-8 pl-3 pr-8 text-xs bg-[#0d1013] border border-[#222831] hover:border-[#2e3540] rounded-md text-[#eceff3] cursor-pointer focus:outline-none"
-            >
-              <option value="all">Tier: Todos · 3</option>
-              <option value="accelerated">accelerated</option>
-              <option value="portable">portable</option>
-              <option value="hybrid">hybrid</option>
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#6b7480] pointer-events-none" />
-          </div>
-
-          {/* Select: Toolchain */}
-          <div className="relative hidden md:block">
-            <select
-              value={filters.toolchain}
-              onChange={(e) => updateFilter('toolchain', e.target.value)}
-              className="appearance-none h-8 pl-3 pr-8 text-xs bg-[#0d1013] border border-[#222831] hover:border-[#2e3540] rounded-md text-[#eceff3] cursor-pointer focus:outline-none"
-            >
-              <option value="all">Toolchain: Todos</option>
-              <option value="stable 1.90">Rust stable 1.90</option>
-              <option value="nightly">Rust nightly</option>
-              <option value="0.15">Zig 0.15</option>
-              <option value="1.25">Go 1.25</option>
-              <option value=".NET 10">.NET 10</option>
-              <option value="6.2">Swift 6.2</option>
-              <option value="GraalVM">GraalVM</option>
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#6b7480] pointer-events-none" />
-          </div>
-
-          {/* Select: Biblioteca */}
-          <div className="relative hidden lg:block">
-            <select
-              value={filters.lib}
-              onChange={(e) => updateFilter('lib', e.target.value)}
-              className="appearance-none h-8 pl-3 pr-8 text-xs bg-[#0d1013] border border-[#222831] hover:border-[#2e3540] rounded-md text-[#eceff3] cursor-pointer focus:outline-none"
-            >
-              <option value="all">Biblioteca: Todas</option>
-              <option value="padrão">padrão</option>
-              <option value="libvips">libvips</option>
-              <option value="cgo · libwebp/turbo">cgo libwebp</option>
-              <option value="image-rs">image-rs</option>
-              <option value="PGO · padrão">PGO padrão</option>
-              <option value="x/image">x/image</option>
-              <option value="noasm · padrão">noasm</option>
-              <option value="NativeAOT">NativeAOT</option>
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#6b7480] pointer-events-none" />
-          </div>
-
-          {/* Counter and Clear */}
-          <div className="ml-auto flex items-center gap-3">
-            <span className="text-xs font-mono text-[#a3acb9]">
-              <strong className="text-[#eceff3]">{uniqueImplsCount}</strong> impl. · <strong className="text-[#eceff3]">{uniqueTasksCount}</strong> tarefas
+          {/* Counts & Clear */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-mono text-[var(--arena-text-secondary)]">
+              <strong className="text-[var(--arena-text-primary)]">{uniqueImplsCount}</strong> impl. · <strong className="text-[var(--arena-text-primary)]">{uniqueTasksCount}</strong> tarefas
             </span>
 
             <button
               onClick={resetFilters}
-              className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-[#a3acb9] hover:text-[#eceff3] bg-[#0d1013] hover:bg-[#171b21] border border-[#222831] rounded-md transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-[var(--arena-text-secondary)] hover:text-[var(--arena-text-primary)] bg-[var(--arena-canvas)] hover:bg-[var(--arena-raised)] border border-[var(--arena-border)] rounded-md transition-colors cursor-pointer"
               title="Limpar todos os filtros"
             >
               <RotateCcw className="w-3 h-3" />
@@ -158,21 +114,245 @@ export default function FilterToolbar() {
 
         </div>
 
-        {/* Linha 2: Benchmark Filters */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[#222831]/60">
+        {/* Linha 2: Pílulas de Linguagens (com "somente" no hover), Atalho Só Reais e Pureza */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-[var(--arena-border)]/60">
           
-          {/* Operação Segmented Tabs */}
-          <div className="flex items-center p-0.5 bg-[#0d1013] border border-[#222831] rounded-lg">
+          {/* Language Pills + Popover trigger */}
+          <div className="flex flex-wrap items-center gap-1.5 relative" ref={popoverRef}>
+            <span className="text-[11px] font-mono text-[var(--arena-text-muted)] mr-1 hidden sm:inline">
+              Linguagens:
+            </span>
+
+            {/* Quick Popover Trigger Button */}
+            <button
+              onClick={() => setIsLangPopoverOpen(prev => !prev)}
+              className={`flex items-center gap-1.5 px-2.5 h-7 rounded-md border text-xs font-mono transition-colors cursor-pointer ${
+                isLangPopoverOpen || filters.selectedLanguages.length > 0
+                  ? 'bg-[var(--arena-canvas)] border-[var(--arena-border-strong)] text-[var(--arena-text-primary)] font-semibold shadow-xs'
+                  : 'bg-transparent border-[var(--arena-border)] text-[var(--arena-text-secondary)] hover:text-[var(--arena-text-primary)] hover:bg-[var(--arena-canvas)]'
+              }`}
+              title="Abrir popover com busca e checkboxes de linguagens"
+            >
+              <SlidersHorizontal className="w-3 h-3 text-[#C9501C] dark:text-[#E0703A]" />
+              <span className="hidden sm:inline">Filtrar...</span>
+              <span className="sm:hidden">Linguagens</span>
+              {filters.selectedLanguages.length > 0 && (
+                <span className="w-4 h-4 rounded-full bg-[#C9501C] dark:bg-[#E0703A] text-white text-[9px] flex items-center justify-center font-bold">
+                  {filters.selectedLanguages.length}
+                </span>
+              )}
+              <ChevronDown className={`w-3 h-3 transition-transform ${isLangPopoverOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Desktop Popover Menu */}
+            {isLangPopoverOpen && (
+              <div className="hidden sm:block absolute left-0 top-full mt-2 w-80 rounded-xl bg-[var(--arena-surface)] border border-[var(--arena-border-strong)] shadow-2xl p-3.5 z-50 animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between pb-2 border-b border-[var(--arena-border)]/60">
+                  <div className="flex items-center gap-1.5">
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-[#C9501C] dark:text-[#E0703A]" />
+                    <span className="text-xs font-bold text-[var(--arena-text-primary)]">
+                      Filtrar Linguagens
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setIsLangPopoverOpen(false)}
+                    className="p-1 rounded text-[var(--arena-text-muted)] hover:text-[var(--arena-text-primary)] cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Internal Search Input */}
+                <div className="relative my-2.5">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--arena-text-muted)]" />
+                  <input
+                    type="text"
+                    placeholder="Filtrar linguagens..."
+                    value={langSearch}
+                    onChange={(e) => setLangSearch(e.target.value)}
+                    className="w-full h-7 pl-7 pr-2.5 text-xs bg-[var(--arena-canvas)] border border-[var(--arena-border)] rounded-md text-[var(--arena-text-primary)] placeholder-[var(--arena-text-muted)] focus:outline-none focus:border-[var(--arena-border-strong)]"
+                  />
+                </div>
+
+                {/* Checkboxes List with 'somente' action */}
+                <div className="space-y-1 max-h-48 overflow-y-auto my-2 pr-1">
+                  {Object.entries(langConfig)
+                    .filter(([_, info]) => info.label.toLowerCase().includes(langSearch.toLowerCase()))
+                    .map(([langKey, info]) => {
+                      const isChecked = filters.selectedLanguages.length === 0 || filters.selectedLanguages.includes(langKey);
+                      return (
+                        <div key={langKey} className="group/item flex items-center justify-between p-1.5 rounded-lg hover:bg-[var(--arena-canvas)] transition-colors">
+                          <label className="flex items-center gap-2 text-xs font-medium text-[var(--arena-text-primary)] cursor-pointer flex-1">
+                            <input
+                              type="checkbox"
+                              checked={filters.selectedLanguages.includes(langKey)}
+                              onChange={() => toggleLanguageFilter(langKey)}
+                              className="rounded border-[var(--arena-border)] text-[#C9501C] focus:ring-0 cursor-pointer"
+                            />
+                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: info.color }} />
+                            <span>{info.label}</span>
+                            <span className="text-[10px] font-mono text-[var(--arena-text-muted)]">({info.count} impl)</span>
+                          </label>
+                          <button
+                            onClick={() => {
+                              setOnlyLanguage(langKey);
+                              setIsLangPopoverOpen(false);
+                            }}
+                            className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--arena-canvas)] hover:bg-[var(--arena-raised)] border border-[var(--arena-border)] text-[var(--arena-text-muted)] hover:text-[var(--arena-text-primary)] opacity-0 group-hover/item:opacity-100 transition-opacity cursor-pointer"
+                            title={`Ver somente ${info.label}`}
+                          >
+                            somente
+                          </button>
+                        </div>
+                      );
+                    })}
+                </div>
+
+                {/* Popover Footer Shortcuts */}
+                <div className="flex items-center justify-between pt-2 border-t border-[var(--arena-border)]/60 text-[11px] font-mono">
+                  <button
+                    onClick={() => updateFilter('selectedLanguages', [])}
+                    className="text-[var(--arena-text-muted)] hover:text-[var(--arena-text-primary)] cursor-pointer"
+                  >
+                    Selecionar todas
+                  </button>
+                  <button
+                    onClick={() => updateFilter('selectedLanguages', ['none'])}
+                    className="text-[var(--arena-text-muted)] hover:text-[var(--arena-text-primary)] cursor-pointer"
+                  >
+                    Limpar seleção
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Desktop Quick Pills */}
+            <div className="hidden sm:flex items-center gap-1.5">
+              {Object.entries(langConfig).map(([langKey, info]) => {
+                const isSelected = filters.selectedLanguages.length === 0 || filters.selectedLanguages.includes(langKey);
+                const isExclusivelySelected = filters.selectedLanguages.length === 1 && filters.selectedLanguages[0] === langKey;
+
+                return (
+                  <div
+                    key={langKey}
+                    className={`group relative flex items-center h-7 rounded-md border text-xs font-medium transition-all ${
+                      isSelected
+                        ? 'bg-[var(--arena-canvas)] border-[var(--arena-border-strong)] text-[var(--arena-text-primary)] shadow-xs'
+                        : 'bg-transparent border-[var(--arena-border)]/50 text-[var(--arena-text-muted)] opacity-60 hover:opacity-100'
+                    }`}
+                  >
+                    <button
+                      onClick={() => toggleLanguageFilter(langKey)}
+                      className="flex items-center gap-1.5 px-2 h-full cursor-pointer"
+                      title={`Filtrar ${info.label}`}
+                    >
+                      <span 
+                        className="w-2 h-2 rounded-full shrink-0" 
+                        style={{ backgroundColor: info.color }} 
+                      />
+                      <span>{info.label}</span>
+                      <span className="text-[10px] font-mono text-[var(--arena-text-muted)]">
+                        {info.count}
+                      </span>
+                    </button>
+
+                    {!isExclusivelySelected && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOnlyLanguage(langKey);
+                        }}
+                        className="hidden group-hover:flex items-center px-1.5 h-full border-l border-[var(--arena-border)] text-[10px] font-mono text-[var(--arena-text-muted)] hover:text-[var(--arena-text-primary)] bg-[var(--arena-surface)] rounded-r-md cursor-pointer transition-colors"
+                        title={`Ver somente ${info.label}`}
+                      >
+                        somente
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Quick preset: "Só reais (Go, Rust)" & Purity */}
+          <div className="flex items-center gap-2">
+            
+            {/* Quick preset button */}
+            <button
+              onClick={() => {
+                if (isRealOnlyActive) {
+                  updateFilter('dataType', 'all');
+                } else {
+                  updateFilter('dataType', 'real');
+                  if (filters.selectedLanguages.length > 0) {
+                    updateFilter('selectedLanguages', []);
+                  }
+                }
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono transition-colors cursor-pointer border ${
+                isRealOnlyActive
+                  ? 'bg-[#C9501C]/15 dark:bg-[#E0703A]/20 border-[#C9501C] dark:border-[#E0703A] text-[#C9501C] dark:text-[#E0703A] font-semibold'
+                  : 'bg-[var(--arena-canvas)] border-[var(--arena-border)] text-[var(--arena-text-secondary)] hover:text-[var(--arena-text-primary)]'
+              }`}
+              title="Filtrar implementações padrão reais em produção de Go e Rust"
+            >
+              <Zap className="w-3 h-3" />
+              <span>Só reais (Go, Rust)</span>
+            </button>
+
+            {/* Purity segmented */}
+            <div className="hidden md:flex items-center p-0.5 bg-[var(--arena-canvas)] border border-[var(--arena-border)] rounded-lg text-xs">
+              <button
+                onClick={() => updateFilter('purity', 'all')}
+                className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
+                  filters.purity === 'all'
+                    ? 'bg-[var(--arena-surface)] text-[var(--arena-text-primary)] font-medium shadow-xs'
+                    : 'text-[var(--arena-text-muted)] hover:text-[var(--arena-text-secondary)]'
+                }`}
+              >
+                Pureza: Todos
+              </button>
+              <button
+                onClick={() => updateFilter('purity', 'pure')}
+                className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
+                  filters.purity === 'pure'
+                    ? 'bg-[var(--arena-surface)] text-[var(--arena-text-primary)] font-medium shadow-xs'
+                    : 'text-[var(--arena-text-muted)] hover:text-[var(--arena-text-secondary)]'
+                }`}
+              >
+                Sem FFI (Puro)
+              </button>
+              <button
+                onClick={() => updateFilter('purity', 'hybrid')}
+                className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
+                  filters.purity === 'hybrid'
+                    ? 'bg-[var(--arena-surface)] text-[var(--arena-text-primary)] font-medium shadow-xs'
+                    : 'text-[var(--arena-text-muted)] hover:text-[var(--arena-text-secondary)]'
+                }`}
+              >
+                Com FFI (Híbrido)
+              </button>
+            </div>
+
+          </div>
+
+        </div>
+
+        {/* Linha 3: Dimensões (Operação, Formato, Modo, Imagem), Agrupar e Link Duelo */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[var(--arena-border)]/60">
+          
+          {/* Operation Tabs */}
+          <div className="flex items-center p-0.5 bg-[var(--arena-canvas)] border border-[var(--arena-border)] rounded-lg">
             {ops.map((op) => {
               const active = filters.op === op.id;
               return (
                 <button
                   key={op.id}
                   onClick={() => updateFilter('op', op.id)}
-                  className={`px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
                     active
-                      ? 'bg-[#171b21] border border-[#2e3540] text-[#eceff3] shadow-sm'
-                      : 'text-[#6b7480] hover:text-[#a3acb9]'
+                      ? 'bg-[var(--arena-surface)] text-[var(--arena-text-primary)] shadow-xs font-semibold'
+                      : 'text-[var(--arena-text-muted)] hover:text-[var(--arena-text-secondary)]'
                   }`}
                 >
                   {op.label}
@@ -181,7 +361,7 @@ export default function FilterToolbar() {
             })}
           </div>
 
-          {/* Formato, Modo, Imagem dropdowns */}
+          {/* Formato, Modo, Imagem Dropdowns */}
           <div className="flex items-center gap-2">
             
             {/* Formato */}
@@ -189,7 +369,7 @@ export default function FilterToolbar() {
               <select
                 value={filters.format}
                 onChange={(e) => updateFilter('format', e.target.value)}
-                className="appearance-none h-7 pl-2.5 pr-6 text-xs bg-[#0d1013] border border-[#222831] hover:border-[#2e3540] rounded-md text-[#eceff3] cursor-pointer focus:outline-none"
+                className="appearance-none h-7 pl-2.5 pr-6 text-xs bg-[var(--arena-canvas)] border border-[var(--arena-border)] hover:border-[var(--arena-border-strong)] rounded-md text-[var(--arena-text-primary)] cursor-pointer focus:outline-none"
               >
                 <option value="all">Formato: Todos</option>
                 <option value="png">PNG</option>
@@ -199,7 +379,7 @@ export default function FilterToolbar() {
                 <option value="jxl">JXL</option>
                 <option value="pam">PAM</option>
               </select>
-              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[#6b7480] pointer-events-none" />
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--arena-text-muted)] pointer-events-none" />
             </div>
 
             {/* Modo */}
@@ -207,13 +387,13 @@ export default function FilterToolbar() {
               <select
                 value={filters.mode}
                 onChange={(e) => updateFilter('mode', e.target.value)}
-                className="appearance-none h-7 pl-2.5 pr-6 text-xs bg-[#0d1013] border border-[#222831] hover:border-[#2e3540] rounded-md text-[#eceff3] cursor-pointer focus:outline-none"
+                className="appearance-none h-7 pl-2.5 pr-6 text-xs bg-[var(--arena-canvas)] border border-[var(--arena-border)] hover:border-[var(--arena-border-strong)] rounded-md text-[var(--arena-text-primary)] cursor-pointer focus:outline-none"
               >
                 <option value="all">Modo: Todos</option>
                 <option value="lossy">Lossy</option>
                 <option value="lossless">Lossless</option>
               </select>
-              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[#6b7480] pointer-events-none" />
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--arena-text-muted)] pointer-events-none" />
             </div>
 
             {/* Imagem */}
@@ -221,7 +401,7 @@ export default function FilterToolbar() {
               <select
                 value={filters.image}
                 onChange={(e) => updateFilter('image', e.target.value)}
-                className="appearance-none h-7 pl-2.5 pr-6 text-xs bg-[#0d1013] border border-[#222831] hover:border-[#2e3540] rounded-md text-[#eceff3] cursor-pointer focus:outline-none"
+                className="appearance-none h-7 pl-2.5 pr-6 text-xs bg-[var(--arena-canvas)] border border-[var(--arena-border)] hover:border-[var(--arena-border-strong)] rounded-md text-[var(--arena-text-primary)] cursor-pointer focus:outline-none"
               >
                 <option value="all">Imagem: Todas</option>
                 <option value="photo">Photo</option>
@@ -229,16 +409,15 @@ export default function FilterToolbar() {
                 <option value="illustration">Illustration</option>
                 <option value="alpha">Alpha</option>
               </select>
-              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[#6b7480] pointer-events-none" />
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--arena-text-muted)] pointer-events-none" />
             </div>
 
           </div>
 
-          {/* Toggles & Duel action */}
+          {/* Group Toggle & Duel shortcut */}
           <div className="flex items-center gap-3">
             
-            {/* Toggle: Agrupar por linguagem */}
-            <label className="flex items-center gap-2 text-xs text-[#a3acb9] cursor-pointer select-none">
+            <label className="flex items-center gap-2 text-xs text-[var(--arena-text-secondary)] cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={filters.groupByLanguage}
@@ -246,37 +425,127 @@ export default function FilterToolbar() {
                 className="sr-only"
               />
               <div className={`w-8 h-4.5 rounded-full transition-colors relative ${
-                filters.groupByLanguage ? 'bg-[#3dd68c]' : 'bg-[#222831]'
+                filters.groupByLanguage ? 'bg-[#2E8B3E] dark:bg-[#3DD68C]' : 'bg-[var(--arena-border)]'
               }`}>
                 <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform absolute top-0.5 ${
                   filters.groupByLanguage ? 'translate-x-4' : 'translate-x-0.5'
                 }`} />
               </div>
-              <span className="hidden sm:inline">Agrupar por linguagem</span>
+              <span className="hidden sm:inline">Agrupar</span>
             </label>
 
-            {/* Comparar 2 button */}
             <button
               onClick={scrollToDuel}
-              className="px-3 py-1 rounded-full bg-[#171b21] hover:bg-[#222831] border border-[#2e3540] text-xs font-medium text-[#eceff3] transition-colors cursor-pointer"
+              className="px-2.5 py-1 rounded-md bg-[var(--arena-canvas)] hover:bg-[var(--arena-raised)] border border-[var(--arena-border)] text-xs font-mono font-medium text-[var(--arena-text-primary)] transition-colors cursor-pointer"
             >
-              Comparar 2
+              Ir ao Duelo →
             </button>
 
           </div>
 
         </div>
 
-        {/* Linha 3: SQL Ativo */}
-        <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-[#0d1013] border border-[#222831] text-[11px] font-mono">
+        {/* Linha de SQL Ativo */}
+        <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-[var(--arena-canvas)] border border-[var(--arena-border)] text-[11px] font-mono">
           <div className="flex items-center gap-2 overflow-hidden truncate">
-            <span className="text-[#3dd68c] font-semibold shrink-0">SQL ATIVO</span>
-            <span className="text-[#a3acb9] truncate">{activeSql}</span>
+            <span className="text-[#2E8B3E] dark:text-[#3DD68C] font-semibold shrink-0">SQL ATIVO</span>
+            <span className="text-[var(--arena-text-secondary)] truncate">{activeSql}</span>
           </div>
-          <span className="text-[#6b7480] shrink-0">
+          <span className="text-[var(--arena-text-muted)] shrink-0">
             DuckDB-Wasm · {queryLatencyMs.toFixed(1)} ms
           </span>
         </div>
+
+        {/* Mobile Bottom Sheet Drawer (screen < 640px) */}
+        {isLangPopoverOpen && (
+          <div className="sm:hidden fixed inset-0 z-50 flex flex-col justify-end">
+            {/* Backdrop */}
+            <div 
+              className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity" 
+              onClick={() => setIsLangPopoverOpen(false)} 
+            />
+
+            {/* Bottom Sheet Modal */}
+            <div className="relative z-10 w-full max-h-[85vh] bg-[var(--arena-surface)] rounded-t-2xl border-t border-[var(--arena-border-strong)] shadow-2xl p-4 flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-200">
+              <div className="w-12 h-1 bg-[var(--arena-border-strong)] rounded-full mx-auto mb-3" />
+              <div className="flex items-center justify-between pb-2 border-b border-[var(--arena-border)]/60">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="w-4 h-4 text-[#C9501C] dark:text-[#E0703A]" />
+                  <span className="text-sm font-bold text-[var(--arena-text-primary)]">
+                    Filtrar Linguagens
+                  </span>
+                </div>
+                <button
+                  onClick={() => setIsLangPopoverOpen(false)}
+                  className="p-1 rounded-lg text-[var(--arena-text-muted)] hover:text-[var(--arena-text-primary)] cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Internal search */}
+              <div className="relative my-3">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--arena-text-muted)]" />
+                <input
+                  type="text"
+                  placeholder="Buscar linguagem..."
+                  value={langSearch}
+                  onChange={(e) => setLangSearch(e.target.value)}
+                  className="w-full h-8 pl-8 pr-3 text-xs bg-[var(--arena-canvas)] border border-[var(--arena-border)] rounded-lg text-[var(--arena-text-primary)] placeholder-[var(--arena-text-muted)] focus:outline-none"
+                />
+              </div>
+
+              {/* Options list */}
+              <div className="space-y-1.5 max-h-60 overflow-y-auto my-2 pr-1">
+                {Object.entries(langConfig)
+                  .filter(([_, info]) => info.label.toLowerCase().includes(langSearch.toLowerCase()))
+                  .map(([langKey, info]) => {
+                    const isChecked = filters.selectedLanguages.length === 0 || filters.selectedLanguages.includes(langKey);
+                    return (
+                      <div key={langKey} className="flex items-center justify-between p-2 rounded-lg bg-[var(--arena-canvas)] border border-[var(--arena-border)]">
+                        <label className="flex items-center gap-2.5 text-xs font-medium text-[var(--arena-text-primary)] cursor-pointer flex-1">
+                          <input
+                            type="checkbox"
+                            checked={filters.selectedLanguages.includes(langKey)}
+                            onChange={() => toggleLanguageFilter(langKey)}
+                            className="w-4 h-4 rounded border-[var(--arena-border)] text-[#C9501C] focus:ring-0 cursor-pointer"
+                          />
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: info.color }} />
+                          <span>{info.label}</span>
+                          <span className="text-[10px] font-mono text-[var(--arena-text-muted)]">({info.count} impl.)</span>
+                        </label>
+                        <button
+                          onClick={() => {
+                            setOnlyLanguage(langKey);
+                            setIsLangPopoverOpen(false);
+                          }}
+                          className="text-[11px] font-mono px-2.5 py-1 rounded bg-[var(--arena-surface)] border border-[var(--arena-border)] text-[var(--arena-text-primary)] font-semibold cursor-pointer"
+                        >
+                          somente
+                        </button>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              {/* Action buttons */}
+              <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-[var(--arena-border)]/60">
+                <button
+                  onClick={() => updateFilter('selectedLanguages', [])}
+                  className="py-2 text-xs font-mono font-medium rounded-lg bg-[var(--arena-canvas)] border border-[var(--arena-border)] text-[var(--arena-text-primary)] cursor-pointer"
+                >
+                  Todas (6)
+                </button>
+                <button
+                  onClick={() => setIsLangPopoverOpen(false)}
+                  className="py-2 text-xs font-mono font-bold rounded-lg bg-[#C9501C] dark:bg-[#E0703A] text-white cursor-pointer"
+                >
+                  Concluir
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
