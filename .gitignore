@@ -22,6 +22,10 @@ go/bin/
 target/
 rust/target/
 
+# C++ build artifacts
+cpp/bin/
+cpp/build/
+
 # OS
 .DS_Store
 Thumbs.db

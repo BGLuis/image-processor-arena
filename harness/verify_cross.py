@@ -323,16 +323,18 @@ def main() -> int:
     )
     parser.add_argument(
         "--target",
-        choices=["all", "go", "rust", "python"],
+        choices=["all", "go", "rust", "python", "cpp"],
         default="all",
         help="Alvo do teste em modo http ou batch (padrão: all)",
     )
     parser.add_argument("--go-url", default="http://localhost:8080/run?op=analyze", help="URL do endpoint Go")
     parser.add_argument("--rust-url", default="http://localhost:8081/run?op=analyze", help="URL do endpoint Rust")
     parser.add_argument("--python-url", default="http://localhost:8083/run?op=analyze", help="URL do endpoint Python")
+    parser.add_argument("--cpp-url", default="http://localhost:8082/run?op=analyze", help="URL do endpoint C++")
     parser.add_argument("--go-bin", default="./go/bin/arena-batch", help="Caminho do binário CLI Go")
     parser.add_argument("--rust-bin", default="./rust/target/release/arena-batch", help="Caminho do binário CLI Rust")
     parser.add_argument("--python-bin", default="./python/bin/arena-batch", help="Caminho do binário CLI Python")
+    parser.add_argument("--cpp-bin", default="./cpp/bin/arena-batch", help="Caminho do binário CLI C++")
     parser.add_argument("--impl", default=None, help="Implementação do alvo (ex: pure, numpy, etc.)")
     parser.add_argument("--fixtures-dir", default=None, help="Diretório das fixtures sintéticas")
     parser.add_argument("--ground-truth", default=None, help="Caminho do ground_truth.json")
@@ -374,6 +376,8 @@ def main() -> int:
             else:
                 targets.append(("Python HTTP (pure)", lambda p: run_http_analyze(args.python_url, read_file(p), "pure"), args.python_url))
                 targets.append(("Python HTTP (numpy)", lambda p: run_http_analyze(args.python_url, read_file(p), "numpy"), args.python_url))
+        if args.target == "cpp" or (args.target == "all" and os.path.exists("./cpp/bin/arena-server")):
+            targets.append(("C++ HTTP (Port 8082)", lambda p: run_http_analyze(args.cpp_url, read_file(p)), args.cpp_url))
     elif args.mode == "batch":
         if args.target in ["all", "go"]:
             targets.append(("Go Batch CLI", lambda p: run_batch_analyze(args.go_bin, p, impl=args.impl), args.go_bin))
@@ -385,6 +389,8 @@ def main() -> int:
             else:
                 targets.append(("Python Batch CLI (pure)", lambda p: run_batch_analyze(args.python_bin, p, impl="pure"), args.python_bin))
                 targets.append(("Python Batch CLI (numpy)", lambda p: run_batch_analyze(args.python_bin, p, impl="numpy"), args.python_bin))
+        if args.target == "cpp" or (args.target == "all" and os.path.exists(args.cpp_bin)):
+            targets.append(("C++ Batch CLI", lambda p: run_batch_analyze(args.cpp_bin, p), args.cpp_bin))
 
     total_tests = 0
     passed_tests = 0
