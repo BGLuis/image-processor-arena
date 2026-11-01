@@ -24,6 +24,13 @@ avif_decode = "zenavif 0.1.6 / rav1d 1.1.0 (no asm)"
 jxl_encode = "jxl-encoder 0.3.1"
 jxl_decode = "jxl-oxide 0.12.6"
 
+[codecs.cpp]
+png = "libpng 1.6 / lodepng (portable)"
+jpeg = "libturbojpeg 3.x"
+webp = "libwebp 1.5.0"
+avif = "pillow / dav1d"
+jxl = "libjxl 0.11.1"
+
 [operations.go]
 resize = ["golang.org/x/image/draw", "github.com/disintegration/imaging"]
 filter = ["github.com/disintegration/imaging"]
@@ -111,6 +118,7 @@ max_pixels = 40000000
 [benchmarks]
 server_go_port = 8080
 server_rust_port = 8081
+server_cpp_port = 8082
 # Referência da máquina em que os resultados publicados foram coletados (16 CPUs lógicas). No Docker
 # o isolamento é configurável por ARENA_SERVER_CPUSET / ARENA_HARNESS_CPUSET (ver docker-compose.yml).
 cpuset_servers = "0-11"
