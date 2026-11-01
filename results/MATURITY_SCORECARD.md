@@ -1,6 +1,6 @@
 # 📊 Scorecard de Maturidade: Ecossistemas Go Puro × Rust Puro
 
-**Data da Geração**: 2026-10-29 02:38:56  
+**Data da Geração**: 2026-11-01 01:31:32  
 **Tier Ativo**: `ACCELERATED`  
 **Metodologia**: Auditoria de contratos, inspeção de pureza e execução comparativa multi-biblioteca.
 

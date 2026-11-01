@@ -2,12 +2,12 @@
   "summary": {
     "total_tasks": 34,
     "rust_wins": 26,
-    "go_wins": 7,
-    "ties": 1,
+    "go_wins": 5,
+    "ties": 3,
     "rust_win_percentage": 76.5,
-    "go_win_percentage": 20.6,
-    "ties_percentage": 2.9,
-    "global_geomean": 2.67
+    "go_win_percentage": 14.7,
+    "ties_percentage": 8.8,
+    "global_geomean": 2.904818385547134
   },
   "filters_options": {
     "formats": [
@@ -41,13 +41,15 @@
     ]
   },
   "environment": {
-    "platform": "Linux-6.18.44-fc-v51-x86_64-with-glibc2.39",
-    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
-    "cpu_count": 4,
-    "python": "3.11.15",
-    "reference_decoder": "Pillow 12.3.0 + pillow-jxl-plugin"
+    "platform": "Linux-7.2.11-arch1-1-x86_64-with-glibc2.44",
+    "cpu": "12th Gen Intel(R) Core(TM) i5-12600K",
+    "cpu_count": 16,
+    "python": "3.14.9",
+    "reference_decoder": "Pillow 13.0.0 + pillow-jxl-plugin"
   },
-  "collected_at": "2026-10-02 09:57:36",
+  "collected_at": "2026-11-01 01:40:51",
+  "iterations": 5,
+  "warmup": 2,
   "mode": "http",
   "primary_metric": "codec_ms",
   "notes": [
