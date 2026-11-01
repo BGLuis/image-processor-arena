@@ -215,9 +215,13 @@ def compare_result(actual: Dict[str, Any], expected: Dict[str, Any]) -> List[str
 # Executores por Modo
 # ---------------------------------------------------------------------------
 
-def run_http_analyze(url: str, pam_bytes: bytes) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+def run_http_analyze(url: str, pam_bytes: bytes, impl: Optional[str] = None) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    final_url = url
+    if impl:
+        sep = "&" if "?" in final_url else "?"
+        final_url = f"{final_url}{sep}impl={impl}"
     req = urllib.request.Request(
-        url,
+        final_url,
         data=pam_bytes,
         headers={"Content-Type": "image/x-netpbm-pam"},
         method="POST",
@@ -230,12 +234,15 @@ def run_http_analyze(url: str, pam_bytes: bytes) -> Tuple[Optional[Dict[str, Any
         return None, str(e)
 
 
-def run_batch_analyze(bin_path: str, pam_path: str, timeout: int = 10) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+def run_batch_analyze(bin_path: str, pam_path: str, timeout: int = 10, impl: Optional[str] = None) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     if not os.path.exists(bin_path):
         return None, f"Binário não encontrado: {bin_path}"
+    cmd = [bin_path, "--op", "analyze", "--input", pam_path]
+    if impl:
+        cmd.extend(["--impl", impl])
     try:
         proc = subprocess.run(
-            [bin_path, "--op", "analyze", "--input", pam_path],
+            cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -316,14 +323,17 @@ def main() -> int:
     )
     parser.add_argument(
         "--target",
-        choices=["all", "go", "rust"],
+        choices=["all", "go", "rust", "python"],
         default="all",
         help="Alvo do teste em modo http ou batch (padrão: all)",
     )
     parser.add_argument("--go-url", default="http://localhost:8080/run?op=analyze", help="URL do endpoint Go")
     parser.add_argument("--rust-url", default="http://localhost:8081/run?op=analyze", help="URL do endpoint Rust")
+    parser.add_argument("--python-url", default="http://localhost:8083/run?op=analyze", help="URL do endpoint Python")
     parser.add_argument("--go-bin", default="./go/bin/arena-batch", help="Caminho do binário CLI Go")
     parser.add_argument("--rust-bin", default="./rust/target/release/arena-batch", help="Caminho do binário CLI Rust")
+    parser.add_argument("--python-bin", default="./python/bin/arena-batch", help="Caminho do binário CLI Python")
+    parser.add_argument("--impl", default=None, help="Implementação do alvo (ex: pure, numpy, etc.)")
     parser.add_argument("--fixtures-dir", default=None, help="Diretório das fixtures sintéticas")
     parser.add_argument("--ground-truth", default=None, help="Caminho do ground_truth.json")
     args = parser.parse_args()
@@ -355,14 +365,26 @@ def main() -> int:
         targets.append(("Python Oracle", run_self_analyze, None))
     elif args.mode == "http":
         if args.target in ["all", "go"]:
-            targets.append(("Go HTTP (Port 8080)", lambda p: run_http_analyze(args.go_url, read_file(p)), args.go_url))
+            targets.append(("Go HTTP (Port 8080)", lambda p: run_http_analyze(args.go_url, read_file(p), args.impl), args.go_url))
         if args.target in ["all", "rust"]:
-            targets.append(("Rust HTTP (Port 8081)", lambda p: run_http_analyze(args.rust_url, read_file(p)), args.rust_url))
+            targets.append(("Rust HTTP (Port 8081)", lambda p: run_http_analyze(args.rust_url, read_file(p), args.impl), args.rust_url))
+        if args.target in ["all", "python"]:
+            if args.impl:
+                targets.append((f"Python HTTP ({args.impl})", lambda p: run_http_analyze(args.python_url, read_file(p), args.impl), args.python_url))
+            else:
+                targets.append(("Python HTTP (pure)", lambda p: run_http_analyze(args.python_url, read_file(p), "pure"), args.python_url))
+                targets.append(("Python HTTP (numpy)", lambda p: run_http_analyze(args.python_url, read_file(p), "numpy"), args.python_url))
     elif args.mode == "batch":
         if args.target in ["all", "go"]:
-            targets.append(("Go Batch CLI", lambda p: run_batch_analyze(args.go_bin, p), args.go_bin))
+            targets.append(("Go Batch CLI", lambda p: run_batch_analyze(args.go_bin, p, impl=args.impl), args.go_bin))
         if args.target in ["all", "rust"]:
-            targets.append(("Rust Batch CLI", lambda p: run_batch_analyze(args.rust_bin, p), args.rust_bin))
+            targets.append(("Rust Batch CLI", lambda p: run_batch_analyze(args.rust_bin, p, impl=args.impl), args.rust_bin))
+        if args.target in ["all", "python"]:
+            if args.impl:
+                targets.append((f"Python Batch CLI ({args.impl})", lambda p: run_batch_analyze(args.python_bin, p, impl=args.impl), args.python_bin))
+            else:
+                targets.append(("Python Batch CLI (pure)", lambda p: run_batch_analyze(args.python_bin, p, impl="pure"), args.python_bin))
+                targets.append(("Python Batch CLI (numpy)", lambda p: run_batch_analyze(args.python_bin, p, impl="numpy"), args.python_bin))
 
     total_tests = 0
     passed_tests = 0
