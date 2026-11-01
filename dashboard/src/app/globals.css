@@ -16,10 +16,6 @@
 
   --color-lang-go: var(--lang-go);
   --color-lang-rust: var(--lang-rust);
-  --color-lang-zig: var(--lang-zig);
-  --color-lang-java: var(--lang-java);
-  --color-lang-csharp: var(--lang-csharp);
-  --color-lang-swift: var(--lang-swift);
 }
 
 :root {
@@ -35,10 +31,6 @@
 
   --lang-rust: #C9501C;
   --lang-go: #0086A3;
-  --lang-zig: #9A7B00;
-  --lang-csharp: #6A55D8;
-  --lang-swift: #2E8B3E;
-  --lang-java: #C2417F;
 
   --heat-indigo-1: #312E81;
   --heat-indigo-2: #4338CA;
@@ -60,10 +52,6 @@
 
   --lang-rust: #E0703A;
   --lang-go: #25A3B5;
-  --lang-zig: #B38D1E;
-  --lang-csharp: #8F7FF0;
-  --lang-swift: #3E9C4C;
-  --lang-java: #D0598F;
 
   --heat-indigo-1: #6366F1;
   --heat-indigo-2: #4F46E5;

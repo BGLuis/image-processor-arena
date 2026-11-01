@@ -49,12 +49,8 @@ export default function TopBar() {
             <div className="hidden sm:flex items-center gap-1.5 pl-1 text-[var(--arena-text-secondary)] text-xs">
               <span className="w-2 h-2 rounded-full bg-[#0086A3] dark:bg-[#25A3B5]" title="Go" />
               <span className="w-2 h-2 rounded-full bg-[#C9501C] dark:bg-[#E0703A]" title="Rust" />
-              <span className="w-2 h-2 rounded-full bg-[#9A7B00] dark:bg-[#B38D1E]" title="Zig" />
-              <span className="w-2 h-2 rounded-full bg-[#C2417F] dark:bg-[#D0598F]" title="Java" />
-              <span className="w-2 h-2 rounded-full bg-[#6A55D8] dark:bg-[#8F7FF0]" title="C#" />
-              <span className="w-2 h-2 rounded-full bg-[#2E8B3E] dark:bg-[#3E9C4C]" title="Swift" />
               <span className="ml-1 text-[11px] font-mono text-[var(--arena-text-muted)]">
-                6 lang · 18 impl
+                2 linguagens · 2 implementações · zero FFI no núcleo
               </span>
             </div>
           </div>

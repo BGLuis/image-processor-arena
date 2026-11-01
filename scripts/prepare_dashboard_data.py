@@ -89,22 +89,110 @@ def prepare_data(results_file="results/benchmark_results.json", output_dir="dash
         }
         flat_results.append(flat_item)
 
-    # 1. Salvar benchmark_results.json
+    # 1. Gerar results.json (formato longo com 68 registros: 34 Rust acelerado + 34 Go acelerado padrão)
+    long_results = []
+    for idx, r in enumerate(raw_results):
+        task_id = idx + 1
+        task = r.get("task", "")
+        op = r.get("op", "")
+        fmt = r.get("format", "")
+        mode = r.get("mode", "")
+        img = r.get("image", "")
+        mp = r.get("mp", 0.0)
+        winner = r.get("winner", "")
+
+        go_data = r.get("go", {}) or {}
+        rust_data = r.get("rust", {}) or {}
+
+        go_codec = go_data.get("codec_ms", {}) or {}
+        rust_codec = rust_data.get("codec_ms", {}) or {}
+
+        go_median = go_codec.get("median") or 0.0
+        rust_median = rust_codec.get("median") or 0.0
+
+        min_median = min(go_median, rust_median) if (go_median > 0 and rust_median > 0) else 1.0
+
+        rust_rel = round(rust_median / min_median, 2) if min_median > 0 else 1.0
+        go_rel = round(go_median / min_median, 2) if min_median > 0 else 1.0
+
+        rust_quality = rust_data.get("quality", {}) or {}
+        go_quality = go_data.get("quality", {}) or {}
+
+        rust_psnr = rust_quality.get("psnr_db")
+        go_psnr = go_quality.get("psnr_db")
+
+        rust_p25 = rust_codec.get("p25")
+        rust_p75 = rust_codec.get("p75")
+        go_p25 = go_codec.get("p25")
+        go_p75 = go_codec.get("p75")
+
+        rust_row = {
+            "task_id": task_id,
+            "task": task,
+            "op": op,
+            "format": fmt,
+            "mode": mode,
+            "image": img,
+            "mp": mp,
+            "language": "rust",
+            "tier": "accelerated",
+            "toolchain": "stable 1.90",
+            "lib": "padrão",
+            "impl_id": "rust:accelerated:stable:padrao",
+            "codec_median_ms": round(rust_median, 3) if rust_median else 0.0,
+            "p25": round(rust_p25, 3) if isinstance(rust_p25, (int, float)) else round(rust_median, 3),
+            "p75": round(rust_p75, 3) if isinstance(rust_p75, (int, float)) else round(rust_median, 3),
+            "bytes": rust_data.get("out_bytes") or 0,
+            "psnr_db": round(rust_psnr, 2) if isinstance(rust_psnr, (int, float)) else None,
+            "rel_time": rust_rel,
+            "winner": winner
+        }
+
+        go_row = {
+            "task_id": task_id,
+            "task": task,
+            "op": op,
+            "format": fmt,
+            "mode": mode,
+            "image": img,
+            "mp": mp,
+            "language": "go",
+            "tier": "accelerated",
+            "toolchain": "1.25",
+            "lib": "padrão",
+            "impl_id": "go:accelerated:1.25:padrao",
+            "codec_median_ms": round(go_median, 3) if go_median else 0.0,
+            "p25": round(go_p25, 3) if isinstance(go_p25, (int, float)) else round(go_median, 3),
+            "p75": round(go_p75, 3) if isinstance(go_p75, (int, float)) else round(go_median, 3),
+            "bytes": go_data.get("out_bytes") or 0,
+            "psnr_db": round(go_psnr, 2) if isinstance(go_psnr, (int, float)) else None,
+            "rel_time": go_rel,
+            "winner": winner
+        }
+
+        long_results.append(rust_row)
+        long_results.append(go_row)
+
+    long_results_path = os.path.join(output_dir, "results.json")
+    with open(long_results_path, "w", encoding="utf-8") as f:
+        json.dump(long_results, f, ensure_ascii=False, indent=2)
+
+    # 2. Salvar benchmark_results.json
     results_path = os.path.join(output_dir, "benchmark_results.json")
     with open(results_path, "w", encoding="utf-8") as f:
         json.dump(flat_results, f, ensure_ascii=False, indent=2)
 
-    # 2. Salvar per_operation.json
+    # 3. Salvar per_operation.json
     per_op_path = os.path.join(output_dir, "per_operation.json")
     with open(per_op_path, "w", encoding="utf-8") as f:
         json.dump(per_operation, f, ensure_ascii=False, indent=2)
 
-    # 3. Salvar equal_quality.json
+    # 4. Salvar equal_quality.json
     eq_path = os.path.join(output_dir, "equal_quality.json")
     with open(eq_path, "w", encoding="utf-8") as f:
         json.dump(equal_quality, f, ensure_ascii=False, indent=2)
 
-    # 4. Salvar metadata.json com agregações pré-calculadas
+    # 5. Salvar metadata.json com agregações pré-calculadas
     total_tasks = len(flat_results)
     rust_wins = sum(1 for r in flat_results if r["winner"] == "Rust")
     go_wins = sum(1 for r in flat_results if r["winner"] == "Go")
@@ -146,7 +234,8 @@ def prepare_data(results_file="results/benchmark_results.json", output_dir="dash
     print(f"✓ Dados preparados com sucesso em {output_dir}/")
     print(f"  - Tarefas processadas: {total_tasks}")
     print(f"  - Vitórias Rust: {rust_wins} | Go: {go_wins} | Empates: {ties}")
-    print(f"  - Arquivos gerados: benchmark_results.json, per_operation.json, equal_quality.json, metadata.json")
+    print(f"  - Registros em results.json: {len(long_results)}")
+    print(f"  - Arquivos gerados: results.json, benchmark_results.json, per_operation.json, equal_quality.json, metadata.json")
 
 if __name__ == "__main__":
     src = sys.argv[1] if len(sys.argv) > 1 else "results/benchmark_results.json"

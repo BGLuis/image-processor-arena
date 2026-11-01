@@ -7,10 +7,6 @@ import { useData } from '../context/DataContext';
 const langColors: Record<string, string> = {
   go: 'var(--lang-go)',
   rust: 'var(--lang-rust)',
-  zig: 'var(--lang-zig)',
-  java: 'var(--lang-java)',
-  csharp: 'var(--lang-csharp)',
-  swift: 'var(--lang-swift)',
 };
 
 export default function HeatmapSection() {
@@ -23,7 +19,7 @@ export default function HeatmapSection() {
     y: number;
   } | null>(null);
 
-  // All 18 implementations sorted by rank
+  // Implementations sorted by rank (Rust and Go)
   const columns = useMemo(() => {
     return [...implementations].sort((a, b) => a.rank - b.rank);
   }, [implementations]);
@@ -159,7 +155,7 @@ export default function HeatmapSection() {
               </h2>
             </div>
             <p className="text-xs text-[var(--arena-text-secondary)] mt-1">
-              Tempo de codec relativo à melhor implementação (18 colunas completas). Células escuras indicam maior velocidade.
+              Tempo de codec relativo à melhor implementação por tarefa. Células escuras indicam maior velocidade.
             </p>
           </div>
 
@@ -205,33 +201,33 @@ export default function HeatmapSection() {
           </div>
         </div>
 
-        {/* Heatmap Table (18 columns complete) */}
+        {/* Heatmap Table */}
         <div className="overflow-x-auto border border-[var(--arena-border)] rounded-lg bg-[var(--arena-canvas)]">
-          <table className="w-full text-left border-collapse table-fixed min-w-[1000px]">
+          <table className="w-full text-left border-collapse table-fixed min-w-[640px]">
             
             {/* Table Header */}
             <thead>
               <tr className="border-b border-[var(--arena-border)] bg-[var(--arena-surface)]">
-                <th className="w-56 py-2 px-3 text-[11px] font-mono text-[var(--arena-text-muted)] uppercase tracking-wider sticky left-0 z-20 bg-[var(--arena-surface)] border-r border-[var(--arena-border)]">
+                <th className="w-64 sm:w-80 py-2.5 px-3 text-[11px] font-mono text-[var(--arena-text-muted)] uppercase tracking-wider sticky left-0 z-20 bg-[var(--arena-surface)] border-r border-[var(--arena-border)]">
                   Tarefa
                 </th>
                 {columns.map(col => {
                   const color = langColors[col.language] || 'var(--lang-rust)';
-                  const shortLib = col.tier === 'hybrid' ? 'hybrid' : col.lib.split(' ')[0].replace('·', '');
+                  const langName = col.language === 'rust' ? 'Rust' : 'Go';
                   return (
-                    <th key={col.impl_id} className="w-11 py-2 px-0.5 text-center">
+                    <th key={col.impl_id} className="w-28 sm:w-36 py-2 px-2 text-center">
                       <div className="flex flex-col items-center">
                         <span className="text-[10px] font-mono font-bold text-[var(--arena-text-primary)]">
                           #{col.rank}
                         </span>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
-                          <span className="text-[9px] font-bold text-[var(--arena-text-primary)] uppercase truncate max-w-[34px]">
-                            {col.language.slice(0, 3)}
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                          <span className="text-xs font-bold text-[var(--arena-text-primary)]">
+                            {langName}
                           </span>
                         </div>
-                        <span className="text-[8px] font-mono text-[var(--arena-text-muted)] truncate max-w-[38px]">
-                          {shortLib}
+                        <span className="text-[9px] font-mono text-[var(--arena-text-muted)] truncate max-w-[140px]">
+                          {col.toolchain} · {col.lib}
                         </span>
                       </div>
                     </th>
@@ -245,10 +241,10 @@ export default function HeatmapSection() {
               {tasksByOp.map(group => (
                 <React.Fragment key={group.op}>
                   {/* Operation Divider Row */}
-                  <tr className="bg-[var(--arena-surface)]/70 border-y border-[var(--arena-border)]/80">
+                  <tr className="bg-[var(--arena-surface)] border-y border-[var(--arena-border)]/80">
                     <td 
                       colSpan={columns.length + 1} 
-                      className="py-1 px-3 text-[10px] font-mono font-bold text-[var(--arena-text-secondary)] uppercase tracking-wider sticky left-0"
+                      className="py-1 px-3 text-[10px] font-mono font-bold text-[var(--arena-text-secondary)] uppercase tracking-wider sticky left-0 bg-[var(--arena-surface)]"
                     >
                       {group.label} ({group.tasks.length} tarefas)
                     </td>
@@ -262,17 +258,17 @@ export default function HeatmapSection() {
                         {t.task.replace(` [${t.image}]`, ` · ${t.image.split('.')[0]}`)}
                       </td>
 
-                      {/* 18 Implementation Cells */}
+                      {/* Implementation Cells */}
                       {columns.map(col => {
                         const cell = cellMap.get(`${t.task_id}:${col.impl_id}`);
                         const { className, label } = getIndigoStyle(cell);
 
                         return (
-                          <td key={col.impl_id} className="py-0.5 px-0.5 text-center">
+                          <td key={col.impl_id} className="py-1 px-1.5 text-center">
                             <div
-                              onMouseEnter={(e) => handleMouseEnter(e, t.task, `${col.language} (${col.lib})`, cell)}
+                              onMouseEnter={(e) => handleMouseEnter(e, t.task, `${col.language === 'rust' ? 'Rust' : 'Go'} (${col.lib})`, cell)}
                               onMouseLeave={() => setTooltip(null)}
-                              className={`w-full h-6 rounded-xs flex items-center justify-center text-[10px] font-mono transition-transform hover:scale-105 cursor-default ${className}`}
+                              className={`w-full h-7 rounded-sm flex items-center justify-center text-[10px] font-mono transition-transform hover:scale-105 cursor-default ${className}`}
                             >
                               {showValues ? label : ''}
                             </div>

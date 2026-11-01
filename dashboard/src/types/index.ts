@@ -6,7 +6,7 @@ export interface LongBenchmarkResult {
   mode: 'lossy' | 'lossless' | string;
   image: string;
   mp: number;
-  language: 'rust' | 'go' | 'zig' | 'swift' | 'csharp' | 'java' | string;
+  language: 'rust' | 'go' | string;
   tier: 'portable' | 'accelerated' | 'hybrid' | string;
   toolchain: string;
   lib: string;
@@ -17,6 +17,7 @@ export interface LongBenchmarkResult {
   bytes: number;
   psnr_db: number | null;
   rel_time: number;
+  winner?: string;
 }
 
 export interface ImplementationSummary {

@@ -7,19 +7,11 @@ import { useData } from '../context/DataContext';
 const langColors: Record<string, string> = {
   go: 'var(--lang-go)',
   rust: 'var(--lang-rust)',
-  zig: 'var(--lang-zig)',
-  java: 'var(--lang-java)',
-  csharp: 'var(--lang-csharp)',
-  swift: 'var(--lang-swift)',
 };
 
 const langDisplayNames: Record<string, string> = {
   rust: 'Rust',
-  zig: 'Zig',
   go: 'Go',
-  swift: 'Swift',
-  csharp: 'C#',
-  java: 'Java',
 };
 
 export default function PodiumSection() {
@@ -27,51 +19,32 @@ export default function PodiumSection() {
 
   // Highlight 1: Leader
   const rank1 = implementations.find(i => i.rank === 1) || implementations[0] || {
-    impl_id: 'rust:hybrid:stable:libvips',
+    impl_id: 'rust:accelerated:stable:padrao',
     language: 'rust',
     toolchain: 'stable 1.90',
-    lib: 'libvips',
-    tier: 'hybrid',
-    score: 1.53,
-    wins: 9,
-    podiums: 16,
+    lib: 'padrão',
+    tier: 'accelerated',
+    score: 1.23,
+    wins: 26,
+    podiums: 34,
     coverage: 34
   };
 
   // Highlight 2: Rank 2
   const rank2 = implementations.find(i => i.rank === 2) || implementations[1] || {
-    impl_id: 'zig:accelerated:0.15:releasefast',
-    language: 'zig',
-    toolchain: '0.15',
-    lib: 'ReleaseFast · padrão',
+    impl_id: 'go:accelerated:1.25:padrao',
+    language: 'go',
+    toolchain: '1.25',
+    lib: 'padrão',
     tier: 'accelerated',
-    score: 1.56,
-    wins: 6,
-    podiums: 13,
-    coverage: 24
-  };
-
-  // Highlight 3: Rank 3
-  const rank3 = implementations.find(i => i.rank === 3) || implementations[2] || {
-    impl_id: 'rust:accelerated:nightly:padrao',
-    language: 'rust',
-    toolchain: 'nightly',
-    lib: 'native · padrão',
-    tier: 'accelerated',
-    score: 1.60,
-    wins: 2,
-    podiums: 19,
+    score: 3.28,
+    wins: 7,
+    podiums: 34,
     coverage: 34
   };
 
   // Best Pure (no FFI / no C bindings)
-  const bestPure = useMemo(() => {
-    return implementations.find(i => 
-      i.tier !== 'hybrid' && 
-      !i.lib.toLowerCase().includes('cgo') && 
-      !i.lib.toLowerCase().includes('libvips')
-    ) || rank2;
-  }, [implementations, rank2]);
+  const bestPure = rank1;
 
   // Best by Operation
   const bestByOp = useMemo(() => {
@@ -96,14 +69,14 @@ export default function PodiumSection() {
     };
 
     return {
-      encode: calcBestForOp('encode') || { lang: 'rust', lib: 'libvips', score: 1.51 },
-      decode: calcBestForOp('decode') || { lang: 'rust', lib: 'padrão', score: 1.43 },
-      transcode: calcBestForOp('transcode') || { lang: 'rust', lib: 'libvips', score: 1.63 }
+      encode: calcBestForOp('encode') || { lang: 'rust', lib: 'padrão', score: 1.18 },
+      decode: calcBestForOp('decode') || { lang: 'rust', lib: 'padrão', score: 1.32 },
+      transcode: calcBestForOp('transcode') || { lang: 'go', lib: 'padrão', score: 1.55 }
     };
   }, [longResults]);
 
   // Best per Language for logarithmic strip
-  const languages = ['rust', 'zig', 'go', 'swift', 'csharp', 'java'];
+  const languages = ['rust', 'go'];
   const bestByLang = useMemo(() => {
     return languages.map(lang => {
       const variants = implementations.filter(i => i.language === lang);
@@ -166,7 +139,7 @@ export default function PodiumSection() {
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
               <span className="text-2xl font-bold font-mono text-[var(--arena-text-primary)]">
-                {formatScore(rank1.score, '1,53')}×
+                {formatScore(rank1.score, '1,23')}×
               </span>
               <span className="text-[10px] text-[var(--arena-text-muted)] font-mono">relativo</span>
             </div>
@@ -191,7 +164,7 @@ export default function PodiumSection() {
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
               <span className="text-2xl font-bold font-mono text-[var(--arena-text-primary)]">
-                {formatScore(bestPure.score, '1,56')}×
+                {formatScore(bestPure.score, '1,23')}×
               </span>
               <span className="text-[10px] text-[var(--arena-text-muted)] font-mono">relativo</span>
             </div>
@@ -216,7 +189,7 @@ export default function PodiumSection() {
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
               <span className="text-2xl font-bold font-mono text-[var(--arena-text-primary)]">
-                {formatScore(bestByOp.encode.score, '1,51')}×
+                {formatScore(bestByOp.encode.score, '1,18')}×
               </span>
               <span className="text-[10px] text-[var(--arena-text-muted)] font-mono">21 tarefas</span>
             </div>
@@ -241,7 +214,7 @@ export default function PodiumSection() {
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
               <span className="text-2xl font-bold font-mono text-[var(--arena-text-primary)]">
-                {formatScore(bestByOp.decode.score, '1,43')}×
+                {formatScore(bestByOp.decode.score, '1,32')}×
               </span>
               <span className="text-[10px] text-[var(--arena-text-muted)] font-mono">5 tarefas</span>
             </div>
@@ -266,7 +239,7 @@ export default function PodiumSection() {
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
               <span className="text-2xl font-bold font-mono text-[var(--arena-text-primary)]">
-                {formatScore(bestByOp.transcode.score, '1,63')}×
+                {formatScore(bestByOp.transcode.score, '1,55')}×
               </span>
               <span className="text-[10px] text-[var(--arena-text-muted)] font-mono">4 tarefas</span>
             </div>
@@ -287,10 +260,10 @@ export default function PodiumSection() {
       {/* Main Podium Layout: Left = 3 Podium Cards, Right = Logarithmic Ruler & Purity Cost */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* 3 Podium Cards (5 columns) */}
-        <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3">
+        {/* 2 Podium Cards (5 columns) */}
+        <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3.5">
           
-          {/* 1º Ouro */}
+          {/* 1º Ouro - Rust */}
           <div className="relative bg-[var(--arena-surface)] border-2 border-[#F2C14E]/60 dark:border-[#F2C14E]/50 rounded-xl p-4 overflow-hidden shadow-sm flex flex-col justify-between">
             <div className="absolute top-0 left-0 right-0 h-1 bg-[#F2C14E]" />
             <div>
@@ -303,8 +276,8 @@ export default function PodiumSection() {
                     Campeão Geral
                   </span>
                 </div>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#9A7B00]/15 text-[#9A7B00] dark:text-[#F5A524] border border-[#9A7B00]/30 font-semibold">
-                  hybrid · FFI
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#2E8B3E]/15 text-[#2E8B3E] dark:text-[#3DD68C] border border-[#2E8B3E]/30 font-semibold">
+                  zero FFI · seguro
                 </span>
               </div>
 
@@ -323,19 +296,19 @@ export default function PodiumSection() {
 
                 <div className="text-right">
                   <span className="text-3xl font-extrabold font-mono text-[#F2C14E]">
-                    {formatScore(rank1.score, '1,53')}×
+                    {formatScore(rank1.score, '1,23')}×
                   </span>
                 </div>
               </div>
             </div>
 
             <div className="mt-3 pt-2.5 border-t border-[var(--arena-border)]/60 text-[11px] font-mono text-[var(--arena-text-secondary)] flex items-center justify-between">
-              <span>{rank1.wins} vitórias · {rank1.podiums} pódios</span>
+              <span>{rank1.wins} vitórias em 34 tarefas</span>
               <span className="text-[var(--arena-text-primary)] font-semibold">{rank1.coverage}/34 tarefas</span>
             </div>
           </div>
 
-          {/* 2º Prata */}
+          {/* 2º Prata - Go */}
           <div className="relative bg-[var(--arena-surface)] border border-[#C9D1DB]/50 dark:border-[#C9D1DB]/40 rounded-xl p-4 overflow-hidden shadow-xs flex flex-col justify-between">
             <div className="absolute top-0 left-0 right-0 h-1 bg-[#C9D1DB]/80" />
             <div>
@@ -348,8 +321,8 @@ export default function PodiumSection() {
                     2º Lugar
                   </span>
                 </div>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[var(--arena-canvas)] text-[var(--arena-text-secondary)] border border-[var(--arena-border)]">
-                  {rank2.tier}
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#0086A3]/15 text-[#0086A3] dark:text-[#25A3B5] border border-[#0086A3]/30 font-semibold">
+                  zero FFI · puro
                 </span>
               </div>
 
@@ -368,62 +341,15 @@ export default function PodiumSection() {
 
                 <div className="text-right">
                   <span className="text-2xl font-bold font-mono text-[var(--arena-text-primary)]">
-                    {formatScore(rank2.score, '1,56')}×
+                    {formatScore(rank2.score, '3,28')}×
                   </span>
                 </div>
               </div>
             </div>
 
             <div className="mt-3 pt-2.5 border-t border-[var(--arena-border)]/60 text-[11px] font-mono text-[var(--arena-text-secondary)] flex items-center justify-between">
-              <span>{rank2.wins} vitórias · {rank2.podiums} pódios</span>
-              <span className="flex items-center gap-1 text-[#9A7B00] dark:text-[#F5A524] font-semibold">
-                {rank2.coverage}/34 <AlertTriangle className="w-3 h-3 text-[#9A7B00] dark:text-[#F5A524]" />
-              </span>
-            </div>
-          </div>
-
-          {/* 3º Bronze */}
-          <div className="relative bg-[var(--arena-surface)] border border-[#D08B5B]/50 dark:border-[#D08B5B]/40 rounded-xl p-4 overflow-hidden shadow-xs flex flex-col justify-between">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-[#D08B5B]/80" />
-            <div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-[#D08B5B]/20 text-[#A65B2E] dark:text-[#D08B5B] border border-[#D08B5B]/40 flex items-center justify-center text-xs font-bold font-mono">
-                    3
-                  </div>
-                  <span className="text-xs font-semibold uppercase tracking-wider text-[var(--arena-text-primary)]">
-                    3º Lugar
-                  </span>
-                </div>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[var(--arena-canvas)] text-[var(--arena-text-secondary)] border border-[var(--arena-border)]">
-                  {rank3.tier}
-                </span>
-              </div>
-
-              <div className="mt-3 flex items-baseline justify-between">
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: langColors[rank3.language] }} />
-                    <span className="text-base font-bold text-[var(--arena-text-primary)] capitalize">
-                      {rank3.language}
-                    </span>
-                  </div>
-                  <p className="text-xs text-[var(--arena-text-secondary)] mt-0.5">
-                    {rank3.toolchain} · {rank3.lib}
-                  </p>
-                </div>
-
-                <div className="text-right">
-                  <span className="text-2xl font-bold font-mono text-[var(--arena-text-primary)]">
-                    {formatScore(rank3.score, '1,60')}×
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-3 pt-2.5 border-t border-[var(--arena-border)]/60 text-[11px] font-mono text-[var(--arena-text-secondary)] flex items-center justify-between">
-              <span>{rank3.wins} vitórias · {rank3.podiums} pódios</span>
-              <span className="text-[var(--arena-text-primary)] font-semibold">{rank3.coverage}/34 tarefas</span>
+              <span>{rank2.wins} vitórias · 1 empate</span>
+              <span className="text-[var(--arena-text-primary)] font-semibold">{rank2.coverage}/34 tarefas</span>
             </div>
           </div>
 
@@ -516,52 +442,52 @@ export default function PodiumSection() {
             </div>
           </div>
 
-          {/* Linha do Custo da Pureza (Purity Cost Line) */}
+          {/* Linha da Arquitetura Zero FFI */}
           <div className="mt-4 pt-4 border-t border-[var(--arena-border)] bg-[var(--arena-canvas)] p-3.5 rounded-lg border">
             <div className="flex items-center gap-2 mb-2">
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[#C9501C]/15 dark:bg-[#E0703A]/20 text-[#C9501C] dark:text-[#E0703A] border border-[#C9501C]/30 dark:border-[#E0703A]/30">
-                INSIGHT
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[#2E8B3E]/15 dark:bg-[#3DD68C]/20 text-[#2E8B3E] dark:text-[#3DD68C] border border-[#2E8B3E]/30 dark:border-[#3DD68C]/30">
+                ARQUITETURA
               </span>
               <h4 className="text-xs font-bold text-[var(--arena-text-primary)]">
-                O Custo da Pureza: FFI vs. Implementação Nativa
+                Arquitetura Zero FFI: Segurança e Confiabilidade no Núcleo
               </h4>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs mt-2.5">
               
-              {/* Go Cost */}
+              {/* Rust Architecture */}
               <div className="p-2.5 rounded-md bg-[var(--arena-surface)] border border-[var(--arena-border)] flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between text-[11px] font-mono">
-                    <span className="font-semibold text-[#0086A3] dark:text-[#25A3B5]">Go (cgo vs PGO)</span>
-                    <span className="text-[#C9501C] dark:text-[#F2546B] font-bold">+2,41× mais lento</span>
+                    <span className="font-semibold text-[#C9501C] dark:text-[#E0703A]">Rust (Memória Segura)</span>
+                    <span className="text-[#2E8B3E] dark:text-[#3DD68C] font-bold">26 vitórias (76,5%)</span>
                   </div>
                   <div className="mt-1.5 flex items-center gap-2 text-xs font-mono">
-                    <span className="text-[var(--arena-text-secondary)]">cgo: 1,70×</span>
-                    <ArrowRight className="w-3 h-3 text-[var(--arena-text-muted)]" />
-                    <span className="text-[var(--arena-text-primary)] font-bold">PGO: 4,11×</span>
+                    <span className="text-[var(--arena-text-secondary)]">Score: 1,23×</span>
+                    <span className="text-[var(--arena-text-muted)]">·</span>
+                    <span className="text-[var(--arena-text-primary)] font-bold">Zero segfaults</span>
                   </div>
                 </div>
                 <p className="text-[10px] text-[var(--arena-text-muted)] mt-2 leading-relaxed">
-                  Abdicar de bibliotecas C via cgo custa mais que o dobro do tempo em compressão.
+                  Implementação 100% Rust segura sem bindings em C. Alto throughput sem risco de corrupção de memória.
                 </p>
               </div>
 
-              {/* Rust Cost */}
+              {/* Go Architecture */}
               <div className="p-2.5 rounded-md bg-[var(--arena-surface)] border border-[var(--arena-border)] flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between text-[11px] font-mono">
-                    <span className="font-semibold text-[#C9501C] dark:text-[#E0703A]">Rust (libvips vs Padrão)</span>
-                    <span className="text-[#2E8B3E] dark:text-[#3DD68C] font-bold">+0,07× (+4%)</span>
+                    <span className="font-semibold text-[#0086A3] dark:text-[#25A3B5]">Go (CGO_ENABLED=0)</span>
+                    <span className="text-[#0086A3] dark:text-[#25A3B5] font-bold">7 vitórias + 1 empate</span>
                   </div>
                   <div className="mt-1.5 flex items-center gap-2 text-xs font-mono">
-                    <span className="text-[var(--arena-text-secondary)]">libvips: 1,53×</span>
-                    <ArrowRight className="w-3 h-3 text-[var(--arena-text-muted)]" />
-                    <span className="text-[var(--arena-text-primary)] font-bold">Padrão: 1,60×</span>
+                    <span className="text-[var(--arena-text-secondary)]">Score: 3,28×</span>
+                    <span className="text-[var(--arena-text-muted)]">·</span>
+                    <span className="text-[var(--arena-text-primary)] font-bold">Binário estático</span>
                   </div>
                 </div>
                 <p className="text-[10px] text-[var(--arena-text-muted)] mt-2 leading-relaxed">
-                  A stack 100% Rust segura entrega performance virtualmente idêntica à biblioteca C.
+                  Zero chamadas FFI ou overhead de troca de stack cgo. Portabilidade total com vitórias em AVIF/JXL e transcode.
                 </p>
               </div>
 

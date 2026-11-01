@@ -4,27 +4,19 @@ import React from 'react';
 import { useData } from '../context/DataContext';
 
 const langColors: Record<string, string> = {
-  go: '#2ec4e6',
-  rust: '#f4743b',
-  zig: '#f7c548',
-  java: '#e8618c',
-  csharp: '#8b7cf6',
-  swift: '#a3e635',
+  go: 'var(--lang-go)',
+  rust: 'var(--lang-rust)',
 };
 
 const langDisplayNames: Record<string, string> = {
   rust: 'Rust',
-  zig: 'Zig',
   go: 'Go',
-  swift: 'Swift',
-  csharp: 'C#',
-  java: 'Java',
 };
 
 export default function BestPerLanguage() {
   const { implementations } = useData();
 
-  const languages = ['rust', 'zig', 'go', 'swift', 'csharp', 'java'];
+  const languages = ['rust', 'go'];
 
   const bestByLang = languages.map(lang => {
     const variants = implementations.filter(i => i.language === lang);
@@ -59,8 +51,8 @@ export default function BestPerLanguage() {
         </span>
       </div>
 
-      {/* Grid of 6 language cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      {/* Grid of 2 language cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {bestByLang.map(({ lang, best, variants }) => {
           if (!best) return null;
           const color = langColors[lang] || '#a3acb9';

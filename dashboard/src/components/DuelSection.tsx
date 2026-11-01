@@ -7,10 +7,6 @@ import { useData } from '../context/DataContext';
 const langColors: Record<string, string> = {
   go: 'var(--lang-go)',
   rust: 'var(--lang-rust)',
-  zig: 'var(--lang-zig)',
-  java: 'var(--lang-java)',
-  csharp: 'var(--lang-csharp)',
-  swift: 'var(--lang-swift)',
 };
 
 export default function DuelSection() {
@@ -25,8 +21,8 @@ export default function DuelSection() {
 
   const [metricTab, setMetricTab] = useState<'speedup' | 'latency' | 'throughput' | 'bytes'>('speedup');
 
-  const implA = implementations.find(i => i.impl_id === duelImplA) || implementations[4] || implementations[0];
-  const implB = implementations.find(i => i.impl_id === duelImplB) || implementations[9] || implementations[1];
+  const implA = implementations.find(i => i.impl_id === duelImplA) || implementations[0];
+  const implB = implementations.find(i => i.impl_id === duelImplB) || implementations[1];
 
   const colorA = langColors[implA?.language] || '#E0703A';
   const colorB = langColors[implB?.language] || '#25A3B5';

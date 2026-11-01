@@ -7,10 +7,6 @@ import { useData } from '../context/DataContext';
 const langColors: Record<string, string> = {
   go: 'var(--lang-go)',
   rust: 'var(--lang-rust)',
-  zig: 'var(--lang-zig)',
-  java: 'var(--lang-java)',
-  csharp: 'var(--lang-csharp)',
-  swift: 'var(--lang-swift)',
 };
 
 export default function TradeoffsSection() {
@@ -299,24 +295,12 @@ export default function TradeoffsSection() {
 
           {/* Scatter Legend */}
           <div className="mt-4 pt-3 border-t border-[var(--arena-border)]/60 flex items-center justify-between text-[11px] font-mono text-[var(--arena-text-muted)]">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4">
               <span className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#C9501C] dark:bg-[#E0703A]" /> Rust
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#0086A3] dark:bg-[#25A3B5]" /> Go
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#9A7B00] dark:bg-[#B38D1E]" /> Zig
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#6A55D8] dark:bg-[#8F7FF0]" /> C#
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#2E8B3E] dark:bg-[#3E9C4C]" /> Swift
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#C2417F] dark:bg-[#D0598F]" /> Java
               </span>
             </div>
             <span>{scatterData.length} pontos plotados</span>

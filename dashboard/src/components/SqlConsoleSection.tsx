@@ -16,7 +16,7 @@ const presets: Preset[] = [
     name: 'Ranking com vitórias e cobertura',
     query: `SELECT language, tier, toolchain, lib,
        round(exp(avg(ln(rel_time))), 2) AS score,
-       count(*) FILTER (rel_time <= 1.01) AS wins,
+       count(*) FILTER (lower(language) = lower(winner)) AS wins,
        count(*)                         AS coverage
 FROM results
 GROUP BY ALL

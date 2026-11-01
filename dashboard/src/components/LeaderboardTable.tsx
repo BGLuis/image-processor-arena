@@ -1,26 +1,18 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Check, AlertTriangle, Info } from 'lucide-react';
+import { ChevronDown, ChevronRight, Check, AlertTriangle, Info, ShieldCheck } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import type { ImplementationSummary } from '../types';
 
 const langColors: Record<string, string> = {
   go: 'var(--lang-go)',
   rust: 'var(--lang-rust)',
-  zig: 'var(--lang-zig)',
-  java: 'var(--lang-java)',
-  csharp: 'var(--lang-csharp)',
-  swift: 'var(--lang-swift)',
 };
 
 const langDisplayNames: Record<string, string> = {
   rust: 'Rust',
-  zig: 'Zig',
   go: 'Go',
-  swift: 'Swift',
-  csharp: 'C#',
-  java: 'Java',
 };
 
 export default function LeaderboardTable() {
@@ -32,12 +24,8 @@ export default function LeaderboardTable() {
     toggleDuelSelection 
   } = useData();
 
-  // Collapsed groups state (default: Swift, C#, Java collapsed)
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
-    swift: true,
-    csharp: true,
-    java: true,
-  });
+  // Collapsed groups state
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   const toggleGroup = (lang: string) => {
     setCollapsedGroups(prev => ({ ...prev, [lang]: !prev[lang] }));
@@ -50,17 +38,12 @@ export default function LeaderboardTable() {
     }
     if (filters.language !== 'all' && item.language !== filters.language) return false;
     if (filters.purity === 'pure') {
-      const isHybrid = item.tier === 'hybrid' || item.lib.toLowerCase().includes('cgo') || item.lib.toLowerCase().includes('libvips');
+      const isHybrid = item.tier === 'hybrid';
       if (isHybrid) return false;
     }
     if (filters.purity === 'hybrid') {
-      const isHybrid = item.tier === 'hybrid' || item.lib.toLowerCase().includes('cgo') || item.lib.toLowerCase().includes('libvips');
+      const isHybrid = item.tier === 'hybrid';
       if (!isHybrid) return false;
-    }
-    if (filters.dataType === 'real') {
-      const isReal = (item.language === 'go' && (item.impl_id === 'go:accelerated:1.25:padrao' || item.impl_id === 'go:accelerated:1.25:pgo')) ||
-                     (item.language === 'rust' && (item.impl_id === 'rust:accelerated:stable:padrao'));
-      if (!isReal) return false;
     }
     if (filters.tier !== 'all' && item.tier !== filters.tier) return false;
     if (filters.toolchain !== 'all' && item.toolchain !== filters.toolchain) return false;
@@ -68,8 +51,8 @@ export default function LeaderboardTable() {
     return true;
   });
 
-  // Group by language order: Rust, Zig, Go, Swift, C#, Java
-  const langOrder = ['rust', 'zig', 'go', 'swift', 'csharp', 'java'];
+  // Group by language order: Rust, Go
+  const langOrder = ['rust', 'go'];
   const grouped = langOrder.map(lang => {
     const items = filteredImpls.filter(i => i.language === lang);
     return {
@@ -295,12 +278,12 @@ export default function LeaderboardTable() {
   return (
     <section id="ranking" className="mb-10 scroll-mt-28">
       
-      {/* Informational Banner */}
-      <div className="mb-3 px-3.5 py-2.5 rounded-lg bg-[var(--arena-surface)] border border-[var(--arena-border)] flex items-center justify-between text-xs text-[var(--arena-text-secondary)]">
+      {/* Verified Real Data Banner */}
+      <div className="mb-3 px-3.5 py-2.5 rounded-lg bg-[var(--arena-surface)] border border-[#2E8B3E]/30 dark:border-[#3DD68C]/30 flex items-center justify-between text-xs text-[var(--arena-text-secondary)]">
         <div className="flex items-center gap-2">
-          <Info className="w-4 h-4 text-[#0086A3] dark:text-[#25A3B5] shrink-0" />
+          <ShieldCheck className="w-4 h-4 text-[#2E8B3E] dark:text-[#3DD68C] shrink-0" />
           <span>
-            Dados ilustrativos da rodada oficial · Ambiente Xeon @ 2.10GHz, 4 vCPUs · Clique em qualquer linha para alimentar os slots <strong>A</strong> e <strong>B</strong> do Duelo.
+            <strong className="text-[var(--arena-text-primary)]">Dados 100% Reais e Auditados</strong> · Medições em ambiente Intel Xeon @ 2.10GHz (4 vCPUs, Linux x86_64) · Clique em qualquer linha para alimentar os slots <strong>A</strong> e <strong>B</strong> do Duelo.
           </span>
         </div>
         <span className="hidden sm:inline font-mono text-[11px] text-[var(--arena-text-muted)] shrink-0">

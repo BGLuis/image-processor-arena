@@ -170,7 +170,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
       const item = map.get(r.impl_id)!;
       item.rel_times.push(r.rel_time);
-      if (r.rel_time <= 1.01) {
+      if (r.winner) {
+        if ((r.language.toLowerCase() === 'rust' && r.winner === 'Rust') || 
+            (r.language.toLowerCase() === 'go' && r.winner === 'Go')) {
+          item.wins += 1;
+        }
+      } else if (r.rel_time <= 1.01) {
         item.wins += 1;
       }
       if (podiumSet.has(`${r.task_id}:${r.impl_id}`)) {
@@ -234,17 +239,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
       if (filters.purity === 'pure') {
-        const isHybrid = r.tier === 'hybrid' || r.lib.toLowerCase().includes('cgo') || r.lib.toLowerCase().includes('libvips');
+        const isHybrid = r.tier === 'hybrid';
         if (isHybrid) return false;
       }
       if (filters.purity === 'hybrid') {
-        const isHybrid = r.tier === 'hybrid' || r.lib.toLowerCase().includes('cgo') || r.lib.toLowerCase().includes('libvips');
+        const isHybrid = r.tier === 'hybrid';
         if (!isHybrid) return false;
-      }
-      if (filters.dataType === 'real') {
-        const isReal = (r.language === 'go' && (r.impl_id === 'go:accelerated:1.25:padrao' || r.impl_id === 'go:accelerated:1.25:pgo')) ||
-                       (r.language === 'rust' && (r.impl_id === 'rust:accelerated:stable:padrao'));
-        if (!isReal) return false;
       }
       if (filters.tier !== 'all' && r.tier !== filters.tier) {
         return false;
@@ -281,8 +281,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     } else if (filters.language !== 'all') {
       whereParts.push(`language = '${filters.language}'`);
     }
-    if (filters.purity === 'pure') whereParts.push(`tier != 'hybrid' AND lib NOT LIKE '%cgo%' AND lib NOT LIKE '%libvips%'`);
-    if (filters.purity === 'hybrid') whereParts.push(`(tier = 'hybrid' OR lib LIKE '%cgo%' OR lib LIKE '%libvips%')`);
+    if (filters.purity === 'pure') whereParts.push(`tier != 'hybrid'`);
+    if (filters.purity === 'hybrid') whereParts.push(`tier = 'hybrid'`);
     if (filters.tier !== 'all') whereParts.push(`tier = '${filters.tier}'`);
     if (filters.op !== 'all') whereParts.push(`op = '${filters.op}'`);
     if (filters.format !== 'all') whereParts.push(`format = '${filters.format}'`);
@@ -380,23 +380,23 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           };
         });
       } else if (lower.includes('order by language')) {
-        rows = ['rust', 'zig', 'go', 'swift', 'csharp', 'java'].map(lang => {
+        rows = ['rust', 'go'].map(lang => {
           const items = implementations.filter(i => i.language === lang);
           return {
             language: lang,
             tier: items[0]?.tier || 'accelerated',
-            score: items[0]?.score || 1.53,
+            score: items[0]?.score || (lang === 'rust' ? 1.23 : 3.28),
             tasks: 34
           };
         });
       } else if (lower.includes('format')) {
         rows = [
-          { format: 'jxl', op: 'encode', mode: 'lossless', supported_impls: 14 },
-          { format: 'avif', op: 'encode', mode: 'lossy', supported_impls: 14 },
-          { format: 'webp', op: 'encode', mode: 'lossless', supported_impls: 16 },
-          { format: 'jpeg', op: 'decode', mode: 'lossy', supported_impls: 18 },
-          { format: 'png', op: 'encode', mode: 'lossless', supported_impls: 18 },
-          { format: 'pam', op: 'analyze', mode: 'lossless', supported_impls: 18 },
+          { format: 'jxl', op: 'encode', mode: 'lossless', supported_impls: 2 },
+          { format: 'avif', op: 'encode', mode: 'lossy', supported_impls: 2 },
+          { format: 'webp', op: 'encode', mode: 'lossless', supported_impls: 2 },
+          { format: 'jpeg', op: 'decode', mode: 'lossy', supported_impls: 2 },
+          { format: 'png', op: 'encode', mode: 'lossless', supported_impls: 2 },
+          { format: 'pam', op: 'analyze', mode: 'lossless', supported_impls: 2 },
         ];
       } else {
         rows = implementations.slice(0, 5).map(i => ({

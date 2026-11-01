@@ -1,16 +1,12 @@
 'use client';
 
 import React, { useRef, useEffect, useState } from 'react';
-import { Search, RotateCcw, ChevronDown, Check, Zap, Shield, Layers, SlidersHorizontal, X } from 'lucide-react';
+import { Search, RotateCcw, ChevronDown, Check, Shield, Layers, SlidersHorizontal, X } from 'lucide-react';
 import { useData } from '../context/DataContext';
 
 const langConfig: Record<string, { label: string; color: string; count: number }> = {
-  rust: { label: 'Rust', color: 'var(--lang-rust)', count: 4 },
-  go: { label: 'Go', color: 'var(--lang-go)', count: 5 },
-  zig: { label: 'Zig', color: 'var(--lang-zig)', count: 2 },
-  swift: { label: 'Swift', color: 'var(--lang-swift)', count: 2 },
-  csharp: { label: 'C#', color: 'var(--lang-csharp)', count: 2 },
-  java: { label: 'Java', color: 'var(--lang-java)', count: 2 },
+  rust: { label: 'Rust', color: 'var(--lang-rust)', count: 1 },
+  go: { label: 'Go', color: 'var(--lang-go)', count: 1 },
 };
 
 export default function FilterToolbar() {
@@ -71,7 +67,6 @@ export default function FilterToolbar() {
     { id: 'transcode', label: 'Transcode' },
   ];
 
-  const isRealOnlyActive = filters.dataType === 'real';
 
   return (
     <div className="sticky top-16 z-40 w-full mb-8">
@@ -114,7 +109,7 @@ export default function FilterToolbar() {
 
         </div>
 
-        {/* Linha 2: Pílulas de Linguagens (com "somente" no hover), Atalho Só Reais e Pureza */}
+        {/* Linha 2: Pílulas de Linguagens (Go e Rust com "somente" no hover) e Arquitetura Zero FFI */}
         <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-[var(--arena-border)]/60">
           
           {/* Language Pills + Popover trigger */}
@@ -274,66 +269,11 @@ export default function FilterToolbar() {
             </div>
           </div>
 
-          {/* Quick preset: "Só reais (Go, Rust)" & Purity */}
-          <div className="flex items-center gap-2">
-            
-            {/* Quick preset button */}
-            <button
-              onClick={() => {
-                if (isRealOnlyActive) {
-                  updateFilter('dataType', 'all');
-                } else {
-                  updateFilter('dataType', 'real');
-                  if (filters.selectedLanguages.length > 0) {
-                    updateFilter('selectedLanguages', []);
-                  }
-                }
-              }}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono transition-colors cursor-pointer border ${
-                isRealOnlyActive
-                  ? 'bg-[#C9501C]/15 dark:bg-[#E0703A]/20 border-[#C9501C] dark:border-[#E0703A] text-[#C9501C] dark:text-[#E0703A] font-semibold'
-                  : 'bg-[var(--arena-canvas)] border-[var(--arena-border)] text-[var(--arena-text-secondary)] hover:text-[var(--arena-text-primary)]'
-              }`}
-              title="Filtrar implementações padrão reais em produção de Go e Rust"
-            >
-              <Zap className="w-3 h-3" />
-              <span>Só reais (Go, Rust)</span>
-            </button>
-
-            {/* Purity segmented */}
-            <div className="hidden md:flex items-center p-0.5 bg-[var(--arena-canvas)] border border-[var(--arena-border)] rounded-lg text-xs">
-              <button
-                onClick={() => updateFilter('purity', 'all')}
-                className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
-                  filters.purity === 'all'
-                    ? 'bg-[var(--arena-surface)] text-[var(--arena-text-primary)] font-medium shadow-xs'
-                    : 'text-[var(--arena-text-muted)] hover:text-[var(--arena-text-secondary)]'
-                }`}
-              >
-                Pureza: Todos
-              </button>
-              <button
-                onClick={() => updateFilter('purity', 'pure')}
-                className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
-                  filters.purity === 'pure'
-                    ? 'bg-[var(--arena-surface)] text-[var(--arena-text-primary)] font-medium shadow-xs'
-                    : 'text-[var(--arena-text-muted)] hover:text-[var(--arena-text-secondary)]'
-                }`}
-              >
-                Sem FFI (Puro)
-              </button>
-              <button
-                onClick={() => updateFilter('purity', 'hybrid')}
-                className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
-                  filters.purity === 'hybrid'
-                    ? 'bg-[var(--arena-surface)] text-[var(--arena-text-primary)] font-medium shadow-xs'
-                    : 'text-[var(--arena-text-muted)] hover:text-[var(--arena-text-secondary)]'
-                }`}
-              >
-                Com FFI (Híbrido)
-              </button>
-            </div>
-
+          {/* Arquitetura Zero FFI Badge */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--arena-canvas)] border border-[var(--arena-border)] text-xs font-mono text-[var(--arena-text-secondary)]">
+            <Shield className="w-3.5 h-3.5 text-[#2E8B3E] dark:text-[#3DD68C]" />
+            <span className="font-medium text-[var(--arena-text-primary)]">Zero FFI</span>
+            <span className="hidden md:inline text-[11px] text-[var(--arena-text-muted)]">· sem CGO / binários C</span>
           </div>
 
         </div>
@@ -534,7 +474,7 @@ export default function FilterToolbar() {
                   onClick={() => updateFilter('selectedLanguages', [])}
                   className="py-2 text-xs font-mono font-medium rounded-lg bg-[var(--arena-canvas)] border border-[var(--arena-border)] text-[var(--arena-text-primary)] cursor-pointer"
                 >
-                  Todas (6)
+                  Todas (2)
                 </button>
                 <button
                   onClick={() => setIsLangPopoverOpen(false)}
