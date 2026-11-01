@@ -6,6 +6,30 @@ use crate::pam::PamImage;
 use std::io::Cursor;
 
 pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecError> {
+    if matches!(
+        params.implementation.as_deref(),
+        Some("image-rs") | Some("image")
+    ) {
+        use image::codecs::png::{CompressionType, FilterType, PngEncoder};
+        use image::ImageEncoder;
+        let compression = match params.effort {
+            1..=2 => CompressionType::Fast,
+            3..=6 => CompressionType::Default,
+            _ => CompressionType::Best,
+        };
+        let mut out = Vec::new();
+        let encoder = PngEncoder::new_with_quality(&mut out, compression, FilterType::NoFilter);
+        let color = if pam.depth == 4 {
+            image::ExtendedColorType::Rgba8
+        } else {
+            image::ExtendedColorType::Rgb8
+        };
+        encoder
+            .write_image(&pam.data, pam.width, pam.height, color)
+            .map_err(|e| CodecError::Encode(e.to_string()))?;
+        return Ok(out);
+    }
+
     let mut out = Vec::new();
     let mut encoder = png::Encoder::new(&mut out, pam.width, pam.height);
 
@@ -29,7 +53,54 @@ pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecErr
     Ok(out)
 }
 
-pub fn decode(data: &[u8]) -> Result<PamImage, CodecError> {
+pub fn decode(data: &[u8], implementation: Option<&str>) -> Result<PamImage, CodecError> {
+    if matches!(implementation, Some("image-rs") | Some("image")) {
+        use image::codecs::png::PngDecoder;
+        use image::ImageDecoder;
+        let decoder = PngDecoder::new(Cursor::new(data))
+            .map_err(|e| CodecError::Decode(e.to_string()))?;
+        let (width, height) = decoder.dimensions();
+        let color_type = decoder.color_type();
+        let total_bytes = decoder.total_bytes() as usize;
+        let mut buf = vec![0u8; total_bytes];
+        decoder
+            .read_image(&mut buf)
+            .map_err(|e| CodecError::Decode(e.to_string()))?;
+        let decode_err = |e: crate::pam::PamError| CodecError::Decode(e.to_string());
+        return match color_type {
+            image::ColorType::Rgb8 => PamImage::new_rgb(width, height, buf).map_err(decode_err),
+            image::ColorType::Rgba8 => PamImage::new_rgba(width, height, buf).map_err(decode_err),
+            image::ColorType::Rgb16 => {
+                let rgb = buf
+                    .chunks_exact(2)
+                    .map(|p| u16_to_u8(u16::from_be_bytes([p[0], p[1]])))
+                    .collect();
+                PamImage::new_rgb(width, height, rgb).map_err(decode_err)
+            }
+            image::ColorType::Rgba16 => {
+                let rgba = buf
+                    .chunks_exact(2)
+                    .map(|p| u16_to_u8(u16::from_be_bytes([p[0], p[1]])))
+                    .collect();
+                PamImage::new_rgba(width, height, rgba).map_err(decode_err)
+            }
+            image::ColorType::L8 => {
+                let rgb = buf.iter().flat_map(|&g| [g, g, g]).collect();
+                PamImage::new_rgb(width, height, rgb).map_err(decode_err)
+            }
+            image::ColorType::La8 => {
+                let rgba = buf
+                    .chunks_exact(2)
+                    .flat_map(|ga| [ga[0], ga[0], ga[0], ga[1]])
+                    .collect();
+                PamImage::new_rgba(width, height, rgba).map_err(decode_err)
+            }
+            _ => Err(CodecError::UnsupportedFormat(format!(
+                "Tipo de cor PNG image-rs não suportado: {color_type:?}"
+            ))),
+        };
+    }
+
     let mut decoder = png::Decoder::new(Cursor::new(data));
     // EXPAND leva PNG indexado e de 1, 2 ou 4 bits a 8 bits por canal e converte tRNS em alpha,
     // como o image/png do Go. Os 16 bits ficam como estão e são reduzidos abaixo, com arredondamento.

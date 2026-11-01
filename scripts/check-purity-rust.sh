@@ -33,6 +33,8 @@ fi
 CARGO_FEATURES=""
 if [[ "${TIER}" == "hybrid" ]]; then
     CARGO_FEATURES="--features hybrid"
+elif [[ "${TIER}" == "portable" ]]; then
+    CARGO_FEATURES="--features portable"
 fi
 
 echo "[*] Obtendo árvore de dependências ativas para o alvo x86_64-unknown-linux-gnu..."
@@ -138,7 +140,11 @@ fi
 
 # 5. Se o binário batch ou server já estiver compilado, inspeciona ldd
 if [[ "${TIER}" != "hybrid" ]]; then
-    for bin_candidate in "${RUST_DIR}/target/release/arena-server" "${RUST_DIR}/target/release/arena-batch"; do
+    CANDIDATES=("${RUST_DIR}/target/release/arena-server" "${RUST_DIR}/target/release/arena-batch")
+    if [[ "${TIER}" == "portable" ]]; then
+        CANDIDATES+=("${RUST_DIR}/target/release/arena-server-portable" "${RUST_DIR}/target/release/arena-batch-portable")
+    fi
+    for bin_candidate in "${CANDIDATES[@]}"; do
         if [[ -f "${bin_candidate}" ]]; then
             echo "[*] Inspecionando links dinâmicos do binário: $(basename "${bin_candidate}")..."
             NON_STD_LIBS=$(ldd "${bin_candidate}" | grep -v -E "linux-vdso|libc\.so|libgcc_s|ld-linux|libm\.so" || true)

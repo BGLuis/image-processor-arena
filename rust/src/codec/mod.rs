@@ -2,6 +2,8 @@
 // Adaptadores de codecs puros e despacho centralizado para encode, decode e transcode.
 
 pub mod avif;
+#[cfg(feature = "hybrid")]
+pub mod hybrid;
 pub mod jpeg;
 pub mod jxl;
 pub mod params;
@@ -199,11 +201,11 @@ pub fn decode_with_impl(
         params::validate_decode_impl(format, imp)?;
     }
     match format {
-        ImageFormat::Png => png::decode(data),
-        ImageFormat::Jpeg => jpeg::decode(data),
-        ImageFormat::Webp => webp::decode(data),
-        ImageFormat::Avif => avif::decode(data),
-        ImageFormat::Jxl => jxl::decode(data),
+        ImageFormat::Png => png::decode(data, implementation),
+        ImageFormat::Jpeg => jpeg::decode(data, implementation),
+        ImageFormat::Webp => webp::decode(data, implementation),
+        ImageFormat::Avif => avif::decode(data, implementation),
+        ImageFormat::Jxl => jxl::decode(data, implementation),
     }
 }
 
@@ -337,6 +339,151 @@ mod tests {
         let decoded_avif = decode(&avif_bytes, ImageFormat::Avif).expect("AVIF decode falhou");
         assert_eq!(decoded_avif.width, 32);
         assert_eq!(decoded_avif.height, 32);
+    }
+
+    #[test]
+    fn test_image_rs_codecs() {
+        let pam = create_test_pam(32, 32);
+
+        // 1. PNG roundtrip
+        let params_png = EncodeParams {
+            format: ImageFormat::Png,
+            mode: CodecMode::Lossless,
+            quality: 100,
+            effort: 4,
+            implementation: Some("image-rs".into()),
+        };
+        let png_bytes = encode(&pam, &params_png).expect("PNG image-rs encode falhou");
+        let decoded_png = decode_with_impl(&png_bytes, ImageFormat::Png, Some("image-rs"))
+            .expect("PNG image-rs decode falhou");
+        assert_eq!(decoded_png.width, 32);
+        assert_eq!(decoded_png.height, 32);
+        assert_eq!(decoded_png.data, pam.data);
+
+        // 2. JPEG roundtrip
+        let params_jpeg = EncodeParams {
+            format: ImageFormat::Jpeg,
+            mode: CodecMode::Lossy,
+            quality: 85,
+            effort: 4,
+            implementation: Some("image-rs".into()),
+        };
+        let jpeg_bytes = encode(&pam, &params_jpeg).expect("JPEG image-rs encode falhou");
+        let decoded_jpeg = decode_with_impl(&jpeg_bytes, ImageFormat::Jpeg, Some("image-rs"))
+            .expect("JPEG image-rs decode falhou");
+        assert_eq!(decoded_jpeg.width, 32);
+        assert_eq!(decoded_jpeg.height, 32);
+
+        // 3. WebP lossless roundtrip
+        let params_webp = EncodeParams {
+            format: ImageFormat::Webp,
+            mode: CodecMode::Lossless,
+            quality: 100,
+            effort: 4,
+            implementation: Some("image-rs".into()),
+        };
+        let webp_bytes = encode(&pam, &params_webp).expect("WebP image-rs lossless encode falhou");
+        let decoded_webp = decode_with_impl(&webp_bytes, ImageFormat::Webp, Some("image-rs"))
+            .expect("WebP image-rs lossless decode falhou");
+        assert_eq!(decoded_webp.width, 32);
+        assert_eq!(decoded_webp.height, 32);
+        assert_eq!(decoded_webp.data, pam.data);
+
+        // 4. WebP lossy encode refusal
+        let params_webp_lossy = EncodeParams {
+            format: ImageFormat::Webp,
+            mode: CodecMode::Lossy,
+            quality: 75,
+            effort: 4,
+            implementation: Some("image-rs".into()),
+        };
+        let res = encode(&pam, &params_webp_lossy);
+        assert!(
+            matches!(res, Err(CodecError::UnsupportedFormat(_))),
+            "res: {res:?}"
+        );
+
+        // 5. AVIF encode
+        let params_avif = EncodeParams {
+            format: ImageFormat::Avif,
+            mode: CodecMode::Lossy,
+            quality: 60,
+            effort: 10,
+            implementation: Some("image-rs".into()),
+        };
+        let avif_bytes = encode(&pam, &params_avif).expect("AVIF image-rs encode falhou");
+        assert!(!avif_bytes.is_empty());
+        let decoded_avif = decode_with_impl(&avif_bytes, ImageFormat::Avif, Some("image-rs"))
+            .expect("AVIF image-rs decode falhou");
+        assert_eq!(decoded_avif.width, 32);
+        assert_eq!(decoded_avif.height, 32);
+    }
+
+    #[cfg(feature = "hybrid")]
+    #[test]
+    fn test_hybrid_codecs() {
+        let pam = create_test_pam(32, 32);
+
+        // 1. JPEG roundtrip via libturbojpeg
+        let params_jpeg = EncodeParams {
+            format: ImageFormat::Jpeg,
+            mode: CodecMode::Lossy,
+            quality: 85,
+            effort: 4,
+            implementation: Some("hybrid".into()),
+        };
+        let jpeg_bytes = encode(&pam, &params_jpeg).expect("JPEG hybrid encode falhou");
+        let decoded_jpeg = decode_with_impl(&jpeg_bytes, ImageFormat::Jpeg, Some("hybrid"))
+            .expect("JPEG hybrid decode falhou");
+        assert_eq!(decoded_jpeg.width, 32);
+        assert_eq!(decoded_jpeg.height, 32);
+
+        // 2. WebP lossy roundtrip via libwebp
+        let params_webp_lossy = EncodeParams {
+            format: ImageFormat::Webp,
+            mode: CodecMode::Lossy,
+            quality: 80,
+            effort: 4,
+            implementation: Some("hybrid".into()),
+        };
+        let webp_lossy_bytes =
+            encode(&pam, &params_webp_lossy).expect("WebP hybrid lossy encode falhou");
+        let decoded_webp_lossy =
+            decode_with_impl(&webp_lossy_bytes, ImageFormat::Webp, Some("hybrid"))
+                .expect("WebP hybrid lossy decode falhou");
+        assert_eq!(decoded_webp_lossy.width, 32);
+        assert_eq!(decoded_webp_lossy.height, 32);
+
+        // 3. WebP lossless roundtrip via libwebp
+        let params_webp_lossless = EncodeParams {
+            format: ImageFormat::Webp,
+            mode: CodecMode::Lossless,
+            quality: 100,
+            effort: 4,
+            implementation: Some("hybrid".into()),
+        };
+        let webp_ll_bytes =
+            encode(&pam, &params_webp_lossless).expect("WebP hybrid lossless encode falhou");
+        let decoded_webp_ll =
+            decode_with_impl(&webp_ll_bytes, ImageFormat::Webp, Some("hybrid"))
+                .expect("WebP hybrid lossless decode falhou");
+        assert_eq!(decoded_webp_ll.width, 32);
+        assert_eq!(decoded_webp_ll.height, 32);
+        assert_eq!(decoded_webp_ll.data, pam.data);
+
+        // 4. PNG via hybrid delegation
+        let params_png = EncodeParams {
+            format: ImageFormat::Png,
+            mode: CodecMode::Lossless,
+            quality: 100,
+            effort: 4,
+            implementation: Some("hybrid".into()),
+        };
+        let png_bytes = encode(&pam, &params_png).expect("PNG hybrid encode falhou");
+        let decoded_png = decode_with_impl(&png_bytes, ImageFormat::Png, Some("hybrid"))
+            .expect("PNG hybrid decode falhou");
+        assert_eq!(decoded_png.width, 32);
+        assert_eq!(decoded_png.height, 32);
     }
 
     // zenrav1e nunca entra no modo lossless do AV1, então o modo é recusado em vez de

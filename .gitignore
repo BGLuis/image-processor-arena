@@ -21,6 +21,7 @@ go/bin/
 # Rust build artifacts
 target/
 rust/target/
+rust/bin/
 
 # OS
 .DS_Store

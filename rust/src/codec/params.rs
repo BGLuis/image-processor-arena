@@ -108,17 +108,17 @@ fn check_range(name: &str, value: u8, min: u8, max: u8) -> Result<(), CodecError
 
 pub fn validate_encode_impl(format: ImageFormat, implementation: &str) -> Result<(), CodecError> {
     let imp = implementation.to_ascii_lowercase();
-    if imp == "default" {
+    if imp == "default" || imp == "portable" || imp == "hybrid" || imp == "ffi" {
         return Ok(());
     }
     let valid = match format {
-        ImageFormat::Png => matches!(imp.as_str(), "png" | "stdlib"),
-        ImageFormat::Jpeg => matches!(imp.as_str(), "jpeg-encoder" | "stdlib"),
+        ImageFormat::Png => matches!(imp.as_str(), "png" | "stdlib" | "image-rs" | "image"),
+        ImageFormat::Jpeg => matches!(imp.as_str(), "jpeg-encoder" | "stdlib" | "image-rs" | "image"),
         ImageFormat::Webp => matches!(
             imp.as_str(),
-            "zenwebp" | "image-webp" | "image_webp" | "gowebp"
+            "zenwebp" | "image-webp" | "image_webp" | "gowebp" | "image-rs" | "image"
         ),
-        ImageFormat::Avif => matches!(imp.as_str(), "ravif" | "zenravif"),
+        ImageFormat::Avif => matches!(imp.as_str(), "ravif" | "zenravif" | "image-rs" | "image"),
         ImageFormat::Jxl => matches!(imp.as_str(), "jxl-encoder" | "gen2brain" | "jxl"),
     };
     if !valid {
@@ -131,17 +131,17 @@ pub fn validate_encode_impl(format: ImageFormat, implementation: &str) -> Result
 
 pub fn validate_decode_impl(format: ImageFormat, implementation: &str) -> Result<(), CodecError> {
     let imp = implementation.to_ascii_lowercase();
-    if imp == "default" {
+    if imp == "default" || imp == "portable" || imp == "hybrid" || imp == "ffi" {
         return Ok(());
     }
     let valid = match format {
-        ImageFormat::Png => matches!(imp.as_str(), "png" | "stdlib"),
-        ImageFormat::Jpeg => matches!(imp.as_str(), "zune-jpeg" | "zune" | "stdlib"),
+        ImageFormat::Png => matches!(imp.as_str(), "png" | "stdlib" | "image-rs" | "image"),
+        ImageFormat::Jpeg => matches!(imp.as_str(), "zune-jpeg" | "zune" | "stdlib" | "image-rs" | "image"),
         ImageFormat::Webp => matches!(
             imp.as_str(),
-            "image-webp" | "image_webp" | "imagewebp" | "zenwebp" | "gowebp"
+            "image-webp" | "image_webp" | "imagewebp" | "zenwebp" | "gowebp" | "image-rs" | "image"
         ),
-        ImageFormat::Avif => matches!(imp.as_str(), "zenavif" | "rav1d"),
+        ImageFormat::Avif => matches!(imp.as_str(), "zenavif" | "rav1d" | "image-rs" | "image"),
         ImageFormat::Jxl => matches!(imp.as_str(), "jxl-oxide" | "gen2brain" | "jxl"),
     };
     if !valid {
@@ -302,6 +302,46 @@ mod tests {
         assert!(matches!(err, CodecError::InvalidParam(_)), "{err:?}");
         let err = EncodeParams::parse("bmp", None, None, None).unwrap_err();
         assert!(matches!(err, CodecError::UnsupportedFormat(_)), "{err:?}");
+    }
+
+    #[test]
+    fn test_valid_impls() {
+        let all_formats = [
+            ImageFormat::Png,
+            ImageFormat::Jpeg,
+            ImageFormat::Webp,
+            ImageFormat::Avif,
+            ImageFormat::Jxl,
+        ];
+        for fmt in all_formats {
+            for imp in ["default", "portable", "hybrid", "ffi"] {
+                assert!(
+                    validate_encode_impl(fmt, imp).is_ok(),
+                    "{fmt:?} encode {imp}"
+                );
+                assert!(
+                    validate_decode_impl(fmt, imp).is_ok(),
+                    "{fmt:?} decode {imp}"
+                );
+            }
+        }
+        for fmt in [
+            ImageFormat::Png,
+            ImageFormat::Jpeg,
+            ImageFormat::Webp,
+            ImageFormat::Avif,
+        ] {
+            for imp in ["image-rs", "image"] {
+                assert!(
+                    validate_encode_impl(fmt, imp).is_ok(),
+                    "{fmt:?} encode {imp}"
+                );
+                assert!(
+                    validate_decode_impl(fmt, imp).is_ok(),
+                    "{fmt:?} decode {imp}"
+                );
+            }
+        }
     }
 
     #[test]

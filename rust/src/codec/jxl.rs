@@ -38,7 +38,7 @@ pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecErr
     }
 }
 
-pub fn decode(data: &[u8]) -> Result<PamImage, CodecError> {
+pub fn decode(data: &[u8], _implementation: Option<&str>) -> Result<PamImage, CodecError> {
     let image = jxl_oxide::JxlImage::builder()
         .read(Cursor::new(data))
         .map_err(|e| CodecError::Decode(format!("{e:?}")))?;
@@ -122,7 +122,7 @@ mod tests {
                 };
                 let encoded = encode(&pam, &params)
                     .unwrap_or_else(|e| panic!("encode falhou em {name} effort {effort}: {e}"));
-                let decoded = decode(&encoded)
+                let decoded = decode(&encoded, None)
                     .unwrap_or_else(|e| panic!("decode falhou em {name} effort {effort}: {e}"));
 
                 assert_eq!(
@@ -152,7 +152,7 @@ mod tests {
                 .encode(&pam.data, pam.width, pam.height, layout)
                 .unwrap_or_else(|e| panic!("encode falhou em {name}: {:?}", e.decompose().0));
             let decoded =
-                decode(&encoded).unwrap_or_else(|e| panic!("decode falhou em {name}: {e}"));
+                decode(&encoded, None).unwrap_or_else(|e| panic!("decode falhou em {name}: {e}"));
 
             assert_eq!(decoded.data, pam.data, "pixels divergem em {name}");
         }

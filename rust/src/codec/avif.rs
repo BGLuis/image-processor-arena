@@ -8,6 +8,30 @@ use super::{checked_len, params as contract, u16_to_u8, CodecError, CodecMode, E
 use crate::pam::PamImage;
 
 pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecError> {
+    if matches!(
+        params.implementation.as_deref(),
+        Some("image-rs") | Some("image")
+    ) {
+        if params.mode == CodecMode::Lossless {
+            return Err(CodecError::UnsupportedFormat("avif lossless".to_string()));
+        }
+        use image::codecs::avif::AvifEncoder;
+        use image::ImageEncoder;
+        let speed = contract::avif_speed(params.effort);
+        let quality = contract::ravif_quality(params.quality) as u8;
+        let mut out = Vec::new();
+        let encoder = AvifEncoder::new_with_speed_quality(&mut out, speed, quality);
+        let color = if pam.depth == 4 {
+            image::ExtendedColorType::Rgba8
+        } else {
+            image::ExtendedColorType::Rgb8
+        };
+        encoder
+            .write_image(&pam.data, pam.width, pam.height, color)
+            .map_err(|e| CodecError::Encode(e.to_string()))?;
+        return Ok(out);
+    }
+
     let speed = contract::avif_speed(params.effort);
 
     match params.mode {
@@ -43,7 +67,7 @@ pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecErr
     }
 }
 
-pub fn decode(data: &[u8]) -> Result<PamImage, CodecError> {
+pub fn decode(data: &[u8], _implementation: Option<&str>) -> Result<PamImage, CodecError> {
     let image = zenavif::decode(data).map_err(|e| CodecError::Decode(format!("{e:?}")))?;
     let width = image.width() as u32;
     let height = image.height() as u32;
