@@ -89,8 +89,8 @@ pub fn decode(data: &[u8], implementation: Option<&str>) -> Result<PamImage, Cod
     if matches!(implementation, Some("image-rs") | Some("image")) {
         use image::codecs::webp::WebPDecoder;
         use image::ImageDecoder;
-        let decoder = WebPDecoder::new(Cursor::new(data))
-            .map_err(|e| CodecError::Decode(e.to_string()))?;
+        let decoder =
+            WebPDecoder::new(Cursor::new(data)).map_err(|e| CodecError::Decode(e.to_string()))?;
         let (width, height) = decoder.dimensions();
         let has_alpha = decoder.color_type().has_alpha();
         let total_bytes = checked_len(width, height, if has_alpha { 4 } else { 3 })?;

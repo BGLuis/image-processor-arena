@@ -113,7 +113,10 @@ pub fn validate_encode_impl(format: ImageFormat, implementation: &str) -> Result
     }
     let valid = match format {
         ImageFormat::Png => matches!(imp.as_str(), "png" | "stdlib" | "image-rs" | "image"),
-        ImageFormat::Jpeg => matches!(imp.as_str(), "jpeg-encoder" | "stdlib" | "image-rs" | "image"),
+        ImageFormat::Jpeg => matches!(
+            imp.as_str(),
+            "jpeg-encoder" | "stdlib" | "image-rs" | "image"
+        ),
         ImageFormat::Webp => matches!(
             imp.as_str(),
             "zenwebp" | "image-webp" | "image_webp" | "gowebp" | "image-rs" | "image"
@@ -136,7 +139,10 @@ pub fn validate_decode_impl(format: ImageFormat, implementation: &str) -> Result
     }
     let valid = match format {
         ImageFormat::Png => matches!(imp.as_str(), "png" | "stdlib" | "image-rs" | "image"),
-        ImageFormat::Jpeg => matches!(imp.as_str(), "zune-jpeg" | "zune" | "stdlib" | "image-rs" | "image"),
+        ImageFormat::Jpeg => matches!(
+            imp.as_str(),
+            "zune-jpeg" | "zune" | "stdlib" | "image-rs" | "image"
+        ),
         ImageFormat::Webp => matches!(
             imp.as_str(),
             "image-webp" | "image_webp" | "imagewebp" | "zenwebp" | "gowebp" | "image-rs" | "image"

@@ -29,11 +29,21 @@ pub fn encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, CodecErr
         if pam.depth == 4 {
             let rgb_data = pam.to_rgb_bytes();
             encoder
-                .write_image(&rgb_data, pam.width, pam.height, image::ExtendedColorType::Rgb8)
+                .write_image(
+                    &rgb_data,
+                    pam.width,
+                    pam.height,
+                    image::ExtendedColorType::Rgb8,
+                )
                 .map_err(|e| CodecError::Encode(e.to_string()))?;
         } else {
             encoder
-                .write_image(&pam.data, pam.width, pam.height, image::ExtendedColorType::Rgb8)
+                .write_image(
+                    &pam.data,
+                    pam.width,
+                    pam.height,
+                    image::ExtendedColorType::Rgb8,
+                )
                 .map_err(|e| CodecError::Encode(e.to_string()))?;
         }
         return Ok(out);
@@ -81,8 +91,8 @@ pub fn decode(data: &[u8], implementation: Option<&str>) -> Result<PamImage, Cod
     if matches!(implementation, Some("image-rs") | Some("image")) {
         use image::codecs::jpeg::JpegDecoder;
         use image::ImageDecoder;
-        let decoder = JpegDecoder::new(Cursor::new(data))
-            .map_err(|e| CodecError::Decode(e.to_string()))?;
+        let decoder =
+            JpegDecoder::new(Cursor::new(data)).map_err(|e| CodecError::Decode(e.to_string()))?;
         let (width, height) = decoder.dimensions();
         let color_type = decoder.color_type();
         let total_bytes = decoder.total_bytes() as usize;

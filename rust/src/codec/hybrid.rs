@@ -118,7 +118,9 @@ pub mod ffi {
 }
 
 #[cfg(feature = "hybrid")]
-use super::{check_side, checked_len, CodecError, CodecMode, EncodeParams, JPEG_MAX_SIDE, WEBP_MAX_SIDE};
+use super::{
+    check_side, checked_len, CodecError, CodecMode, EncodeParams, JPEG_MAX_SIDE, WEBP_MAX_SIDE,
+};
 #[cfg(feature = "hybrid")]
 use crate::pam::PamImage;
 
@@ -128,7 +130,9 @@ pub fn jpeg_encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, Cod
     unsafe {
         let handle = ffi::tjInitCompress();
         if handle.is_null() {
-            return Err(CodecError::Encode("Falha ao inicializar tjInitCompress".into()));
+            return Err(CodecError::Encode(
+                "Falha ao inicializar tjInitCompress".into(),
+            ));
         }
         let (src_ptr, pixel_format) = if pam.depth == 4 {
             (pam.data.as_ptr(), ffi::TJPF_RGBA)
@@ -154,7 +158,9 @@ pub fn jpeg_encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, Cod
         if ret != 0 {
             let err_c = ffi::tjGetErrorStr2(handle);
             let err_msg = if !err_c.is_null() {
-                std::ffi::CStr::from_ptr(err_c).to_string_lossy().to_string()
+                std::ffi::CStr::from_ptr(err_c)
+                    .to_string_lossy()
+                    .to_string()
             } else {
                 "tjCompress2 falhou".into()
             };
@@ -173,7 +179,9 @@ pub fn jpeg_decode(data: &[u8]) -> Result<PamImage, CodecError> {
     unsafe {
         let handle = ffi::tjInitDecompress();
         if handle.is_null() {
-            return Err(CodecError::Decode("Falha ao inicializar tjInitDecompress".into()));
+            return Err(CodecError::Decode(
+                "Falha ao inicializar tjInitDecompress".into(),
+            ));
         }
         let mut width: libc::c_int = 0;
         let mut height: libc::c_int = 0;
@@ -189,7 +197,9 @@ pub fn jpeg_decode(data: &[u8]) -> Result<PamImage, CodecError> {
         if ret_hdr != 0 {
             let err_c = ffi::tjGetErrorStr2(handle);
             let err_msg = if !err_c.is_null() {
-                std::ffi::CStr::from_ptr(err_c).to_string_lossy().to_string()
+                std::ffi::CStr::from_ptr(err_c)
+                    .to_string_lossy()
+                    .to_string()
             } else {
                 "tjDecompressHeader2 falhou".into()
             };
@@ -214,7 +224,9 @@ pub fn jpeg_decode(data: &[u8]) -> Result<PamImage, CodecError> {
         if ret_dec != 0 {
             let err_c = ffi::tjGetErrorStr2(handle);
             let err_msg = if !err_c.is_null() {
-                std::ffi::CStr::from_ptr(err_c).to_string_lossy().to_string()
+                std::ffi::CStr::from_ptr(err_c)
+                    .to_string_lossy()
+                    .to_string()
             } else {
                 "tjDecompress2 falhou".into()
             };
@@ -267,11 +279,12 @@ pub fn webp_encode(pam: &PamImage, params: &EncodeParams) -> Result<Vec<u8>, Cod
 #[cfg(feature = "hybrid")]
 pub fn webp_decode(data: &[u8]) -> Result<PamImage, CodecError> {
     let mut features: ffi::WebPBitstreamFeatures = unsafe { std::mem::zeroed() };
-    let status = unsafe {
-        ffi::WebPGetFeaturesInternal(data.as_ptr(), data.len(), &mut features, 0x0210)
-    };
+    let status =
+        unsafe { ffi::WebPGetFeaturesInternal(data.as_ptr(), data.len(), &mut features, 0x0210) };
     if status != 0 {
-        return Err(CodecError::Decode("WebPGetFeatures falhou: cabeçalho inválido".into()));
+        return Err(CodecError::Decode(
+            "WebPGetFeatures falhou: cabeçalho inválido".into(),
+        ));
     }
     if features.has_animation != 0 {
         return Err(CodecError::Decode("WebP animado não é suportado".into()));

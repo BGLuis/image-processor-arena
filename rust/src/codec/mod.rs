@@ -464,9 +464,8 @@ mod tests {
         };
         let webp_ll_bytes =
             encode(&pam, &params_webp_lossless).expect("WebP hybrid lossless encode falhou");
-        let decoded_webp_ll =
-            decode_with_impl(&webp_ll_bytes, ImageFormat::Webp, Some("hybrid"))
-                .expect("WebP hybrid lossless decode falhou");
+        let decoded_webp_ll = decode_with_impl(&webp_ll_bytes, ImageFormat::Webp, Some("hybrid"))
+            .expect("WebP hybrid lossless decode falhou");
         assert_eq!(decoded_webp_ll.width, 32);
         assert_eq!(decoded_webp_ll.height, 32);
         assert_eq!(decoded_webp_ll.data, pam.data);
