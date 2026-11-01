@@ -58,19 +58,75 @@ func ParseFormat(format string) (string, error) {
 }
 
 var validEncoderImpls = map[string]map[string]bool{
-	"png":  {"stdlib": true, "image/png": true, "default": true},
-	"jpeg": {"stdlib": true, "image/jpeg": true, "default": true},
-	"webp": {"deepteams": true, "gowebp": true, "default": true},
-	"avif": {"gav1d": true, "goavif": true, "default": true},
-	"jxl":  {"gen2brain": true, "jxl": true, "default": true},
+	"png":  {"stdlib": true, "image/png": true, "hybrid": true, "cgo": true, "libpng": true, "default": true},
+	"jpeg": {"stdlib": true, "image/jpeg": true, "hybrid": true, "cgo": true, "turbojpeg": true, "libturbojpeg": true, "default": true},
+	"webp": {"deepteams": true, "gowebp": true, "hybrid": true, "cgo": true, "libwebp": true, "default": true},
+	"avif": {"gav1d": true, "goavif": true, "hybrid": true, "cgo": true, "default": true},
+	"jxl":  {"gen2brain": true, "jxl": true, "hybrid": true, "cgo": true, "libjxl": true, "default": true},
 }
 
 var validDecoderImpls = map[string]map[string]bool{
-	"png":  {"stdlib": true, "image/png": true, "default": true},
-	"jpeg": {"stdlib": true, "image/jpeg": true, "default": true},
-	"webp": {"deepteams": true, "gowebp": true, "ximage": true, "golang.org/x/image/webp": true, "default": true},
-	"avif": {"gav1d": true, "goavif": true, "default": true},
-	"jxl":  {"gen2brain": true, "jxl": true, "default": true},
+	"png":  {"stdlib": true, "image/png": true, "hybrid": true, "cgo": true, "libpng": true, "default": true},
+	"jpeg": {"stdlib": true, "image/jpeg": true, "hybrid": true, "cgo": true, "turbojpeg": true, "libturbojpeg": true, "default": true},
+	"webp": {"deepteams": true, "gowebp": true, "ximage": true, "golang.org/x/image/webp": true, "hybrid": true, "cgo": true, "libwebp": true, "default": true},
+	"avif": {"gav1d": true, "goavif": true, "hybrid": true, "cgo": true, "default": true},
+	"jxl":  {"gen2brain": true, "jxl": true, "hybrid": true, "cgo": true, "libjxl": true, "default": true},
+}
+
+// ResolveEncoderImpl returns the normalized implementation name for encoding.
+func ResolveEncoderImpl(format, mode, impl string) string {
+	format = NormalizeFormat(format)
+	imp := strings.ToLower(strings.TrimSpace(impl))
+	if imp == "" || imp == "default" {
+		switch format {
+		case "png", "jpeg":
+			return "stdlib"
+		case "webp":
+			if mode == ModeLossless {
+				return "gowebp"
+			}
+			return "deepteams"
+		case "avif":
+			return "gav1d"
+		case "jxl":
+			return "gen2brain"
+		}
+	}
+	if imp == "image/png" || imp == "image/jpeg" {
+		return "stdlib"
+	}
+	if imp == "jxl" {
+		return "gen2brain"
+	}
+	return imp
+}
+
+// ResolveDecoderImpl returns the normalized implementation name for decoding.
+func ResolveDecoderImpl(format, impl string) string {
+	format = NormalizeFormat(format)
+	imp := strings.ToLower(strings.TrimSpace(impl))
+	if imp == "" || imp == "default" {
+		switch format {
+		case "png", "jpeg":
+			return "stdlib"
+		case "webp":
+			return "deepteams"
+		case "avif":
+			return "gav1d"
+		case "jxl":
+			return "gen2brain"
+		}
+	}
+	if imp == "image/png" || imp == "image/jpeg" {
+		return "stdlib"
+	}
+	if imp == "golang.org/x/image/webp" {
+		return "ximage"
+	}
+	if imp == "jxl" {
+		return "gen2brain"
+	}
+	return imp
 }
 
 // ValidateDecoderImpl checks if the given decoder implementation is valid for the format.

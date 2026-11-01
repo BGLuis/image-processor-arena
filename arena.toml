@@ -10,7 +10,33 @@ webp_lossy = "github.com/deepteams/webp"
 webp_lossless = "github.com/KarpelesLab/gowebp"
 webp_decode_alt = "golang.org/x/image/webp"
 avif_lossy = "github.com/gen2brain/gav1d/avif"
+avif_decode_alt = "github.com/KarpelesLab/goavif"
 jxl = "github.com/gen2brain/jxl"
+
+# Variantes de compilação e execução Go:
+# 1. go:portable:1.27:noasm (Tier 1: Portável)
+#    - Compilado com CGO_ENABLED=0 e -tags "noasm portable".
+#    - Isola deepteams/webp; usa gowebp puro para WebP (lossy e lossless) e ximage/gowebp no decode.
+#    - 0 arquivos assembly (.s) em dependências externas.
+# 2. go:accelerated:1.27:padrao (Tier 2: Acelerado - Padrão)
+#    - Compilado com CGO_ENABLED=0 sem tags restritivas.
+#    - Utiliza rotinas assembly/SIMD de deepteams/webp, gav1d e gen2brain/jxl.
+# 3. go:accelerated:1.27:pgo (Tier 2: Acelerado com PGO)
+#    - Compilado com CGO_ENABLED=0 e -pgo=auto (perfis cmd/server/default.pgo e cmd/batch/default.pgo gerados por cmd/pgo_gen).
+#    - Otimização guiada por perfil sobre o corpus representativo da Arena.
+# 4. go:accelerated:1.27:alt-pure (Tier 2: Bibliotecas Puras Alternativas)
+#    - Selecionáveis via parâmetro ?impl= / from_impl / to_impl (e flag --impl no batch):
+#      * WebP: deepteams (lossy), gowebp (lossy e lossless), ximage (decode golang.org/x/image/webp)
+#      * AVIF: gav1d (encode/decode), goavif (decode github.com/KarpelesLab/goavif)
+#      * Header X-Arena-Impl informa a implementação executada.
+# 5. go:hybrid:1.27:cgo (Tier 3: Híbrido CGO)
+#    - Compilado com CGO_ENABLED=1 e -tags hybrid.
+#    - Bindings CGO nativos para libturbojpeg e libwebp do sistema; adaptadores hybrid/cgo para todos os 5 formatos.
+#
+# Limitações conhecidas:
+# - AVIF lossless não é suportado pelo gav1d (retorna 400 ErrUnsupportedFormat).
+# - WebP animado é rejeitado (400) pelo decodificador da Arena.
+# - JPEG suporta qualidade 1..100 com subamostragem 4:2:0 baseline.
 
 [codecs.rust]
 png = "png 0.18.1"

@@ -335,6 +335,7 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 		}
 
 		w.Header().Set("X-Arena-Analyze-Ns", strconv.FormatInt(analyzeNs, 10))
+		w.Header().Set("X-Arena-Impl", "go")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(respJSON)
@@ -354,7 +355,9 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 		}
 		encodeNs := time.Since(start).Nanoseconds()
 
+		implUsed := codec.ResolveEncoderImpl(req.params.Format, req.params.Mode, req.params.Impl)
 		w.Header().Set("X-Arena-Encode-Ns", strconv.FormatInt(encodeNs, 10))
+		w.Header().Set("X-Arena-Impl", implUsed)
 		w.Header().Set("Content-Type", mimeForFormat(req.params.Format))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(encBuf.Bytes())
@@ -370,7 +373,9 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 
 		pamBytes := pam.EncodeBytes(pamImg)
 
+		implUsed := codec.ResolveDecoderImpl(req.from, req.fromImpl)
 		w.Header().Set("X-Arena-Decode-Ns", strconv.FormatInt(decodeNs, 10))
+		w.Header().Set("X-Arena-Impl", implUsed)
 		w.Header().Set("Content-Type", "image/x-netpbm-pam")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(pamBytes)
@@ -393,8 +398,11 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 		}
 		encodeNs := time.Since(startEnc).Nanoseconds()
 
+		fromImplUsed := codec.ResolveDecoderImpl(req.from, req.fromImpl)
+		toImplUsed := codec.ResolveEncoderImpl(req.params.Format, req.params.Mode, req.params.Impl)
 		w.Header().Set("X-Arena-Decode-Ns", strconv.FormatInt(decodeNs, 10))
 		w.Header().Set("X-Arena-Encode-Ns", strconv.FormatInt(encodeNs, 10))
+		w.Header().Set("X-Arena-Impl", fmt.Sprintf("%s->%s", fromImplUsed, toImplUsed))
 		w.Header().Set("Content-Type", mimeForFormat(req.params.Format))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(encBuf.Bytes())
@@ -415,7 +423,12 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 
 		outBytes := pam.EncodeBytes(dstPam)
 
+		implUsed := req.impl
+		if implUsed == "" {
+			implUsed = "xdraw"
+		}
 		w.Header().Set("X-Arena-Process-Ns", strconv.FormatInt(processNs, 10))
+		w.Header().Set("X-Arena-Impl", implUsed)
 		w.Header().Set("Content-Type", "image/x-netpbm-pam")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(outBytes)
@@ -436,7 +449,12 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 
 		outBytes := pam.EncodeBytes(dstPam)
 
+		implUsed := req.impl
+		if implUsed == "" {
+			implUsed = "imaging"
+		}
 		w.Header().Set("X-Arena-Process-Ns", strconv.FormatInt(processNs, 10))
+		w.Header().Set("X-Arena-Impl", implUsed)
 		w.Header().Set("Content-Type", "image/x-netpbm-pam")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(outBytes)
@@ -458,6 +476,7 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 		outBytes := pam.EncodeBytes(dstPam)
 
 		w.Header().Set("X-Arena-Process-Ns", strconv.FormatInt(processNs, 10))
+		w.Header().Set("X-Arena-Impl", "caire")
 		w.Header().Set("Content-Type", "image/x-netpbm-pam")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(outBytes)

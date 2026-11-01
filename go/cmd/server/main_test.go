@@ -381,6 +381,9 @@ func TestRunDecodeWithImpl(t *testing.T) {
 	if ct := decResp.Header().Get("Content-Type"); ct != "image/x-netpbm-pam" {
 		t.Errorf("expected Content-Type image/x-netpbm-pam, got %s", ct)
 	}
+	if impl := decResp.Header().Get("X-Arena-Impl"); impl != "ximage" {
+		t.Errorf("expected X-Arena-Impl ximage, got %s", impl)
+	}
 }
 
 func TestRunTranscodeWithImpl(t *testing.T) {
@@ -397,6 +400,9 @@ func TestRunTranscodeWithImpl(t *testing.T) {
 	}
 	if ct := tcResp.Header().Get("Content-Type"); ct != "image/webp" {
 		t.Errorf("expected Content-Type image/webp, got %s", ct)
+	}
+	if impl := tcResp.Header().Get("X-Arena-Impl"); impl != "stdlib->gowebp" {
+		t.Errorf("expected X-Arena-Impl stdlib->gowebp, got %s", impl)
 	}
 }
 

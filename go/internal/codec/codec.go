@@ -216,6 +216,18 @@ func Encode(w io.Writer, pamImg *pam.Image, params Params) error {
 	if impl == "jxl" {
 		impl = "gen2brain"
 	}
+	if impl == "libturbojpeg" {
+		impl = "turbojpeg"
+	}
+	if impl == "libwebp" {
+		impl = "hybrid"
+	}
+	if impl == "libpng" {
+		impl = "hybrid"
+	}
+	if impl == "libjxl" {
+		impl = "hybrid"
+	}
 
 	adapters, ok := encoderAdapters[format]
 	if !ok {
@@ -263,6 +275,18 @@ func Decode(r io.Reader, format string, impl ...string) (*pam.Image, error) {
 	if implementation == "jxl" {
 		implementation = "gen2brain"
 	}
+	if implementation == "libturbojpeg" {
+		implementation = "turbojpeg"
+	}
+	if implementation == "libwebp" {
+		implementation = "hybrid"
+	}
+	if implementation == "libpng" {
+		implementation = "hybrid"
+	}
+	if implementation == "libjxl" {
+		implementation = "hybrid"
+	}
 
 	adapters, ok := decoderAdapters[fmtNorm]
 	if !ok {
@@ -293,6 +317,11 @@ func Decode(r io.Reader, format string, impl ...string) (*pam.Image, error) {
 			}
 			if err != nil || decoded == nil {
 				if dec, ok := adapters["gowebp"]; ok {
+					decoded, err = dec(bytes.NewReader(data))
+				}
+			}
+			if err != nil || decoded == nil {
+				if dec, ok := adapters["ximage"]; ok {
 					decoded, err = dec(bytes.NewReader(data))
 				}
 			}
