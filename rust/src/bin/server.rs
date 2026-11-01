@@ -236,6 +236,7 @@ fn join_error(err: JoinError) -> HttpError {
 fn response(
     content_type: &'static str,
     timings: &[(&'static str, u128)],
+    impl_name: Option<&str>,
     body: Vec<u8>,
 ) -> Response {
     let mut headers = HeaderMap::new();
@@ -245,6 +246,10 @@ fn response(
             HeaderName::from_static(name),
             HeaderValue::from_str(&nanos.to_string()).expect("dígitos formam um header válido"),
         );
+    }
+    let imp = impl_name.unwrap_or("default");
+    if let Ok(val) = HeaderValue::from_str(imp) {
+        headers.insert(HeaderName::from_static("x-arena-impl"), val);
     }
     (headers, body).into_response()
 }
@@ -326,12 +331,14 @@ async fn run_handler(
             Ok(response(
                 "application/json",
                 &[("x-arena-analyze-ns", analyze_ns)],
+                Some("default"),
                 result_json.into_bytes(),
             ))
         }
 
         Plan::Encode(encode_params) => {
             let format = encode_params.format;
+            let imp = encode_params.implementation.clone();
             let (out_bytes, encode_ns) = tokio::task::spawn_blocking(move || {
                 let pam = PamImage::parse_with_limit(&body, max_pixels).map_err(pam_error)?;
                 let t0 = Instant::now();
@@ -346,6 +353,7 @@ async fn run_handler(
             Ok(response(
                 format.mime_type(),
                 &[("x-arena-encode-ns", encode_ns)],
+                imp.as_deref(),
                 out_bytes,
             ))
         }
@@ -354,6 +362,7 @@ async fn run_handler(
             format,
             implementation,
         } => {
+            let imp = implementation.clone();
             let (pam_bytes, decode_ns) = tokio::task::spawn_blocking(move || {
                 let t0 = Instant::now();
                 let pam = codec::decode_with_impl(&body, format, implementation.as_deref())
@@ -367,6 +376,7 @@ async fn run_handler(
             Ok(response(
                 "image/x-netpbm-pam",
                 &[("x-arena-decode-ns", decode_ns)],
+                imp.as_deref(),
                 pam_bytes,
             ))
         }
@@ -377,6 +387,7 @@ async fn run_handler(
             to,
         } => {
             let to_format = to.format;
+            let imp = to.implementation.clone().or_else(|| from_impl.clone());
             let (out_bytes, decode_ns, encode_ns) = tokio::task::spawn_blocking(move || {
                 codec::transcode_with_impl(&body, from, from_impl.as_deref(), &to)
                     .map_err(|e| codec_error("Erro transcode", e))
@@ -390,6 +401,7 @@ async fn run_handler(
                     ("x-arena-decode-ns", decode_ns),
                     ("x-arena-encode-ns", encode_ns),
                 ],
+                imp.as_deref(),
                 out_bytes,
             ))
         }
@@ -400,6 +412,7 @@ async fn run_handler(
             filter,
             implementation,
         } => {
+            let imp = implementation.clone();
             let (body_pam, process_ns) = tokio::task::spawn_blocking(move || {
                 let pam = PamImage::parse_with_limit(&body, max_pixels).map_err(pam_error)?;
                 let t0 = Instant::now();
@@ -420,6 +433,7 @@ async fn run_handler(
             Ok(response(
                 "image/x-netpbm-pam",
                 &[("x-arena-process-ns", process_ns)],
+                imp.as_deref(),
                 body_pam,
             ))
         }
@@ -429,6 +443,7 @@ async fn run_handler(
             sigma,
             implementation,
         } => {
+            let imp = implementation.clone();
             let (body_pam, process_ns) = tokio::task::spawn_blocking(move || {
                 let pam = PamImage::parse_with_limit(&body, max_pixels).map_err(pam_error)?;
                 let t0 = Instant::now();
@@ -444,6 +459,7 @@ async fn run_handler(
             Ok(response(
                 "image/x-netpbm-pam",
                 &[("x-arena-process-ns", process_ns)],
+                imp.as_deref(),
                 body_pam,
             ))
         }
@@ -710,6 +726,35 @@ mod tests {
             let err = run(q, body).await.unwrap_err();
             assert_eq!(err.0, StatusCode::BAD_REQUEST, "{name}: {}", err.1);
         }
+    }
+
+    #[tokio::test]
+    async fn x_arena_impl_header_present() {
+        let response = run(
+            query("encode", "png", &[("impl", "image-rs")]),
+            sample_pam(),
+        )
+        .await
+        .expect("requisição válida de encode");
+        assert_eq!(response.status(), StatusCode::OK);
+        let imp = response
+            .headers()
+            .get("x-arena-impl")
+            .expect("header x-arena-impl deve existir")
+            .to_str()
+            .unwrap();
+        assert_eq!(imp, "image-rs");
+
+        let response_default = run(query("encode", "png", &[]), sample_pam())
+            .await
+            .expect("requisição válida");
+        let imp_default = response_default
+            .headers()
+            .get("x-arena-impl")
+            .expect("header x-arena-impl padrão")
+            .to_str()
+            .unwrap();
+        assert_eq!(imp_default, "default");
     }
 
     #[tokio::test]
