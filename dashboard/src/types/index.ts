@@ -6,7 +6,7 @@ export interface LongBenchmarkResult {
   mode: 'lossy' | 'lossless' | string;
   image: string;
   mp: number;
-  language: 'rust' | 'go' | string;
+  language: 'rust' | 'go' | 'cpp' | 'python' | string;
   tier: 'portable' | 'accelerated' | 'hybrid' | string;
   toolchain: string;
   lib: string;
@@ -17,7 +17,8 @@ export interface LongBenchmarkResult {
   bytes: number;
   psnr_db: number | null;
   rel_time: number;
-  winner?: string;
+  /** 1 = mais rápida da tarefa entre as implementações que a suportam */
+  task_rank: number;
 }
 
 export interface ImplementationSummary {
@@ -162,5 +163,7 @@ export interface MetadataInfo {
     reference_decoder?: string;
   };
   collected_at: string;
+  iterations?: number;
+  warmup?: number;
   mode: string;
 }

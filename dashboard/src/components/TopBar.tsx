@@ -6,7 +6,7 @@ import { useData } from '../context/DataContext';
 import { useTheme } from '../context/ThemeContext';
 
 export default function TopBar() {
-  const { isDbReady, initError } = useData();
+  const { isDbReady, initError, languages, totalImplementations } = useData();
   const { theme, setTheme } = useTheme();
 
   const scrollToSection = (id: string) => {
@@ -49,8 +49,10 @@ export default function TopBar() {
             <div className="hidden sm:flex items-center gap-1.5 pl-1 text-[var(--arena-text-secondary)] text-xs">
               <span className="w-2 h-2 rounded-full bg-[#0086A3] dark:bg-[#25A3B5]" title="Go" />
               <span className="w-2 h-2 rounded-full bg-[#C9501C] dark:bg-[#E0703A]" title="Rust" />
+              <span className="w-2 h-2 rounded-full bg-[var(--lang-cpp)]" title="C++" />
+              <span className="w-2 h-2 rounded-full bg-[var(--lang-python)]" title="Python" />
               <span className="ml-1 text-[11px] font-mono text-[var(--arena-text-muted)]">
-                2 linguagens · 2 implementações · zero FFI no núcleo
+                {languages.length} linguagens · {totalImplementations} implementações
               </span>
             </div>
           </div>

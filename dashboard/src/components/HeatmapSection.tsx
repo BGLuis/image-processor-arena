@@ -3,14 +3,10 @@
 import React, { useState, useMemo } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useData } from '../context/DataContext';
-
-const langColors: Record<string, string> = {
-  go: 'var(--lang-go)',
-  rust: 'var(--lang-rust)',
-};
+import { langColor, langLabel } from '../lib/languages';
 
 export default function HeatmapSection() {
-  const { longResults, implementations } = useData();
+  const { filteredResults, implementations } = useData();
   const [showValues, setShowValues] = useState(true);
   const [tooltip, setTooltip] = useState<{
     text: string;
@@ -19,7 +15,7 @@ export default function HeatmapSection() {
     y: number;
   } | null>(null);
 
-  // Implementations sorted by rank (Rust and Go)
+  // Implementations sorted by rank
   const columns = useMemo(() => {
     return [...implementations].sort((a, b) => a.rank - b.rank);
   }, [implementations]);
@@ -35,7 +31,7 @@ export default function HeatmapSection() {
       image: string;
     }>();
 
-    for (const r of longResults) {
+    for (const r of filteredResults) {
       if (!map.has(r.task_id)) {
         map.set(r.task_id, {
           task_id: r.task_id,
@@ -56,19 +52,19 @@ export default function HeatmapSection() {
       label: op.toUpperCase(),
       tasks: tasks.filter(t => t.op.toLowerCase() === op)
     })).filter(g => g.tasks.length > 0);
-  }, [longResults]);
+  }, [filteredResults]);
 
   // Fast lookup for cells: (task_id:impl_id) -> record
   const cellMap = useMemo(() => {
     const m = new Map<string, { rel_time: number; ms: number }>();
-    for (const r of longResults) {
+    for (const r of filteredResults) {
       m.set(`${r.task_id}:${r.impl_id}`, {
         rel_time: r.rel_time,
         ms: r.codec_median_ms
       });
     }
     return m;
-  }, [longResults]);
+  }, [filteredResults]);
 
   // 5-step Indigo Ramp style mapping
   const getIndigoStyle = (cell?: { rel_time: number; ms: number }) => {
@@ -203,7 +199,10 @@ export default function HeatmapSection() {
 
         {/* Heatmap Table */}
         <div className="overflow-x-auto border border-[var(--arena-border)] rounded-lg bg-[var(--arena-canvas)]">
-          <table className="w-full text-left border-collapse table-fixed min-w-[640px]">
+          <table
+            className="w-full text-left border-collapse table-fixed"
+            style={{ minWidth: 320 + columns.length * 120 }}
+          >
             
             {/* Table Header */}
             <thead>
@@ -212,8 +211,8 @@ export default function HeatmapSection() {
                   Tarefa
                 </th>
                 {columns.map(col => {
-                  const color = langColors[col.language] || 'var(--lang-rust)';
-                  const langName = col.language === 'rust' ? 'Rust' : 'Go';
+                  const color = langColor(col.language);
+                  const langName = langLabel(col.language);
                   return (
                     <th key={col.impl_id} className="w-28 sm:w-36 py-2 px-2 text-center">
                       <div className="flex flex-col items-center">
@@ -266,7 +265,7 @@ export default function HeatmapSection() {
                         return (
                           <td key={col.impl_id} className="py-1 px-1.5 text-center">
                             <div
-                              onMouseEnter={(e) => handleMouseEnter(e, t.task, `${col.language === 'rust' ? 'Rust' : 'Go'} (${col.lib})`, cell)}
+                              onMouseEnter={(e) => handleMouseEnter(e, t.task, `${langLabel(col.language)} (${col.tier} · ${col.lib})`, cell)}
                               onMouseLeave={() => setTooltip(null)}
                               className={`w-full h-7 rounded-sm flex items-center justify-center text-[10px] font-mono transition-transform hover:scale-105 cursor-default ${className}`}
                             >

@@ -4,20 +4,15 @@ import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, Check, AlertTriangle, Info, ShieldCheck } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import type { ImplementationSummary } from '../types';
-
-const langColors: Record<string, string> = {
-  go: 'var(--lang-go)',
-  rust: 'var(--lang-rust)',
-};
-
-const langDisplayNames: Record<string, string> = {
-  rust: 'Rust',
-  go: 'Go',
-};
+import { langColor, langLabel } from '../lib/languages';
 
 export default function LeaderboardTable() {
   const { 
     implementations, 
+    languages,
+    totalTasks,
+    totalImplementations,
+    metadata,
     filters, 
     duelImplA, 
     duelImplB, 
@@ -31,29 +26,9 @@ export default function LeaderboardTable() {
     setCollapsedGroups(prev => ({ ...prev, [lang]: !prev[lang] }));
   };
 
-  // Filter implementations according to identity filters
-  const filteredImpls = implementations.filter(item => {
-    if (filters.selectedLanguages.length > 0 && !filters.selectedLanguages.includes(item.language)) {
-      return false;
-    }
-    if (filters.language !== 'all' && item.language !== filters.language) return false;
-    if (filters.purity === 'pure') {
-      const isHybrid = item.tier === 'hybrid';
-      if (isHybrid) return false;
-    }
-    if (filters.purity === 'hybrid') {
-      const isHybrid = item.tier === 'hybrid';
-      if (!isHybrid) return false;
-    }
-    if (filters.tier !== 'all' && item.tier !== filters.tier) return false;
-    if (filters.toolchain !== 'all' && item.toolchain !== filters.toolchain) return false;
-    if (filters.lib !== 'all' && item.lib !== filters.lib) return false;
-    return true;
-  });
+  const filteredImpls = implementations;
 
-  // Group by language order: Rust, Go
-  const langOrder = ['rust', 'go'];
-  const grouped = langOrder.map(lang => {
+  const grouped = languages.map(lang => {
     const items = filteredImpls.filter(i => i.language === lang);
     return {
       lang,
@@ -62,6 +37,12 @@ export default function LeaderboardTable() {
       best: items[0] || null
     };
   }).filter(g => g.count > 0);
+
+  const env = metadata?.environment;
+  const slotLabel = (implId: string) => {
+    const impl = implementations.find(i => i.impl_id === implId);
+    return impl ? `${langLabel(impl.language)} ${impl.lib}` : '-';
+  };
 
   const getRankBadge = (rank: number) => {
     if (rank === 1) {
@@ -103,7 +84,7 @@ export default function LeaderboardTable() {
     const isSelectedA = item.impl_id === duelImplA;
     const isSelectedB = item.impl_id === duelImplB;
     const isSelected = isSelectedA || isSelectedB;
-    const color = langColors[item.language] || 'var(--lang-rust)';
+    const color = langColor(item.language);
 
     const p25Val = item.p25 ?? item.score;
     const p75Val = item.p75 ?? item.score;
@@ -169,8 +150,8 @@ export default function LeaderboardTable() {
               className="w-2 h-2 rounded-full shrink-0" 
               style={{ backgroundColor: color }} 
             />
-            <span className="font-semibold text-[var(--arena-text-primary)] capitalize">
-              {item.language}
+            <span className="font-semibold text-[var(--arena-text-primary)]">
+              {langLabel(item.language)}
             </span>
             <span className="text-[var(--arena-text-secondary)] text-[11px] truncate">
               {item.toolchain} · {item.lib}
@@ -263,11 +244,11 @@ export default function LeaderboardTable() {
 
         {/* Cobertura */}
         <td className="py-2.5 pl-3 pr-4 text-right font-mono text-[var(--arena-text-secondary)] w-24">
-          {item.coverage === 34 ? (
-            <span>34/34</span>
+          {item.coverage === totalTasks ? (
+            <span>{totalTasks}/{totalTasks}</span>
           ) : (
             <span className="text-[#9A7B00] dark:text-[#F5A524] flex items-center justify-end gap-1 font-semibold">
-              {item.coverage}/34 <AlertTriangle className="w-3 h-3 text-[#9A7B00] dark:text-[#F5A524]" />
+              {item.coverage}/{totalTasks} <AlertTriangle className="w-3 h-3 text-[#9A7B00] dark:text-[#F5A524]" />
             </span>
           )}
         </td>
@@ -283,11 +264,13 @@ export default function LeaderboardTable() {
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-[#2E8B3E] dark:text-[#3DD68C] shrink-0" />
           <span>
-            <strong className="text-[var(--arena-text-primary)]">Dados 100% Reais e Auditados</strong> · Medições em ambiente Intel Xeon @ 2.10GHz (4 vCPUs, Linux x86_64) · Clique em qualquer linha para alimentar os slots <strong>A</strong> e <strong>B</strong> do Duelo.
+            <strong className="text-[var(--arena-text-primary)]">Dados 100% Reais e Auditados</strong>
+            {env?.cpu && <> · Medições em {env.cpu} ({env.cpu_count} CPUs lógicas, {env.platform})</>}
+            {' '}· Clique em qualquer linha para alimentar os slots <strong>A</strong> e <strong>B</strong> do Duelo.
           </span>
         </div>
         <span className="hidden sm:inline font-mono text-[11px] text-[var(--arena-text-muted)] shrink-0">
-          Slots ativos: A (Rust) · B (Go)
+          Slots ativos: A ({slotLabel(duelImplA)}) · B ({slotLabel(duelImplB)})
         </span>
       </div>
 
@@ -311,7 +294,7 @@ export default function LeaderboardTable() {
 
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-1 text-xs font-mono rounded-full bg-[var(--arena-canvas)] border border-[var(--arena-border)] text-[var(--arena-text-secondary)]">
-              {filteredImpls.length} de {implementations.length} implementações
+              {filteredImpls.length} de {totalImplementations} implementações
             </span>
           </div>
         </div>
@@ -338,8 +321,8 @@ export default function LeaderboardTable() {
               {filters.groupByLanguage ? (
                 grouped.map(group => {
                   const isCollapsed = !!collapsedGroups[group.lang];
-                  const color = langColors[group.lang] || 'var(--lang-rust)';
-                  const displayName = langDisplayNames[group.lang] || group.lang;
+                  const color = langColor(group.lang);
+                  const displayName = langLabel(group.lang);
 
                   return (
                     <React.Fragment key={group.lang}>

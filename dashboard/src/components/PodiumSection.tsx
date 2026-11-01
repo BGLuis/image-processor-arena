@@ -3,53 +3,35 @@
 import React, { useMemo } from 'react';
 import { Trophy, AlertTriangle, ShieldCheck, Zap, Sparkles, ArrowRight } from 'lucide-react';
 import { useData } from '../context/DataContext';
-
-const langColors: Record<string, string> = {
-  go: 'var(--lang-go)',
-  rust: 'var(--lang-rust)',
-};
-
-const langDisplayNames: Record<string, string> = {
-  rust: 'Rust',
-  go: 'Go',
-};
+import { langColor, langLabel } from '../lib/languages';
 
 export default function PodiumSection() {
-  const { implementations, longResults } = useData();
+  const { implementations, filteredResults, languages, totalTasks } = useData();
+
+  // Placeholder neutro enquanto os dados carregam
+  const placeholder = {
+    impl_id: '', language: '', toolchain: '-', lib: '-', tier: '-',
+    score: undefined as number | undefined, wins: 0, podiums: 0, coverage: 0,
+  };
 
   // Highlight 1: Leader
-  const rank1 = implementations.find(i => i.rank === 1) || implementations[0] || {
-    impl_id: 'rust:accelerated:stable:padrao',
-    language: 'rust',
-    toolchain: 'stable 1.90',
-    lib: 'padrão',
-    tier: 'accelerated',
-    score: 1.23,
-    wins: 26,
-    podiums: 34,
-    coverage: 34
-  };
+  const rank1 = implementations.find(i => i.rank === 1) || implementations[0] || placeholder;
 
   // Highlight 2: Rank 2
-  const rank2 = implementations.find(i => i.rank === 2) || implementations[1] || {
-    impl_id: 'go:accelerated:1.25:padrao',
-    language: 'go',
-    toolchain: '1.25',
-    lib: 'padrão',
-    tier: 'accelerated',
-    score: 3.28,
-    wins: 7,
-    podiums: 34,
-    coverage: 34
-  };
+  const rank2 = implementations.find(i => i.rank === 2) || implementations[1] || placeholder;
 
-  // Best Pure (no FFI / no C bindings)
-  const bestPure = rank1;
+  // Best Pure (no FFI / no C bindings): implementations is sorted by score
+  const pureImpls = implementations.filter(i => i.tier !== 'hybrid');
+  const bestPure = pureImpls[0] || rank1;
+  const bestPureOf = (lang: string) => pureImpls.find(i => i.language === lang);
+  const pureRust = bestPureOf('rust');
+  const pureGo = bestPureOf('go');
+  const winsPct = (wins: number) => totalTasks ? `${((wins / totalTasks) * 100).toFixed(1).replace('.', ',')}%` : '-';
 
   // Best by Operation
   const bestByOp = useMemo(() => {
     const calcBestForOp = (opName: string) => {
-      const rows = longResults.filter(r => r.op === opName);
+      const rows = filteredResults.filter(r => r.op === opName);
       if (!rows.length) return null;
       const byImpl = new Map<string, { rels: number[]; lang: string; lib: string; toolchain: string }>();
       for (const r of rows) {
@@ -58,29 +40,29 @@ export default function PodiumSection() {
         }
         byImpl.get(r.impl_id)!.rels.push(r.rel_time);
       }
-      let bestItem = { impl_id: '', score: 999, lang: 'rust', lib: '', toolchain: '' };
+      let bestItem = { impl_id: '', score: 999, coverage: 0, lang: '', lib: '', toolchain: '' };
       for (const [id, data] of byImpl.entries()) {
         const g = Math.exp(data.rels.reduce((acc, v) => acc + Math.log(Math.max(1.0, v)), 0) / data.rels.length);
-        if (g < bestItem.score) {
-          bestItem = { impl_id: id, score: Math.round(g * 100) / 100, lang: data.lang, lib: data.lib, toolchain: data.toolchain };
+        const coverage = data.rels.length;
+        if (coverage > bestItem.coverage || (coverage === bestItem.coverage && g < bestItem.score)) {
+          bestItem = { impl_id: id, score: Math.round(g * 100) / 100, coverage, lang: data.lang, lib: data.lib, toolchain: data.toolchain };
         }
       }
       return bestItem;
     };
 
     return {
-      encode: calcBestForOp('encode') || { lang: 'rust', lib: 'padrão', score: 1.18 },
-      decode: calcBestForOp('decode') || { lang: 'rust', lib: 'padrão', score: 1.32 },
-      transcode: calcBestForOp('transcode') || { lang: 'go', lib: 'padrão', score: 1.55 }
+      encode: calcBestForOp('encode') || { lang: '', lib: '-', score: undefined },
+      decode: calcBestForOp('decode') || { lang: '', lib: '-', score: undefined },
+      transcode: calcBestForOp('transcode') || { lang: '', lib: '-', score: undefined }
     };
-  }, [longResults]);
+  }, [filteredResults]);
 
   // Best per Language for logarithmic strip
-  const languages = ['rust', 'go'];
   const bestByLang = useMemo(() => {
     return languages.map(lang => {
       const variants = implementations.filter(i => i.language === lang);
-      variants.sort((a, b) => a.score - b.score);
+      variants.sort((a, b) => a.rank - b.rank);
       const best = variants[0] || null;
       return {
         lang,
@@ -88,7 +70,7 @@ export default function PodiumSection() {
         variants
       };
     }).filter(item => item.best !== null);
-  }, [implementations]);
+  }, [implementations, languages]);
 
   // Log scale position: 1x to 8x (0% at 1x, 100% at 8x)
   const getLogPos = (score: number) => {
@@ -118,12 +100,12 @@ export default function PodiumSection() {
             </h2>
           </div>
           <p className="text-xs text-[var(--arena-text-secondary)] mt-1">
-            Score = média geométrica do tempo relativo à melhor implementação por tarefa. 1,00× = venceu todas.
+            Score = média geométrica do tempo relativo à melhor implementação por tarefa. 1,00× = venceu todas. Ranking: mais tarefas suportadas primeiro, depois menor score.
           </p>
         </div>
 
         <span className="text-[11px] font-mono text-[var(--arena-text-muted)]">
-          Ficha oficial · 34 tarefas avaliadas
+          Ficha oficial · {totalTasks} tarefas avaliadas
         </span>
       </div>
 
@@ -139,15 +121,15 @@ export default function PodiumSection() {
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
               <span className="text-2xl font-bold font-mono text-[var(--arena-text-primary)]">
-                {formatScore(rank1.score, '1,23')}×
+                {formatScore(rank1.score, '-')}×
               </span>
               <span className="text-[10px] text-[var(--arena-text-muted)] font-mono">relativo</span>
             </div>
           </div>
           <div className="mt-2.5 pt-2 border-t border-[var(--arena-border)]/60 text-xs">
             <div className="flex items-center gap-1.5 font-semibold text-[var(--arena-text-primary)] capitalize">
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: langColors[rank1.language] }} />
-              {rank1.language}
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: langColor(rank1.language) }} />
+              {langLabel(rank1.language)}
             </div>
             <p className="text-[10px] text-[var(--arena-text-secondary)] truncate font-mono mt-0.5">
               {rank1.lib} · {rank1.tier}
@@ -164,15 +146,15 @@ export default function PodiumSection() {
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
               <span className="text-2xl font-bold font-mono text-[var(--arena-text-primary)]">
-                {formatScore(bestPure.score, '1,23')}×
+                {formatScore(bestPure.score, '-')}×
               </span>
               <span className="text-[10px] text-[var(--arena-text-muted)] font-mono">relativo</span>
             </div>
           </div>
           <div className="mt-2.5 pt-2 border-t border-[var(--arena-border)]/60 text-xs">
             <div className="flex items-center gap-1.5 font-semibold text-[var(--arena-text-primary)] capitalize">
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: langColors[bestPure.language] }} />
-              {bestPure.language}
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: langColor(bestPure.language) }} />
+              {langLabel(bestPure.language)}
             </div>
             <p className="text-[10px] text-[var(--arena-text-secondary)] truncate font-mono mt-0.5">
               {bestPure.toolchain} · {bestPure.lib.replace(' · padrão', '')}
@@ -189,15 +171,15 @@ export default function PodiumSection() {
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
               <span className="text-2xl font-bold font-mono text-[var(--arena-text-primary)]">
-                {formatScore(bestByOp.encode.score, '1,18')}×
+                {formatScore(bestByOp.encode.score, '-')}×
               </span>
               <span className="text-[10px] text-[var(--arena-text-muted)] font-mono">21 tarefas</span>
             </div>
           </div>
           <div className="mt-2.5 pt-2 border-t border-[var(--arena-border)]/60 text-xs">
             <div className="flex items-center gap-1.5 font-semibold text-[var(--arena-text-primary)] capitalize">
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: langColors[bestByOp.encode.lang] }} />
-              {bestByOp.encode.lang}
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: langColor(bestByOp.encode.lang) }} />
+              {langLabel(bestByOp.encode.lang)}
             </div>
             <p className="text-[10px] text-[var(--arena-text-secondary)] truncate font-mono mt-0.5">
               {bestByOp.encode.lib}
@@ -214,15 +196,15 @@ export default function PodiumSection() {
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
               <span className="text-2xl font-bold font-mono text-[var(--arena-text-primary)]">
-                {formatScore(bestByOp.decode.score, '1,32')}×
+                {formatScore(bestByOp.decode.score, '-')}×
               </span>
               <span className="text-[10px] text-[var(--arena-text-muted)] font-mono">5 tarefas</span>
             </div>
           </div>
           <div className="mt-2.5 pt-2 border-t border-[var(--arena-border)]/60 text-xs">
             <div className="flex items-center gap-1.5 font-semibold text-[var(--arena-text-primary)] capitalize">
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: langColors[bestByOp.decode.lang] }} />
-              {bestByOp.decode.lang}
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: langColor(bestByOp.decode.lang) }} />
+              {langLabel(bestByOp.decode.lang)}
             </div>
             <p className="text-[10px] text-[var(--arena-text-secondary)] truncate font-mono mt-0.5">
               {bestByOp.decode.lib}
@@ -239,15 +221,15 @@ export default function PodiumSection() {
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
               <span className="text-2xl font-bold font-mono text-[var(--arena-text-primary)]">
-                {formatScore(bestByOp.transcode.score, '1,55')}×
+                {formatScore(bestByOp.transcode.score, '-')}×
               </span>
               <span className="text-[10px] text-[var(--arena-text-muted)] font-mono">4 tarefas</span>
             </div>
           </div>
           <div className="mt-2.5 pt-2 border-t border-[var(--arena-border)]/60 text-xs">
             <div className="flex items-center gap-1.5 font-semibold text-[var(--arena-text-primary)] capitalize">
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: langColors[bestByOp.transcode.lang] }} />
-              {bestByOp.transcode.lang}
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: langColor(bestByOp.transcode.lang) }} />
+              {langLabel(bestByOp.transcode.lang)}
             </div>
             <p className="text-[10px] text-[var(--arena-text-secondary)] truncate font-mono mt-0.5">
               {bestByOp.transcode.lib}
@@ -277,16 +259,16 @@ export default function PodiumSection() {
                   </span>
                 </div>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#2E8B3E]/15 text-[#2E8B3E] dark:text-[#3DD68C] border border-[#2E8B3E]/30 font-semibold">
-                  zero FFI · seguro
+                  {rank1.tier === 'hybrid' ? 'FFI · hybrid' : `zero FFI · ${rank1.tier}`}
                 </span>
               </div>
 
               <div className="mt-3 flex items-baseline justify-between">
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: langColors[rank1.language] }} />
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: langColor(rank1.language) }} />
                     <span className="text-base font-bold text-[var(--arena-text-primary)] capitalize">
-                      {rank1.language}
+                      {langLabel(rank1.language)}
                     </span>
                   </div>
                   <p className="text-xs text-[var(--arena-text-secondary)] mt-0.5">
@@ -296,15 +278,15 @@ export default function PodiumSection() {
 
                 <div className="text-right">
                   <span className="text-3xl font-extrabold font-mono text-[#F2C14E]">
-                    {formatScore(rank1.score, '1,23')}×
+                    {formatScore(rank1.score, '-')}×
                   </span>
                 </div>
               </div>
             </div>
 
             <div className="mt-3 pt-2.5 border-t border-[var(--arena-border)]/60 text-[11px] font-mono text-[var(--arena-text-secondary)] flex items-center justify-between">
-              <span>{rank1.wins} vitórias em 34 tarefas</span>
-              <span className="text-[var(--arena-text-primary)] font-semibold">{rank1.coverage}/34 tarefas</span>
+              <span>{rank1.wins} vitórias em {totalTasks} tarefas</span>
+              <span className="text-[var(--arena-text-primary)] font-semibold">{rank1.coverage}/{totalTasks} tarefas</span>
             </div>
           </div>
 
@@ -322,16 +304,16 @@ export default function PodiumSection() {
                   </span>
                 </div>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#0086A3]/15 text-[#0086A3] dark:text-[#25A3B5] border border-[#0086A3]/30 font-semibold">
-                  zero FFI · puro
+                  {rank2.tier === 'hybrid' ? 'FFI · hybrid' : `zero FFI · ${rank2.tier}`}
                 </span>
               </div>
 
               <div className="mt-3 flex items-baseline justify-between">
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: langColors[rank2.language] }} />
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: langColor(rank2.language) }} />
                     <span className="text-base font-bold text-[var(--arena-text-primary)] capitalize">
-                      {rank2.language}
+                      {langLabel(rank2.language)}
                     </span>
                   </div>
                   <p className="text-xs text-[var(--arena-text-secondary)] mt-0.5">
@@ -341,15 +323,15 @@ export default function PodiumSection() {
 
                 <div className="text-right">
                   <span className="text-2xl font-bold font-mono text-[var(--arena-text-primary)]">
-                    {formatScore(rank2.score, '3,28')}×
+                    {formatScore(rank2.score, '-')}×
                   </span>
                 </div>
               </div>
             </div>
 
             <div className="mt-3 pt-2.5 border-t border-[var(--arena-border)]/60 text-[11px] font-mono text-[var(--arena-text-secondary)] flex items-center justify-between">
-              <span>{rank2.wins} vitórias · 1 empate</span>
-              <span className="text-[var(--arena-text-primary)] font-semibold">{rank2.coverage}/34 tarefas</span>
+              <span>{rank2.wins} vitórias em {totalTasks} tarefas</span>
+              <span className="text-[var(--arena-text-primary)] font-semibold">{rank2.coverage}/{totalTasks} tarefas</span>
             </div>
           </div>
 
@@ -378,8 +360,8 @@ export default function PodiumSection() {
             <div className="space-y-3.5 my-4">
               {bestByLang.map(({ lang, best, variants }) => {
                 if (!best) return null;
-                const color = langColors[lang];
-                const displayName = langDisplayNames[lang] || lang;
+                const color = langColor(lang);
+                const displayName = langLabel(lang);
                 const bestPos = getLogPos(best.score);
 
                 return (
@@ -460,10 +442,10 @@ export default function PodiumSection() {
                 <div>
                   <div className="flex items-center justify-between text-[11px] font-mono">
                     <span className="font-semibold text-[#C9501C] dark:text-[#E0703A]">Rust (Memória Segura)</span>
-                    <span className="text-[#2E8B3E] dark:text-[#3DD68C] font-bold">26 vitórias (76,5%)</span>
+                    <span className="text-[#2E8B3E] dark:text-[#3DD68C] font-bold">{pureRust ? `${pureRust.wins} vitórias (${winsPct(pureRust.wins)})` : '-'}</span>
                   </div>
                   <div className="mt-1.5 flex items-center gap-2 text-xs font-mono">
-                    <span className="text-[var(--arena-text-secondary)]">Score: 1,23×</span>
+                    <span className="text-[var(--arena-text-secondary)]">Score: {formatScore(pureRust?.score, '-')}×</span>
                     <span className="text-[var(--arena-text-muted)]">·</span>
                     <span className="text-[var(--arena-text-primary)] font-bold">Zero segfaults</span>
                   </div>
@@ -478,10 +460,10 @@ export default function PodiumSection() {
                 <div>
                   <div className="flex items-center justify-between text-[11px] font-mono">
                     <span className="font-semibold text-[#0086A3] dark:text-[#25A3B5]">Go (CGO_ENABLED=0)</span>
-                    <span className="text-[#0086A3] dark:text-[#25A3B5] font-bold">7 vitórias + 1 empate</span>
+                    <span className="text-[#0086A3] dark:text-[#25A3B5] font-bold">{pureGo ? `${pureGo.wins} vitórias (${winsPct(pureGo.wins)})` : '-'}</span>
                   </div>
                   <div className="mt-1.5 flex items-center gap-2 text-xs font-mono">
-                    <span className="text-[var(--arena-text-secondary)]">Score: 3,28×</span>
+                    <span className="text-[var(--arena-text-secondary)]">Score: {formatScore(pureGo?.score, '-')}×</span>
                     <span className="text-[var(--arena-text-muted)]">·</span>
                     <span className="text-[var(--arena-text-primary)] font-bold">Binário estático</span>
                   </div>

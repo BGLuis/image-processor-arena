@@ -3,28 +3,24 @@
 import React, { useState, useMemo } from 'react';
 import { Scale, CheckCircle2, AlertCircle, Info, Sparkles } from 'lucide-react';
 import { useData } from '../context/DataContext';
-
-const langColors: Record<string, string> = {
-  go: 'var(--lang-go)',
-  rust: 'var(--lang-rust)',
-};
+import { langColor, langLabel } from '../lib/languages';
 
 export default function TradeoffsSection() {
-  const { longResults, equalQuality } = useData();
+  const { filteredResults, equalQuality, languages } = useData();
 
   const [modeFilter, setModeFilter] = useState<'all' | 'lossy' | 'lossless'>('all');
   const [hoveredPoint, setHoveredPoint] = useState<any | null>(null);
 
   // 25 tasks of encode and transcode
   const scatterData = useMemo(() => {
-    return longResults.filter(r => {
+    return filteredResults.filter(r => {
       const isEncodeOrTranscode = r.op === 'encode' || r.op === 'transcode';
       if (!isEncodeOrTranscode) return false;
       if (r.bytes <= 0 || r.codec_median_ms <= 0) return false;
       if (modeFilter !== 'all' && r.mode !== modeFilter) return false;
       return true;
     });
-  }, [longResults, modeFilter]);
+  }, [filteredResults, modeFilter]);
 
   // Coordinate scales for scatter plot (Dual logarithmic)
   // X = bytes: 1000 to 200000 bytes (1 KB to 200 KB)
@@ -251,7 +247,7 @@ export default function TradeoffsSection() {
                       cx={cx}
                       cy={cy}
                       r={isHovered ? 5.5 : 3.5}
-                      style={{ fill: langColors[d.language] || 'var(--lang-rust)' }}
+                      style={{ fill: langColor(d.language) }}
                       className="cursor-pointer transition-all hover:stroke-[var(--arena-canvas)] hover:stroke-2 opacity-85 hover:opacity-100"
                       onMouseEnter={() => setHoveredPoint(d)}
                       onMouseLeave={() => setHoveredPoint(null)}
@@ -267,7 +263,7 @@ export default function TradeoffsSection() {
                     {hoveredPoint.task}
                   </div>
                   <div className="text-[11px] text-[var(--arena-text-secondary)] mt-0.5">
-                    {hoveredPoint.language.toUpperCase()} ({hoveredPoint.tier} · {hoveredPoint.lib})
+                    {langLabel(hoveredPoint.language)} ({hoveredPoint.tier} · {hoveredPoint.lib})
                   </div>
                   <div className="mt-2 pt-1.5 border-t border-[var(--arena-border)]/60 grid grid-cols-2 gap-2 text-[10px]">
                     <div>
@@ -296,12 +292,11 @@ export default function TradeoffsSection() {
           {/* Scatter Legend */}
           <div className="mt-4 pt-3 border-t border-[var(--arena-border)]/60 flex items-center justify-between text-[11px] font-mono text-[var(--arena-text-muted)]">
             <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#C9501C] dark:bg-[#E0703A]" /> Rust
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#0086A3] dark:bg-[#25A3B5]" /> Go
-              </span>
+              {languages.map(lang => (
+                <span key={lang} className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: langColor(lang) }} /> {langLabel(lang)}
+                </span>
+              ))}
             </div>
             <span>{scatterData.length} pontos plotados</span>
           </div>

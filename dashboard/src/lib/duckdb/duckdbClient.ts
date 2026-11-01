@@ -48,7 +48,7 @@ export async function getDuckDB(): Promise<{ db: AsyncDuckDB; conn: AsyncDuckDBC
         console.warn('Falha ao carregar benchmark_results.json no DuckDB:', err);
       }
 
-      // Carregar os dados de results.json (formato longo Go vs Rust)
+      // Carregar os dados de results.json (formato longo: tarefa x implementação)
       try {
         const responseResults = await fetch('./data/results.json');
         if (responseResults.ok) {

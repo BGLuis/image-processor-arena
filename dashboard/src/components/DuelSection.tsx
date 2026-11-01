@@ -3,15 +3,11 @@
 import React, { useState, useMemo } from 'react';
 import { Swords, ArrowLeftRight, HelpCircle, Check, Award } from 'lucide-react';
 import { useData } from '../context/DataContext';
-
-const langColors: Record<string, string> = {
-  go: 'var(--lang-go)',
-  rust: 'var(--lang-rust)',
-};
+import { langColor, langLabel } from '../lib/languages';
 
 export default function DuelSection() {
   const { 
-    longResults, 
+    filteredResults, 
     implementations, 
     duelImplA, 
     duelImplB, 
@@ -24,8 +20,9 @@ export default function DuelSection() {
   const implA = implementations.find(i => i.impl_id === duelImplA) || implementations[0];
   const implB = implementations.find(i => i.impl_id === duelImplB) || implementations[1];
 
-  const colorA = langColors[implA?.language] || '#E0703A';
-  const colorB = langColors[implB?.language] || '#25A3B5';
+  const colorA = langColor(implA?.language);
+  // Duelo dentro da mesma linguagem: B não pode repetir a cor de A, senão as duas séries se confundem
+  const colorB = implB?.language === implA?.language ? 'var(--arena-text-secondary)' : langColor(implB?.language);
 
   // Compare results between Impl A and Impl B per task with exact p25-p75 overlap tie criterion
   const duelRows = useMemo(() => {
@@ -38,7 +35,7 @@ export default function DuelSection() {
       rowB?: any;
     }>();
 
-    for (const r of longResults) {
+    for (const r of filteredResults) {
       if (r.impl_id === duelImplA || r.impl_id === duelImplB) {
         if (!tasksMap.has(r.task_id)) {
           tasksMap.set(r.task_id, {
@@ -128,7 +125,7 @@ export default function DuelSection() {
     // Sort order: A fastest on top down to B fastest
     compared.sort((a, b) => b.ratio - a.ratio);
     return compared;
-  }, [longResults, duelImplA, duelImplB]);
+  }, [filteredResults, duelImplA, duelImplB]);
 
   // Overall summary & per-operation stats for divergent lollipop
   const summary = useMemo(() => {
@@ -191,7 +188,11 @@ export default function DuelSection() {
   };
 
   return (
-    <section id="duel" className="mb-10 scroll-mt-28">
+    <section
+      id="duel"
+      className="mb-10 scroll-mt-28"
+      style={{ '--duel-a': colorA, '--duel-b': colorB } as React.CSSProperties}
+    >
       
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 mb-4">
@@ -256,7 +257,7 @@ export default function DuelSection() {
           <div className="sm:col-span-5 p-3 rounded-lg bg-[var(--arena-canvas)] border border-[var(--arena-border)]">
             <div className="flex items-center justify-between mb-1.5">
               <div className="flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-[#C9501C] dark:bg-[#E0703A] text-white text-[11px] font-mono font-bold flex items-center justify-center">
+                <span className="w-5 h-5 rounded-full bg-[var(--duel-a)] text-white text-[11px] font-mono font-bold flex items-center justify-center">
                   A
                 </span>
                 <span className="text-xs font-bold text-[var(--arena-text-primary)]">
@@ -274,7 +275,7 @@ export default function DuelSection() {
             >
               {implementations.map(impl => (
                 <option key={impl.impl_id} value={impl.impl_id}>
-                  {impl.language.toUpperCase()} ({impl.tier} · {impl.toolchain} · {impl.lib})
+                  {langLabel(impl.language)} ({impl.tier} · {impl.toolchain} · {impl.lib})
                 </option>
               ))}
             </select>
@@ -295,7 +296,7 @@ export default function DuelSection() {
           <div className="sm:col-span-5 p-3 rounded-lg bg-[var(--arena-canvas)] border border-[var(--arena-border)]">
             <div className="flex items-center justify-between mb-1.5">
               <div className="flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-[#0086A3] dark:bg-[#25A3B5] text-white text-[11px] font-mono font-bold flex items-center justify-center">
+                <span className="w-5 h-5 rounded-full bg-[var(--duel-b)] text-white text-[11px] font-mono font-bold flex items-center justify-center">
                   B
                 </span>
                 <span className="text-xs font-bold text-[var(--arena-text-primary)]">
@@ -313,7 +314,7 @@ export default function DuelSection() {
             >
               {implementations.map(impl => (
                 <option key={impl.impl_id} value={impl.impl_id}>
-                  {impl.language.toUpperCase()} ({impl.tier} · {impl.toolchain} · {impl.lib})
+                  {langLabel(impl.language)} ({impl.tier} · {impl.toolchain} · {impl.lib})
                 </option>
               ))}
             </select>
@@ -328,15 +329,15 @@ export default function DuelSection() {
           <div className="lg:col-span-5 bg-[var(--arena-canvas)] border border-[var(--arena-border)] rounded-xl p-4 flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between text-xs font-bold font-mono mb-2">
-                <span className="text-[#C9501C] dark:text-[#E0703A]">A: {summary.winsA} vitórias</span>
+                <span className="text-[var(--duel-a)]">A: {summary.winsA} vitórias</span>
                 <span className="text-[var(--arena-text-secondary)]">{summary.ties} {summary.ties === 1 ? 'empate' : 'empates'}</span>
-                <span className="text-[#0086A3] dark:text-[#25A3B5]">B: {summary.winsB} vitórias</span>
+                <span className="text-[var(--duel-b)]">B: {summary.winsB} vitórias</span>
               </div>
 
               {/* Progress Split Bar */}
               <div className="h-3.5 w-full bg-[var(--arena-surface)] rounded-full overflow-hidden flex border border-[var(--arena-border)]">
                 <div 
-                  className="h-full bg-[#C9501C] dark:bg-[#E0703A] transition-all" 
+                  className="h-full bg-[var(--duel-a)] transition-all" 
                   style={{ width: `${(summary.winsA / (duelRows.length || 1)) * 100}%` }}
                   title={`A venceu ${summary.winsA} tarefas`} 
                 />
@@ -346,7 +347,7 @@ export default function DuelSection() {
                   title={`${summary.ties} empates estatísticos`} 
                 />
                 <div 
-                  className="h-full bg-[#0086A3] dark:bg-[#25A3B5] transition-all" 
+                  className="h-full bg-[var(--duel-b)] transition-all" 
                   style={{ width: `${(summary.winsB / (duelRows.length || 1)) * 100}%` }}
                   title={`B venceu ${summary.winsB} tarefas`} 
                 />
@@ -364,8 +365,8 @@ export default function DuelSection() {
               </div>
               <span className={`text-xs font-mono font-semibold px-2.5 py-1 rounded-full border ${
                 summary.isAFaster
-                  ? 'bg-[#C9501C]/15 dark:bg-[#E0703A]/20 text-[#C9501C] dark:text-[#E0703A] border-[#C9501C]/30 dark:border-[#E0703A]/30'
-                  : 'bg-[#0086A3]/15 dark:bg-[#25A3B5]/20 text-[#0086A3] dark:text-[#25A3B5] border-[#0086A3]/30 dark:border-[#25A3B5]/30'
+                  ? 'bg-[var(--duel-a)]/15 text-[var(--duel-a)] border-[var(--duel-a)]/30'
+                  : 'bg-[var(--duel-b)]/15 text-[var(--duel-b)] border-[var(--duel-b)]/30'
               }`}>
                 {summary.isAFaster ? 'A é mais rápido no geral' : 'B é mais rápido no geral'}
               </span>
@@ -386,9 +387,9 @@ export default function DuelSection() {
 
               {/* Axis indicator */}
               <div className="relative w-full flex items-center justify-between text-[10px] font-mono text-[var(--arena-text-muted)] mb-3 pb-1 border-b border-[var(--arena-border)]">
-                <span className="text-[#0086A3] dark:text-[#25A3B5]">← B mais rápido</span>
+                <span className="text-[var(--duel-b)]">← B mais rápido</span>
                 <span className="font-bold text-[var(--arena-text-primary)]">1,0×</span>
-                <span className="text-[#C9501C] dark:text-[#E0703A]">A mais rápido →</span>
+                <span className="text-[var(--duel-a)]">A mais rápido →</span>
               </div>
 
               {/* Lollipops */}
@@ -403,14 +404,14 @@ export default function DuelSection() {
                       <div className="flex-1 flex justify-end items-center h-full pr-1 relative">
                         {!item.isAFaster && (
                           <div className="flex items-center">
-                            <span className="mr-2 text-[10px] font-bold text-[#0086A3] dark:text-[#25A3B5]">
+                            <span className="mr-2 text-[10px] font-bold text-[var(--duel-b)]">
                               {item.factor.toFixed(2).replace('.', ',')}×
                             </span>
                             <div 
-                              className="h-0.5 bg-[#0086A3] dark:bg-[#25A3B5] transition-all"
+                              className="h-0.5 bg-[var(--duel-b)] transition-all"
                               style={{ width: `${widthPct * 2.5}px` }}
                             />
-                            <div className="w-2.5 h-2.5 rounded-full bg-[#0086A3] dark:bg-[#25A3B5] shrink-0 shadow-xs" />
+                            <div className="w-2.5 h-2.5 rounded-full bg-[var(--duel-b)] shrink-0 shadow-xs" />
                           </div>
                         )}
                       </div>
@@ -427,12 +428,12 @@ export default function DuelSection() {
                       <div className="flex-1 flex justify-start items-center h-full pl-1 relative">
                         {item.isAFaster && (
                           <div className="flex items-center">
-                            <div className="w-2.5 h-2.5 rounded-full bg-[#C9501C] dark:bg-[#E0703A] shrink-0 shadow-xs" />
+                            <div className="w-2.5 h-2.5 rounded-full bg-[var(--duel-a)] shrink-0 shadow-xs" />
                             <div 
-                              className="h-0.5 bg-[#C9501C] dark:bg-[#E0703A] transition-all"
+                              className="h-0.5 bg-[var(--duel-a)] transition-all"
                               style={{ width: `${widthPct * 2.5}px` }}
                             />
-                            <span className="ml-2 text-[10px] font-bold text-[#C9501C] dark:text-[#E0703A]">
+                            <span className="ml-2 text-[10px] font-bold text-[var(--duel-a)]">
                               {item.factor.toFixed(2).replace('.', ',')}×
                             </span>
                           </div>
@@ -466,12 +467,12 @@ export default function DuelSection() {
             {/* Legend */}
             <div className="flex items-center gap-3 text-[11px] font-mono">
               <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#C9501C] dark:bg-[#E0703A]" />
-                <span className="text-[var(--arena-text-secondary)]">A (Rust)</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-[var(--duel-a)]" />
+                <span className="text-[var(--arena-text-secondary)]">A ({implA ? `${langLabel(implA.language)} ${implA.lib}` : '-'})</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#0086A3] dark:bg-[#25A3B5]" />
-                <span className="text-[var(--arena-text-secondary)]">B (Go)</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-[var(--duel-b)]" />
+                <span className="text-[var(--arena-text-secondary)]">B ({implB ? `${langLabel(implB.language)} ${implB.lib}` : '-'})</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-2 rounded-xs bg-[#9A7B00]/25 border border-[#9A7B00]/40" />
@@ -555,26 +556,26 @@ export default function DuelSection() {
 
                     {/* Whisker A (Top line at 26%) */}
                     <div 
-                      className="absolute top-[26%] h-px border-t border-dashed border-[#C9501C] dark:border-[#E0703A] pointer-events-none"
+                      className="absolute top-[26%] h-px border-t border-dashed border-[var(--duel-a)] pointer-events-none"
                       style={{ 
                         left: `${Math.min(x25A, x75A)}%`, 
                         width: `${Math.max(0.5, Math.abs(x75A - x25A))}%` 
                       }}
                     >
-                      <div className="absolute left-0 top-[-3px] w-px h-2 bg-[#C9501C] dark:bg-[#E0703A]" />
-                      <div className="absolute right-0 top-[-3px] w-px h-2 bg-[#C9501C] dark:bg-[#E0703A]" />
+                      <div className="absolute left-0 top-[-3px] w-px h-2 bg-[var(--duel-a)]" />
+                      <div className="absolute right-0 top-[-3px] w-px h-2 bg-[var(--duel-a)]" />
                     </div>
 
                     {/* Whisker B (Bottom line at 74%) */}
                     <div 
-                      className="absolute top-[74%] h-px border-t border-dashed border-[#0086A3] dark:border-[#25A3B5] pointer-events-none"
+                      className="absolute top-[74%] h-px border-t border-dashed border-[var(--duel-b)] pointer-events-none"
                       style={{ 
                         left: `${Math.min(x25B, x75B)}%`, 
                         width: `${Math.max(0.5, Math.abs(x75B - x25B))}%` 
                       }}
                     >
-                      <div className="absolute left-0 top-[-3px] w-px h-2 bg-[#0086A3] dark:bg-[#25A3B5]" />
-                      <div className="absolute right-0 top-[-3px] w-px h-2 bg-[#0086A3] dark:bg-[#25A3B5]" />
+                      <div className="absolute left-0 top-[-3px] w-px h-2 bg-[var(--duel-b)]" />
+                      <div className="absolute right-0 top-[-3px] w-px h-2 bg-[var(--duel-b)]" />
                     </div>
 
                     {/* Diagonal connecting dumbbell bar */}
@@ -591,14 +592,14 @@ export default function DuelSection() {
 
                     {/* Circle Point A (median at 26%) */}
                     <div 
-                      className="absolute top-[26%] -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-[#C9501C] dark:bg-[#E0703A] ring-2 ring-[var(--arena-canvas)] z-10 shadow-xs cursor-pointer transition-transform hover:scale-125"
+                      className="absolute top-[26%] -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-[var(--duel-a)] ring-2 ring-[var(--arena-canvas)] z-10 shadow-xs cursor-pointer transition-transform hover:scale-125"
                       style={{ left: `${xA}%` }}
                       title={`A: ${valDisplayA} (p25: ${row.p25A.toFixed(1)} ms, p75: ${row.p75A.toFixed(1)} ms)`}
                     />
 
                     {/* Circle Point B (median at 74%) */}
                     <div 
-                      className="absolute top-[74%] -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-[#0086A3] dark:bg-[#25A3B5] ring-2 ring-[var(--arena-canvas)] z-10 shadow-xs cursor-pointer transition-transform hover:scale-125"
+                      className="absolute top-[74%] -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-[var(--duel-b)] ring-2 ring-[var(--arena-canvas)] z-10 shadow-xs cursor-pointer transition-transform hover:scale-125"
                       style={{ left: `${xB}%` }}
                       title={`B: ${valDisplayB} (p25: ${row.p25B.toFixed(1)} ms, p75: ${row.p75B.toFixed(1)} ms)`}
                     />
@@ -616,11 +617,11 @@ export default function DuelSection() {
                         Empate ({row.speedupDisplay})
                       </span>
                     ) : row.winner === 'A' ? (
-                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-[#C9501C]/15 dark:bg-[#E0703A]/20 text-[#C9501C] dark:text-[#E0703A] border border-[#C9501C]/30 dark:border-[#E0703A]/30">
+                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-[var(--duel-a)]/15 text-[var(--duel-a)] border border-[var(--duel-a)]/30">
                         A +{row.speedupDisplay}
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-[#0086A3]/15 dark:bg-[#25A3B5]/20 text-[#0086A3] dark:text-[#25A3B5] border border-[#0086A3]/30 dark:border-[#25A3B5]/30">
+                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-[var(--duel-b)]/15 text-[var(--duel-b)] border border-[var(--duel-b)]/30">
                         B +{row.speedupDisplay}
                       </span>
                     )}

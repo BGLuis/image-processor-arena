@@ -19,7 +19,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: 'Image Processor Arena — Ficha de Cronometragem & Dashboard Analítico',
-  description: 'Ficha de cronometragem analítica e benchmark de processamento de imagem de alta performance comparando Pure Go vs Pure Rust.',
+  description: 'Ficha de cronometragem analítica e benchmark de processamento de imagem de alta performance comparando Go, Rust, C++ e Python em todas as variantes de compilação.',
 };
 
 export default function RootLayout({

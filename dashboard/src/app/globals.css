@@ -16,6 +16,8 @@
 
   --color-lang-go: var(--lang-go);
   --color-lang-rust: var(--lang-rust);
+  --color-lang-cpp: var(--lang-cpp);
+  --color-lang-python: var(--lang-python);
 }
 
 :root {
@@ -31,6 +33,8 @@
 
   --lang-rust: #C9501C;
   --lang-go: #0086A3;
+  --lang-cpp: #6250D6;
+  --lang-python: #A0306E;
 
   --heat-indigo-1: #312E81;
   --heat-indigo-2: #4338CA;
@@ -52,6 +56,8 @@
 
   --lang-rust: #E0703A;
   --lang-go: #25A3B5;
+  --lang-cpp: #9085E9;
+  --lang-python: #C8508F;
 
   --heat-indigo-1: #6366F1;
   --heat-indigo-2: #4F46E5;

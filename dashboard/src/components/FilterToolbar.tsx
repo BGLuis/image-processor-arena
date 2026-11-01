@@ -3,11 +3,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Search, RotateCcw, ChevronDown, Check, Shield, Layers, SlidersHorizontal, X } from 'lucide-react';
 import { useData } from '../context/DataContext';
-
-const langConfig: Record<string, { label: string; color: string; count: number }> = {
-  rust: { label: 'Rust', color: 'var(--lang-rust)', count: 1 },
-  go: { label: 'Go', color: 'var(--lang-go)', count: 1 },
-};
+import { langColor, langLabel } from '../lib/languages';
 
 export default function FilterToolbar() {
   const { 
@@ -18,8 +14,18 @@ export default function FilterToolbar() {
     resetFilters, 
     filteredResults, 
     activeSql,
-    queryLatencyMs 
+    queryLatencyMs,
+    languages,
+    longResults
   } = useData();
+
+  const langConfig: Record<string, { label: string; color: string; count: number }> = Object.fromEntries(
+    languages.map(lang => [lang, {
+      label: langLabel(lang),
+      color: langColor(lang),
+      count: new Set(longResults.filter(r => r.language === lang).map(r => r.impl_id)).size,
+    }])
+  );
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -109,7 +115,7 @@ export default function FilterToolbar() {
 
         </div>
 
-        {/* Linha 2: Pílulas de Linguagens (Go e Rust com "somente" no hover) e Arquitetura Zero FFI */}
+        {/* Linha 2: Pílulas de Linguagens (com "somente" no hover) e Arquitetura Zero FFI */}
         <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-[var(--arena-border)]/60">
           
           {/* Language Pills + Popover trigger */}

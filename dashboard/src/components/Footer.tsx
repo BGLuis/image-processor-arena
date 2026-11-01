@@ -2,8 +2,14 @@
 
 import React from 'react';
 import { Cpu, Scale, ShieldCheck, GitBranch } from 'lucide-react';
+import { useData } from '../context/DataContext';
 
 export default function Footer() {
+  const { metadata } = useData();
+  const env = metadata?.environment;
+  const iterations = metadata?.iterations;
+  const warmup = metadata?.warmup;
+
   return (
     <footer className="w-full border-t border-[var(--arena-border)] py-12 mt-12 bg-[var(--arena-surface)] text-xs text-[var(--arena-text-secondary)] transition-colors">
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
@@ -18,7 +24,7 @@ export default function Footer() {
               <h4>01. Métrica Primária (Tempo de Codec)</h4>
             </div>
             <p className="text-[11px] leading-relaxed text-[var(--arena-text-secondary)]">
-              Mediana do tempo de codec sobre 10 repetições descartando outliers de aquecimento. O benchmark exclui estritamente I/O de disco, alocando os buffers em memória para medir a eficiência real dos algoritmos na CPU.
+              Mediana do tempo de codec sobre {iterations ?? '-'} repetições, depois de {warmup ?? '-'} execuções de aquecimento descartadas. O benchmark exclui estritamente I/O de disco, alocando os buffers em memória para medir a eficiência real dos algoritmos na CPU.
             </p>
           </div>
 
@@ -54,7 +60,9 @@ export default function Footer() {
           </div>
 
           <div>
-            <span>Ambiente: Xeon @ 2.10GHz · 4 vCPUs · Linux x86_64 · 02 out 2026</span>
+            <span>
+              Ambiente: {env?.cpu ?? '-'} · {env?.cpu_count ?? '-'} CPUs lógicas · {metadata?.collected_at ?? '-'}
+            </span>
           </div>
         </div>
 

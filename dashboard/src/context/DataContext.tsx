@@ -10,11 +10,17 @@ import type {
   ImplementationSummary
 } from '../types';
 import { getDuckDB, queryDuckDB } from '../lib/duckdb/duckdbClient';
+import { sortLanguages } from '../lib/languages';
 
 export interface DataContextValue {
   longResults: LongBenchmarkResult[];
   filteredResults: LongBenchmarkResult[];
   implementations: ImplementationSummary[];
+  languages: string[];
+  /** Implementações medidas, independente dos filtros */
+  totalImplementations: number;
+  /** Tarefas no recorte atual dos filtros */
+  totalTasks: number;
   benchmarkTasks: BenchmarkTask[];
   equalQuality: EqualQualityComparison[];
   metadata: MetadataInfo | null;
@@ -62,8 +68,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [metadata, setMetadata] = useState<MetadataInfo | null>(null);
   
   const [filters, setFilters] = useState<FilterState>(initialFilters);
-  const [duelImplA, setDuelImplA] = useState<string>('rust:accelerated:stable:padrao');
-  const [duelImplB, setDuelImplB] = useState<string>('go:accelerated:1.25:padrao');
+  const [duelImplA, setDuelImplA] = useState<string>('');
+  const [duelImplB, setDuelImplB] = useState<string>('');
 
   const [activeSql, setActiveSql] = useState<string>('SELECT * FROM results ORDER BY rank, task');
   const [queryLatencyMs, setQueryLatencyMs] = useState<number>(3.1);
@@ -122,113 +128,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Compute implementations summary
-  const implementations = useMemo<ImplementationSummary[]>(() => {
-    if (!longResults.length) return [];
+  const languages = useMemo(() => sortLanguages(longResults.map(r => r.language)), [longResults]);
+  const totalImplementations = useMemo(() => new Set(longResults.map(r => r.impl_id)).size, [longResults]);
 
-    const map = new Map<string, {
-      impl_id: string;
-      language: string;
-      tier: string;
-      toolchain: string;
-      lib: string;
-      rel_times: number[];
-      wins: number;
-      podiums: number;
-    }>();
-
-    // Group rows by task to calculate podiums
-    const tasksMap = new Map<number, LongBenchmarkResult[]>();
-    for (const r of longResults) {
-      if (!tasksMap.has(r.task_id)) {
-        tasksMap.set(r.task_id, []);
-      }
-      tasksMap.get(r.task_id)!.push(r);
-    }
-
-    // Determine podiums (top 3) per task
-    const podiumSet = new Set<string>();
-    for (const [taskId, rows] of tasksMap.entries()) {
-      const sorted = [...rows].sort((a, b) => a.codec_median_ms - b.codec_median_ms);
-      for (let i = 0; i < Math.min(3, sorted.length); i++) {
-        podiumSet.add(`${taskId}:${sorted[i].impl_id}`);
-      }
-    }
-
-    for (const r of longResults) {
-      if (!map.has(r.impl_id)) {
-        map.set(r.impl_id, {
-          impl_id: r.impl_id,
-          language: r.language,
-          tier: r.tier,
-          toolchain: r.toolchain,
-          lib: r.lib,
-          rel_times: [],
-          wins: 0,
-          podiums: 0
-        });
-      }
-      const item = map.get(r.impl_id)!;
-      item.rel_times.push(r.rel_time);
-      if (r.winner) {
-        if ((r.language.toLowerCase() === 'rust' && r.winner === 'Rust') || 
-            (r.language.toLowerCase() === 'go' && r.winner === 'Go')) {
-          item.wins += 1;
-        }
-      } else if (r.rel_time <= 1.01) {
-        item.wins += 1;
-      }
-      if (podiumSet.has(`${r.task_id}:${r.impl_id}`)) {
-        item.podiums += 1;
-      }
-    }
-
-    function quantile(arr: number[], q: number): number {
-      if (!arr.length) return 1.0;
-      const sorted = [...arr].sort((a, b) => a - b);
-      const pos = (sorted.length - 1) * q;
-      const base = Math.floor(pos);
-      const rest = pos - base;
-      if (sorted[base + 1] !== undefined) {
-        return sorted[base] + rest * (sorted[base + 1] - sorted[base]);
-      }
-      return sorted[base];
-    }
-
-    const list: ImplementationSummary[] = [];
-    for (const item of map.values()) {
-      const logSum = item.rel_times.reduce((acc, v) => acc + Math.log(Math.max(v, 1.0)), 0);
-      const score = Math.round(Math.exp(logSum / item.rel_times.length) * 100) / 100;
-      const p25 = Math.round(quantile(item.rel_times, 0.25) * 100) / 100;
-      const p75 = Math.round(quantile(item.rel_times, 0.75) * 100) / 100;
-      list.push({
-        impl_id: item.impl_id,
-        language: item.language,
-        tier: item.tier,
-        toolchain: item.toolchain,
-        lib: item.lib,
-        rank: 0,
-        score,
-        wins: item.wins,
-        podiums: item.podiums,
-        coverage: item.rel_times.length,
-        total_tasks: 34,
-        p25,
-        p75
-      });
-    }
-
-    list.sort((a, b) => a.score - b.score);
-    list.forEach((item, index) => {
-      item.rank = index + 1;
-    });
-
-    return list;
-  }, [longResults]);
-
-  // Filtered rows
+  // Recorte dos filtros, com rel_time e task_rank recalculados contra a mais rápida DO RECORTE:
+  // filtrar "só Python" faz a melhor variante Python valer 1,00× e vencer as tarefas.
   const filteredResults = useMemo(() => {
-    return longResults.filter(r => {
+    const kept = longResults.filter(r => {
       if (filters.search && !r.task.toLowerCase().includes(filters.search.toLowerCase())) {
         return false;
       }
@@ -269,7 +175,136 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
       return true;
     });
+
+    const byTask = new Map<number, LongBenchmarkResult[]>();
+    for (const r of kept) {
+      if (!byTask.has(r.task_id)) byTask.set(r.task_id, []);
+      byTask.get(r.task_id)!.push(r);
+    }
+    const out: LongBenchmarkResult[] = [];
+    for (const rows of byTask.values()) {
+      const ranked = [...rows].sort((a, b) => a.codec_median_ms - b.codec_median_ms);
+      const fastest = ranked[0].codec_median_ms;
+      ranked.forEach((r, i) => out.push({
+        ...r,
+        rel_time: fastest > 0 ? Math.round((r.codec_median_ms / fastest) * 100) / 100 : 1,
+        task_rank: i + 1,
+      }));
+    }
+    return out.sort((a, b) => a.task_id - b.task_id || a.task_rank - b.task_rank);
   }, [longResults, filters]);
+
+  const totalTasks = useMemo(() => new Set(filteredResults.map(r => r.task_id)).size, [filteredResults]);
+
+  // Compute implementations summary
+  const implementations = useMemo<ImplementationSummary[]>(() => {
+    if (!filteredResults.length) return [];
+
+    const map = new Map<string, {
+      impl_id: string;
+      language: string;
+      tier: string;
+      toolchain: string;
+      lib: string;
+      rel_times: number[];
+      wins: number;
+      podiums: number;
+    }>();
+
+    // Group rows by task to calculate podiums
+    const tasksMap = new Map<number, LongBenchmarkResult[]>();
+    for (const r of filteredResults) {
+      if (!tasksMap.has(r.task_id)) {
+        tasksMap.set(r.task_id, []);
+      }
+      tasksMap.get(r.task_id)!.push(r);
+    }
+
+    // Determine podiums (top 3) per task
+    const podiumSet = new Set<string>();
+    for (const [taskId, rows] of tasksMap.entries()) {
+      const sorted = [...rows].sort((a, b) => a.codec_median_ms - b.codec_median_ms);
+      for (let i = 0; i < Math.min(3, sorted.length); i++) {
+        podiumSet.add(`${taskId}:${sorted[i].impl_id}`);
+      }
+    }
+
+    for (const r of filteredResults) {
+      if (!map.has(r.impl_id)) {
+        map.set(r.impl_id, {
+          impl_id: r.impl_id,
+          language: r.language,
+          tier: r.tier,
+          toolchain: r.toolchain,
+          lib: r.lib,
+          rel_times: [],
+          wins: 0,
+          podiums: 0
+        });
+      }
+      const item = map.get(r.impl_id)!;
+      item.rel_times.push(r.rel_time);
+      if (r.task_rank === 1) {
+        item.wins += 1;
+      }
+      if (podiumSet.has(`${r.task_id}:${r.impl_id}`)) {
+        item.podiums += 1;
+      }
+    }
+
+    function quantile(arr: number[], q: number): number {
+      if (!arr.length) return 1.0;
+      const sorted = [...arr].sort((a, b) => a - b);
+      const pos = (sorted.length - 1) * q;
+      const base = Math.floor(pos);
+      const rest = pos - base;
+      if (sorted[base + 1] !== undefined) {
+        return sorted[base] + rest * (sorted[base + 1] - sorted[base]);
+      }
+      return sorted[base];
+    }
+
+    const list: ImplementationSummary[] = [];
+    for (const item of map.values()) {
+      const logSum = item.rel_times.reduce((acc, v) => acc + Math.log(Math.max(v, 1.0)), 0);
+      const score = Math.round(Math.exp(logSum / item.rel_times.length) * 100) / 100;
+      const p25 = Math.round(quantile(item.rel_times, 0.25) * 100) / 100;
+      const p75 = Math.round(quantile(item.rel_times, 0.75) * 100) / 100;
+      list.push({
+        impl_id: item.impl_id,
+        language: item.language,
+        tier: item.tier,
+        toolchain: item.toolchain,
+        lib: item.lib,
+        rank: 0,
+        score,
+        wins: item.wins,
+        podiums: item.podiums,
+        coverage: item.rel_times.length,
+        total_tasks: totalTasks,
+        p25,
+        p75
+      });
+    }
+
+    // Cobertura primeiro: uma implementação que só suporta parte das tarefas nunca passa uma completa
+    list.sort((a, b) => b.coverage - a.coverage || a.score - b.score);
+    list.forEach((item, index) => {
+      item.rank = index + 1;
+    });
+
+    return list;
+  }, [filteredResults, totalTasks]);
+
+  // Duelo padrão: a melhor implementação das duas primeiras linguagens do ranking
+  useEffect(() => {
+    if (!implementations.length || duelImplA) return;
+    const first = implementations[0];
+    const rival = implementations.find(i => i.language !== first.language) ?? implementations[1] ?? first;
+    setDuelImplA(first.impl_id);
+    setDuelImplB(rival.impl_id);
+  }, [implementations, duelImplA]);
+
 
   // Update active SQL preview when filters change
   useEffect(() => {
@@ -372,32 +407,31 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           const best = matching.sort((a, b) => a.codec_median_ms - b.codec_median_ms)[0];
           return {
             op,
-            language: best?.language || 'rust',
-            tier: best?.tier || 'accelerated',
-            toolchain: best?.toolchain || 'stable 1.90',
-            lib: best?.lib || 'padrão',
+            language: best?.language ?? '-',
+            tier: best?.tier ?? '-',
+            toolchain: best?.toolchain ?? '-',
+            lib: best?.lib ?? '-',
             score: 1.00
           };
         });
       } else if (lower.includes('order by language')) {
-        rows = ['rust', 'go'].map(lang => {
+        rows = languages.map(lang => {
           const items = implementations.filter(i => i.language === lang);
           return {
             language: lang,
-            tier: items[0]?.tier || 'accelerated',
-            score: items[0]?.score || (lang === 'rust' ? 1.23 : 3.28),
-            tasks: 34
+            tier: items[0]?.tier ?? '-',
+            score: items[0]?.score ?? null,
+            tasks: totalTasks
           };
         });
       } else if (lower.includes('format')) {
-        rows = [
-          { format: 'jxl', op: 'encode', mode: 'lossless', supported_impls: 2 },
-          { format: 'avif', op: 'encode', mode: 'lossy', supported_impls: 2 },
-          { format: 'webp', op: 'encode', mode: 'lossless', supported_impls: 2 },
-          { format: 'jpeg', op: 'decode', mode: 'lossy', supported_impls: 2 },
-          { format: 'png', op: 'encode', mode: 'lossless', supported_impls: 2 },
-          { format: 'pam', op: 'analyze', mode: 'lossless', supported_impls: 2 },
-        ];
+        const impls = new Map<string, { format: string; op: string; mode: string; ids: Set<string> }>();
+        for (const r of longResults) {
+          const key = `${r.format}:${r.op}:${r.mode}`;
+          if (!impls.has(key)) impls.set(key, { format: r.format, op: r.op, mode: r.mode, ids: new Set() });
+          impls.get(key)!.ids.add(r.impl_id);
+        }
+        rows = [...impls.values()].map(({ ids, ...rest }) => ({ ...rest, supported_impls: ids.size }));
       } else {
         rows = implementations.slice(0, 5).map(i => ({
           language: i.language,
@@ -413,13 +447,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setQueryLatencyMs(latency);
       return { rows, latencyMs: latency };
     }
-  }, [implementations, longResults]);
+  }, [implementations, longResults, languages, totalTasks]);
 
   return (
     <DataContext.Provider value={{
       longResults,
       filteredResults,
       implementations,
+      languages,
+      totalImplementations,
+      totalTasks,
       benchmarkTasks,
       equalQuality,
       metadata,

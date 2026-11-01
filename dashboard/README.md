@@ -33,7 +33,7 @@ Abra [http://localhost:3000](http://localhost:3000) no seu navegador para explor
 - **Banco de Dados Analítico**: [DuckDB-Wasm](https://github.com/duckdb/duckdb-wasm) rodando 100% no cliente em WebAssembly, permitindo consultas analíticas em SQL ultrarrápidas sem necessidade de servidor de banco de dados externo.
 - **Gráficos**: [Recharts](https://recharts.org/) integrados com dados reativos do DuckDB.
 - **Estilização**: [Tailwind CSS v4](https://tailwindcss.com/) com design system dark-tech / arena visual.
-- **Pipeline de Dados**: `scripts/prepare_dashboard_data.py` converte os resultados da Arena (`results/benchmark_results.json`) em tabelas analíticas para o DuckDB em `dashboard/public/data/`.
+- **Pipeline de Dados**: `scripts/prepare_dashboard_data.py` converte os resultados da Arena em tabelas analíticas para o DuckDB em `dashboard/public/data/`: `results/benchmark_matrix.json` (todas as linguagens e variantes, de `harness/benchmark_matrix.py`) vira `results.json`, e `results/benchmark_results.json` (duelo Go × Rust) alimenta a comparação a qualidade equivalente.
 
 ---
 
@@ -68,9 +68,18 @@ Abra [http://localhost:3000](http://localhost:3000) no seu navegador para explor
 Sempre que rodar uma nova bateria de testes no harness da Arena:
 
 ```bash
-# Na raiz do repositório
+# Na raiz do repositório: compila todas as variantes (Go, Rust, C++)
+bash go/scripts/build-variants.sh && bash rust/scripts/build-variants.sh && make -C cpp all
+
+# Mede todas as implementações (sobe um servidor por vez; Python roda com o interpretador atual,
+# que precisa de harness/requirements.txt e numpy)
+python3 harness/benchmark_matrix.py
+
+# Converte para o dashboard
 python3 scripts/prepare_dashboard_data.py
 ```
+
+Use `--only go,rust:hybrid` para medir só algumas variantes. Variantes sem binário são puladas com aviso.
 
 Os novos dados serão imediatamente integrados ao `dashboard/public/data/`.
 
