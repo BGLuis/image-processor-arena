@@ -2,19 +2,69 @@
 """
 scripts/prepare_dashboard_data.py
 
-Lê os resultados brutos da Arena (results/benchmark_results.json) e gera
-os arquivos JSON estruturados para o DuckDB-Wasm e o dashboard Next.js
-em dashboard/public/data/.
+Lê os resultados brutos da Arena e gera os arquivos JSON estruturados para o
+DuckDB-Wasm e o dashboard Next.js em dashboard/public/data/:
+- results/benchmark_matrix.json (todas as implementações) -> results.json
+- results/benchmark_results.json (duelo Go x Rust) -> benchmark_results.json,
+  per_operation.json, equal_quality.json e metadata.json
 """
 
 import json
 import os
 import sys
 
-def prepare_data(results_file="results/benchmark_results.json", output_dir="dashboard/public/data"):
-    if not os.path.exists(results_file):
-        print(f"Erro: Arquivo {results_file} não encontrado.")
-        sys.exit(1)
+def long_format(matrix_file):
+    """Linhas do dashboard a partir de results/benchmark_matrix.json (harness/benchmark_matrix.py).
+
+    rel_time é a mediana dividida pela mais rápida da tarefa entre as implementações que a suportam;
+    task_rank 1 é a vitória. Tarefas não suportadas ou com falha ficam de fora (contam como cobertura).
+    """
+    with open(matrix_file, "r", encoding="utf-8") as f:
+        rows = [r for r in json.load(f)["results"] if r["status"] == "ok"]
+
+    by_task = {}
+    for r in rows:
+        by_task.setdefault(r["task_id"], []).append(r)
+
+    out = []
+    for task_id in sorted(by_task):
+        ranked = sorted(by_task[task_id], key=lambda r: r["codec_ms"]["median"])
+        fastest = ranked[0]["codec_ms"]["median"]
+        for rank, r in enumerate(ranked, start=1):
+            codec = r["codec_ms"]
+            psnr = r.get("quality", {}).get("psnr_db")
+            out.append({
+                "task_id": task_id,
+                "task": r["task"],
+                "op": r["op"],
+                "format": r["format"],
+                "mode": r["mode"],
+                "image": r["image"],
+                "mp": r["mp"],
+                "language": r["language"],
+                "tier": r["tier"],
+                "toolchain": r["toolchain"],
+                "lib": r["lib"],
+                "impl_id": r["impl_id"],
+                "codec_median_ms": round(codec["median"], 3),
+                "p25": round(codec["p25"], 3),
+                "p75": round(codec["p75"], 3),
+                "bytes": r.get("out_bytes") or 0,
+                "psnr_db": round(psnr, 2) if isinstance(psnr, (int, float)) else None,
+                "rel_time": round(codec["median"] / fastest, 2) if fastest > 0 else 1.0,
+                "task_rank": rank,
+            })
+    return out
+
+
+def prepare_data(results_file="results/benchmark_results.json", output_dir="dashboard/public/data",
+                 matrix_file="results/benchmark_matrix.json"):
+    for path in (results_file, matrix_file):
+        if not os.path.exists(path):
+            print(f"Erro: Arquivo {path} não encontrado.")
+            if path == matrix_file:
+                print("  Gere-o com: python3 harness/benchmark_matrix.py")
+            sys.exit(1)
 
     with open(results_file, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -89,89 +139,10 @@ def prepare_data(results_file="results/benchmark_results.json", output_dir="dash
         }
         flat_results.append(flat_item)
 
-    # 1. Gerar results.json (formato longo com 68 registros: 34 Rust acelerado + 34 Go acelerado padrão)
-    long_results = []
-    for idx, r in enumerate(raw_results):
-        task_id = idx + 1
-        task = r.get("task", "")
-        op = r.get("op", "")
-        fmt = r.get("format", "")
-        mode = r.get("mode", "")
-        img = r.get("image", "")
-        mp = r.get("mp", 0.0)
-        winner = r.get("winner", "")
-
-        go_data = r.get("go", {}) or {}
-        rust_data = r.get("rust", {}) or {}
-
-        go_codec = go_data.get("codec_ms", {}) or {}
-        rust_codec = rust_data.get("codec_ms", {}) or {}
-
-        go_median = go_codec.get("median") or 0.0
-        rust_median = rust_codec.get("median") or 0.0
-
-        min_median = min(go_median, rust_median) if (go_median > 0 and rust_median > 0) else 1.0
-
-        rust_rel = round(rust_median / min_median, 2) if min_median > 0 else 1.0
-        go_rel = round(go_median / min_median, 2) if min_median > 0 else 1.0
-
-        rust_quality = rust_data.get("quality", {}) or {}
-        go_quality = go_data.get("quality", {}) or {}
-
-        rust_psnr = rust_quality.get("psnr_db")
-        go_psnr = go_quality.get("psnr_db")
-
-        rust_p25 = rust_codec.get("p25")
-        rust_p75 = rust_codec.get("p75")
-        go_p25 = go_codec.get("p25")
-        go_p75 = go_codec.get("p75")
-
-        rust_row = {
-            "task_id": task_id,
-            "task": task,
-            "op": op,
-            "format": fmt,
-            "mode": mode,
-            "image": img,
-            "mp": mp,
-            "language": "rust",
-            "tier": "accelerated",
-            "toolchain": "stable 1.90",
-            "lib": "padrão",
-            "impl_id": "rust:accelerated:stable:padrao",
-            "codec_median_ms": round(rust_median, 3) if rust_median else 0.0,
-            "p25": round(rust_p25, 3) if isinstance(rust_p25, (int, float)) else round(rust_median, 3),
-            "p75": round(rust_p75, 3) if isinstance(rust_p75, (int, float)) else round(rust_median, 3),
-            "bytes": rust_data.get("out_bytes") or 0,
-            "psnr_db": round(rust_psnr, 2) if isinstance(rust_psnr, (int, float)) else None,
-            "rel_time": rust_rel,
-            "winner": winner
-        }
-
-        go_row = {
-            "task_id": task_id,
-            "task": task,
-            "op": op,
-            "format": fmt,
-            "mode": mode,
-            "image": img,
-            "mp": mp,
-            "language": "go",
-            "tier": "accelerated",
-            "toolchain": "1.25",
-            "lib": "padrão",
-            "impl_id": "go:accelerated:1.25:padrao",
-            "codec_median_ms": round(go_median, 3) if go_median else 0.0,
-            "p25": round(go_p25, 3) if isinstance(go_p25, (int, float)) else round(go_median, 3),
-            "p75": round(go_p75, 3) if isinstance(go_p75, (int, float)) else round(go_median, 3),
-            "bytes": go_data.get("out_bytes") or 0,
-            "psnr_db": round(go_psnr, 2) if isinstance(go_psnr, (int, float)) else None,
-            "rel_time": go_rel,
-            "winner": winner
-        }
-
-        long_results.append(rust_row)
-        long_results.append(go_row)
+    # 1. results.json (formato longo): uma linha por tarefa x implementação medida com sucesso
+    long_results = long_format(matrix_file)
+    with open(matrix_file, "r", encoding="utf-8") as f:
+        matrix_meta = json.load(f)["metadata"]
 
     long_results_path = os.path.join(output_dir, "results.json")
     with open(long_results_path, "w", encoding="utf-8") as f:
@@ -212,7 +183,7 @@ def prepare_data(results_file="results/benchmark_results.json", output_dir="dash
             "rust_win_percentage": round((rust_wins / total_tasks) * 100, 1) if total_tasks else 0,
             "go_win_percentage": round((go_wins / total_tasks) * 100, 1) if total_tasks else 0,
             "ties_percentage": round((ties / total_tasks) * 100, 1) if total_tasks else 0,
-            "global_geomean": 2.67,  # Rust 2.67x mais rápido reportado no PODIUM
+            "global_geomean": next((r["geomean_go_over_rust"] for r in per_operation if r.get("op") == "total"), None),
         },
         "filters_options": {
             "formats": formats,
@@ -220,10 +191,12 @@ def prepare_data(results_file="results/benchmark_results.json", output_dir="dash
             "modes": modes,
             "images": images,
         },
-        "environment": metadata.get("environment", {}),
-        "collected_at": metadata.get("collected_at", ""),
-        "mode": metadata.get("mode", "http"),
-        "primary_metric": metadata.get("primary_metric", "codec_ms"),
+        "environment": matrix_meta.get("environment", {}),
+        "collected_at": matrix_meta.get("collected_at", ""),
+        "iterations": matrix_meta.get("iterations"),
+        "warmup": matrix_meta.get("warmup"),
+        "mode": matrix_meta.get("mode", "http"),
+        "primary_metric": matrix_meta.get("primary_metric", "codec_ms"),
         "notes": metadata.get("notes", []),
     }
 
@@ -234,10 +207,11 @@ def prepare_data(results_file="results/benchmark_results.json", output_dir="dash
     print(f"✓ Dados preparados com sucesso em {output_dir}/")
     print(f"  - Tarefas processadas: {total_tasks}")
     print(f"  - Vitórias Rust: {rust_wins} | Go: {go_wins} | Empates: {ties}")
-    print(f"  - Registros em results.json: {len(long_results)}")
+    print(f"  - Registros em results.json: {len(long_results)} ({len({r['impl_id'] for r in long_results})} implementações)")
     print(f"  - Arquivos gerados: results.json, benchmark_results.json, per_operation.json, equal_quality.json, metadata.json")
 
 if __name__ == "__main__":
     src = sys.argv[1] if len(sys.argv) > 1 else "results/benchmark_results.json"
     dst = sys.argv[2] if len(sys.argv) > 2 else "dashboard/public/data"
-    prepare_data(src, dst)
+    matrix = sys.argv[3] if len(sys.argv) > 3 else "results/benchmark_matrix.json"
+    prepare_data(src, dst, matrix)
