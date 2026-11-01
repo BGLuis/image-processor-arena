@@ -244,6 +244,17 @@ class TestArenaCodecs(unittest.TestCase):
                 self.assertEqual(dec.height, self.height)
 
 
+    def test_pillow_webp_lossless_keeps_rgb_under_transparent_pixels(self):
+        # Lossless é igualdade byte a byte: o RGB sob alpha 0 também faz parte da imagem
+        data = bytes(v for i in range(self.width * self.height) for v in (200, 100, 50, 0 if i % 2 else 255))
+        pam = PamImage(self.width, self.height, 4, "RGB_ALPHA", data)
+        enc = encode_image(pam, parse_params("webp", mode_str="lossless", impl_str="pillow"))
+        self.assertEqual(decode_image(enc, "webp", impl_str="pillow").data, data)
+
+    def test_pillow_jxl_lossless_is_exact(self):
+        enc = encode_image(self.pam_rgb, parse_params("jxl", mode_str="lossless", impl_str="pillow"))
+        self.assertEqual(decode_image(enc, "jxl", impl_str="pillow").data, self.rgb_data)
+
 class TestArenaAnalyze(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

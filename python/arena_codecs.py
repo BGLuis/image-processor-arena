@@ -408,7 +408,8 @@ def encode_pillow(pam: PamImage, params: CodecParams) -> bytes:
     elif fmt == "webp":
         method = EFFORT_STEP[params.effort - 1]
         if params.mode == MODE_LOSSLESS:
-            im.save(buf, format="WEBP", lossless=True)
+            # Sem exact=True o libwebp reescreve o RGB sob pixels totalmente transparentes
+            im.save(buf, format="WEBP", lossless=True, exact=True)
         else:
             im.save(buf, format="WEBP", lossless=False, quality=params.q, method=method)
 
