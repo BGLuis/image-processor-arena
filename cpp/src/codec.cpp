@@ -218,26 +218,17 @@ std::vector<uint8_t> encode_image(const PamImage& img, const EncodeParams& param
             if (err) *err = "WebP side exceeds max 16383";
             return {};
         }
-        if (params.mode == "lossless") {
-            uint8_t* output = nullptr;
-            size_t out_size = 0;
-            if (img.depth == 4) {
-                out_size = WebPEncodeLosslessRGBA(img.data.data(), img.width, img.height, img.width * 4, &output);
-            } else {
-                out_size = WebPEncodeLosslessRGB(img.data.data(), img.width, img.height, img.width * 3, &output);
-            }
-            if (out_size == 0 || !output) {
-                if (err) *err = "WebP lossless encode failed";
-                return {};
-            }
-            std::vector<uint8_t> out(output, output + out_size);
-            WebPFree(output);
-            return out;
-        } else {
+        {
             WebPConfig config;
             WebPConfigInit(&config);
-            config.quality = static_cast<float>(params.q);
-            config.method = webp_method(params.effort);
+            if (params.mode == "lossless") {
+                // WebPEncodeLossless* deixa exact=0 e reescreve o RGB sob pixels totalmente transparentes
+                config.lossless = 1;
+                config.exact = 1;
+            } else {
+                config.quality = static_cast<float>(params.q);
+                config.method = webp_method(params.effort);
+            }
 
             WebPPicture pic;
             WebPPictureInit(&pic);
@@ -259,7 +250,7 @@ std::vector<uint8_t> encode_image(const PamImage& img, const EncodeParams& param
             WebPPictureFree(&pic);
             if (!ok) {
                 WebPMemoryWriterClear(&writer);
-                if (err) *err = "WebP lossy encode failed";
+                if (err) *err = "WebP encode failed";
                 return {};
             }
             std::vector<uint8_t> out(writer.mem, writer.mem + writer.size);
@@ -286,7 +277,9 @@ std::vector<uint8_t> encode_image(const PamImage& img, const EncodeParams& param
         basic_info.bits_per_sample = 8;
         basic_info.num_color_channels = 3;
         basic_info.alpha_bits = (img.depth == 4) ? 8 : 0;
-        basic_info.uses_original_profile = JXL_FALSE;
+        basic_info.num_extra_channels = (img.depth == 4) ? 1 : 0;
+        // Lossless exige o perfil original: com JXL_FALSE o libjxl converte para XYB e a saída deixa de ser exata
+        basic_info.uses_original_profile = params.mode == "lossless" ? JXL_TRUE : JXL_FALSE;
 
         if (JXL_ENC_SUCCESS != JxlEncoderSetBasicInfo(enc, &basic_info)) {
             JxlEncoderDestroy(enc);

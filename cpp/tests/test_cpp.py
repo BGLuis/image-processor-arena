@@ -108,6 +108,21 @@ def test_codecs_roundtrip():
         print(f"  [✓] Codec {fmt.upper()} roundtrip OK ({len(enc_res.stdout)} bytes)")
 
 
+def test_lossless_is_exact():
+    print("[*] Testando que WebP e JXL lossless preservam todos os bytes (inclusive RGB sob alpha 0)...")
+    width, height = 16, 16
+    raster = bytes(v for i in range(width * height) for v in (200, 100, (i * 7) % 256, 0 if i % 2 else 255))
+    pam = f"P7\nWIDTH {width}\nHEIGHT {height}\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n".encode() + raster
+    for bin_name in ["arena-batch", "arena-batch-clang"]:
+        batch_bin = os.path.join(BIN_DIR, bin_name)
+        for fmt in ["webp", "jxl"]:
+            enc = run_cmd([batch_bin, "--op", "encode", "--format", fmt, "--mode", "lossless"], stdin=pam).stdout
+            dec = run_cmd([batch_bin, "--op", "decode", "--format", fmt], stdin=enc).stdout
+            got = dec[dec.index(b"ENDHDR\n") + len(b"ENDHDR\n"):]
+            assert got == raster, f"{bin_name} {fmt} lossless alterou a imagem"
+            print(f"  [✓] {bin_name} {fmt.upper()} lossless exato")
+
+
 def test_server():
     print("[*] Testando arena-server HTTP...")
     server_bin = os.path.join(BIN_DIR, "arena-server")
@@ -188,6 +203,7 @@ def main():
     test_contract_rejections()
     test_portable_limitations()
     test_codecs_roundtrip()
+    test_lossless_is_exact()
     test_server()
     print("=" * 60)
     print("TODOS OS TESTES C++ PASSARAM COM SUCESSO!")
